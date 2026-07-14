@@ -1,0 +1,14 @@
+{
+    "name": "nextticket-frontend",
+    "version": "1.0.0",
+    "private": true,
+    "workspaces": [
+        "commons",
+        "apps/*"
+    ],
+    "scripts": {
+        "dev": "npm run dev -w @nextticket-frontend/webshell",
+        "build": "npm run build -w @nextticket-frontend/webshell",
+        "preview": "npm run preview -w @nextticket-frontend/webshell"
+    }
+}
