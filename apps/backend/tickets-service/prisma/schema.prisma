@@ -1,0 +1,15 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Ticket {
+  id        String   @id @default(uuid())
+  folio     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
