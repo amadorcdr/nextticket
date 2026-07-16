@@ -1,18 +1,16 @@
 # NextTicket
 
----
-
 ## 1. Stack Tecnológico
 
 ### Frontend
 
 | Tecnología | Versión | Uso |
 |------------|---------|-----|
-| **Next.js** | 16.x | Framework React con SSR/SSG para cada microfrontend |
-| **React** | 19.x | Librería UI |
-| **Tailwind CSS** | 4.x | Utilidades CSS con design system personalizado (Material 3) |
-| **HeroUI** | 3.x | Componentes UI (en auth-frontend) |
+| **Vite** | 5.x | Bundler rápido y entorno de desarrollo para cada microfrontend |
+| **React** | 18.x | Librería UI |
 | **TypeScript** | 5.x | Tipado estático |
+| **Tailwind CSS** | 4.x | Utilidades CSS con design system personalizado (Material 3) |
+| **HeroUI** | 3.x | Componentes UI |
 
 ### Backend
 
@@ -30,265 +28,203 @@
 
 | Herramienta | Versión | Propósito |
 |-------------|---------|-----------|
-| **pnpm** | 11.9 | Gestor de paquetes (workspace-aware, eficiente en disco) |
-| **ESLint** | 9.x | Linter adicional por proyecto |
+| **NPM Workspaces** | latest | Gestión de dependencias global para los microfrontends (`apps/frontend`) |
+| **pnpm** | 11.x | Gestor de paquetes individual para cada microservicio del backend |
 
 ---
 
-## 3. Arquitectura de Microfrontends
+## 2. Arquitectura de Microfrontends
 
-NextTicket implementa una arquitectura de **microfrontends Build-time con Workspaces**. Cada microfrontend es una aplicación Next.js independiente dentro del monorepo que se compila y despliega de forma autónoma.
-
-### ¿Qué son los Microfrontends?
-
-Los microfrontends aplican los principios de los microservicios al frontend: **cada equipo o dominio del negocio tiene su propia aplicación frontend**, con su propio código, dependencias, build y deploy.
+Cada microfrontend es una aplicación React (Vite) independiente dentro del monorepo que se compila y despliega de forma autónoma.
 
 ### Modelo utilizado: Build-time / Workspaces
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                    MONOREPO (pnpm)                    │
+│                  NPM WORKSPACES                      │
 │                                                      │
 │  ┌────────────────┐  ┌─────────────────────────────┐ │
-│  │   web-shell    │  │      auth-frontend           │ │
-│  │   (Host/Shell) │  │   (Microfrontend Principal)  │ │
-│  │                │  │                               │ │
-│  │  Orquesta los  │  │  • Landing Page              │ │
-│  │  microfronts   │  │  • Login / Registro          │ │
-│  │  Layout global │  │  • Catálogo de Eventos       │ │
-│  └────────┬───────┘  │  • Detalle de Evento         │ │
-│           │          │  • Selección de Asientos      │ │
-│           │          │  • Checkout                   │ │
-│           │          │  • Mis Boletos                │ │
-│           │          │  • Panel Organizador          │ │
-│           │          │  • Validador de Boletos       │ │
+│  │   webshell     │  │      auth-front             │ │
+│  │   (Host/Shell) │  │  • Login / Registro          │ │
+│  │                │  │  • Perfil                    │ │
+│  │  Orquesta los  │  └─────────────┬───────────────┘ │
+│  │  microfronts   │                │                 │
+│  │  Layout global │  ┌─────────────▼───────────────┐ │
+│  └────────┬───────┘  │  venues-events-front        │ │
+│           │          │  • Landing / Catálogo        │ │
+│           │          │  • Detalle Evento            │ │
+│           │          │  • Panel Organizador         │ │
+│           │          └─────────────┬───────────────┘ │
+│           │                        │                 │
+│           │          ┌─────────────▼───────────────┐ │
+│           ├─────────►│     purchases-front         │ │
+│           │          │  • Checkout                  │ │
+│           │          │  • Historial                 │ │
+│           │          └─────────────┬───────────────┘ │
+│           │                        │                 │
+│           │          ┌─────────────▼───────────────┐ │
+│           ├─────────►│      tickets-front          │ │
+│           │          │  • Selección Asientos        │ │
+│           │          │  • Mis Boletos               │ │
+│           │          │  • Validador QR              │ │
 │           │          └─────────────────────────────┘ │
 │           │                                          │
-│  ┌────────┴───────┐  ┌───────────────────┐          │
-│  │   purchases-   │  │     commons       │          │
-│  │   frontend     │  │  (Librería Comp.) │          │
-│  │ (Microfrontend)│  │                   │          │
-│  │                │  │  Código compartido│          │
-│  │  • Checkout    │  │  entre microfronts│          │
-│  │  • Mis Boletos │  └───────────────────┘          │
-│  └────────────────┘                                  │
+│           ▼          ┌───────────────────┐          │
+│                      │     commons       │          │
+│                      │  (Librería Comp.) │          │
+│                      └───────────────────┘          │
 └──────────────────────────────────────────────────────┘
 ```
 
-### Los 4 Microfrontends
+### Los 6 Microfrontends
 
 | Microfrontend | Paquete | Puerto | Responsabilidad |
 |---------------|---------|--------|-----------------|
-| **Web Shell** | `apps/frontend/web-shell` | — | El host/cáscara que orquesta el layout global. Es el punto de entrada de la aplicación |
-| **Auth Frontend** | `apps/frontend/auth-frontend` | 3000 | Microfrontend principal: landing, autenticación, eventos, checkout, organizador y validador |
-| **Purchases Frontend** | `apps/frontend/purchases-frontend` | 3001 | Microfrontend de compras: checkout y mis boletos (dominio de transacciones) |
-| **Frontend Commons** | `apps/frontend/commons` | — | Librería compartida: componentes, tipos y utilidades que usan todos los microfrontends |
-
-### ¿Por qué Build-time y no Runtime (Module Federation)?
-
-| Aspecto | Build-time (Nuestro modelo) | Runtime (Module Federation) |
-|---------|---------------------------|---------------------------|
-| **Complejidad** | ✅ Más simple — importaciones estáticas | ⚠️ Más complejo — importaciones por HTTP |
-| **Performance** | ✅ Un solo bundle optimizado | ⚠️ Carga asíncrona por red |
-| **Tipado** | ✅ TypeScript completo en compile-time | ⚠️ Tipos declarados manualmente |
-| **Deploy** | ⚠️ Se despliega todo junto | ✅ Deploy independiente por microfront |
-| **DX (Developer Experience)** | ✅ HMR funciona sin configuración extra | ⚠️ Necesita preview builds |
-| **Ideal para** | ✅ Equipos que comparten repo | ✅ Equipos completamente independientes |
-
-> 💡 **Decisión de diseño:** Elegimos Build-time porque nuestro equipo trabaja en el mismo monorepo, compartimos el design system y las dependencias (React 19, Tailwind 4). La simplicidad de las importaciones estáticas y el tipado completo en compile-time nos dan más productividad.
+| **Web Shell** | `apps/frontend/apps/webshell` | 4000 | El host/cáscara que orquesta el layout global. Es el punto de entrada de la aplicación |
+| **Auth Frontend** | `apps/frontend/apps/auth-front` | Microfrontend de autenticación: login, registro y perfil |
+| **Venues & Events Frontend** | `apps/frontend/apps/venues-events-front` | Microfrontend de eventos: landing, catálogo, detalle de evento y panel organizador |
+| **Purchases Frontend** | `apps/frontend/apps/purchases-front` | Microfrontend de compras: flujo de checkout y pasarela de pago |
+| **Tickets Frontend** | `apps/frontend/apps/tickets-front` | Microfrontend de boletos: mapa de asientos, mis boletos y app de validador |
+| **Frontend Commons** | `apps/frontend/commons` | Librería compartida: componentes, tipos y utilidades que usan todos los microfrontends |
 
 ### Comunicación entre Microfrontends
 
 ```mermaid
 graph TD
-    A["Web Shell (Host)"] --> B["auth-frontend"]
-    A --> C["purchases-frontend"]
+    A["Web Shell (Host)"] --> B["auth-front"]
+    A --> C["purchases-front"]
+    A --> F["venues-events-front"]
+    A --> G["tickets-front"]
     B --> D["commons (Shared)"]
     C --> D
+    F --> D
+    G --> D
     B --> E["Backend API"]
     C --> E
+    F --> E
+    G --> E
 
     style A fill:#7c3aed,color:#fff,stroke:#5b21b6
     style B fill:#0053db,color:#fff,stroke:#003ea8
     style C fill:#0053db,color:#fff,stroke:#003ea8
+    style F fill:#0053db,color:#fff,stroke:#003ea8
+    style G fill:#0053db,color:#fff,stroke:#003ea8
     style D fill:#059669,color:#fff,stroke:#047857
     style E fill:#dc2626,color:#fff,stroke:#b91c1c
 ```
 
 Cada microfrontend:
-- ✅ Tiene su **propio `package.json`**, `next.config.ts`, `tailwind.config.ts`
-- ✅ Se **compila de forma independiente** (`next build`)
+- ✅ Tiene su **propio `package.json`**, `vite.config.ts`, `tailwind.config.ts`
+- ✅ Se **compila de forma independiente** (`vite build`)
 - ✅ Comparte el **design system** via `commons`
 - ✅ Tiene su **propio dominio de negocio** (autenticación, compras, etc.)
 - ✅ Puede **desplegarse por separado** en diferentes URLs/puertos
 
 ---
 
-## 4. Estructura Completa del Proyecto
+## 3. Estructura Completa del Proyecto
 
 ```
 nextticket/
 │
 ├── 📁 apps/                           # Aplicaciones del monorepo
-│   ├── 📁 frontend/                   # ── Microfrontends ──
-│   │   ├── 📁 auth-frontend/          # 🔐 MF Principal (Landing + Auth + Eventos + Checkout + Organizer + Validator)
-│   │   │   ├── 📁 app/                #    Rutas Next.js (App Router)
-│   │   │   │   ├── 📄 layout.tsx      #    Layout raíz (fuentes Geist, Tailwind)
-│   │   │   │   ├── 📄 page.tsx        #    Landing page (Hero, BentoGrid, RecentEvents, Newsletter)
-│   │   │   │   ├── 📄 globals.css     #    Estilos globales + tokens de diseño
-│   │   │   │   ├── 📁 login/          #    Página de login/registro (flip card con aurora background)
-│   │   │   │   ├── 📁 eventos/        #    Catálogo de eventos con filtros
-│   │   │   │   ├── 📁 event/[id]/     #    Detalle de evento dinámico
-│   │   │   │   ├── 📁 seats/          #    Selección interactiva de asientos
-│   │   │   │   ├── 📁 checkout/       #    Formulario de compra simulada
-│   │   │   │   │   └── 📁 confirmacion/  Confirmación con folio generado
-│   │   │   │   ├── 📁 mis-boletos/    #    Dashboard de boletos del usuario
-│   │   │   │   ├── 📁 organizer/      #    Panel del organizador
-│   │   │   │   │   ├── 📁 dashboard/  #    Dashboard con estadísticas
-│   │   │   │   │   ├── 📁 myEvents/   #    CRUD de eventos del organizador
-│   │   │   │   │   └── 📁 salesEvent/ #    Ventas por evento
-│   │   │   │   ├── 📁 validator/      #    Módulo de validación de boletos
-│   │   │   │   │   └── 📁 events/     #    Eventos asignados al validador
-│   │   │   │   └── 📁 img/            #    Assets de imágenes
-│   │   │   ├── 📁 components/         #    Componentes React
-│   │   │   │   ├── 📄 Navbar.tsx      #    Barra de navegación con rutas activas
-│   │   │   │   ├── 📄 Footer.tsx      #    Footer con iconos sociales
-│   │   │   │   ├── 📄 Stepper.tsx     #    Stepper de 3 pasos (asientos → checkout → confirmación)
-│   │   │   │   ├── 📄 icons.tsx       #    Biblioteca de iconos SVG (14 iconos)
-│   │   │   │   ├── 📁 landing/        #    Componentes del landing
-│   │   │   │   │   ├── 📄 data.ts     #    Datos mock de eventos
-│   │   │   │   │   ├── 📄 types.ts    #    Tipos TypeScript del landing
-│   │   │   │   │   ├── 📁 sections/   #    Secciones: Hero, BentoGrid, RecentEvents, Newsletter, EventDetail, SeatSelection
-│   │   │   │   │   └── 📁 cards/      #    SmallBentoCard
-│   │   │   │   ├── 📁 client/         #    Componentes del rol Cliente
-│   │   │   │   │   ├── 📁 events/     #    ClientEventsView, ClientEventCard, ClientEventGrid, ClientEventFilters
-│   │   │   │   │   ├── 📁 tickets/    #    ClientTicketsView, TicketCard, TicketFilters, TicketQrPreview
-│   │   │   │   │   ├── 📁 data/       #    clientMock.ts (datos mock del cliente)
-│   │   │   │   │   └── 📁 types/      #    client.ts (tipos del cliente)
-│   │   │   │   ├── 📁 organizer/      #    Componentes del rol Organizador
-│   │   │   │   │   ├── 📄 OrganizerSidebar.tsx    # Sidebar del panel
-│   │   │   │   │   ├── 📄 OrganizerTopbar.tsx     # Topbar del panel
-│   │   │   │   │   ├── 📄 OrganizerTable.tsx      # Tabla de eventos
-│   │   │   │   │   ├── 📄 ModalEvent.tsx          # Modal crear evento
-│   │   │   │   │   ├── 📄 EditModalEvent.tsx      # Modal editar evento
-│   │   │   │   │   ├── 📄 ModalDeleteEvent.tsx    # Modal eliminar evento
-│   │   │   │   │   └── 📄 ModalProfile.tsx        # Modal perfil del organizador
-│   │   │   │   └── 📁 validator/      #    Componentes del rol Validador
-│   │   │   │       ├── 📄 ValidatorView.tsx       # Vista principal del validador
-│   │   │   │       ├── 📁 events/     #    ValidatorEventsView
-│   │   │   │       ├── 📁 layout/     #    Layout del validador
-│   │   │   │       ├── 📁 scanner/    #    Escáner QR
-│   │   │   │       ├── 📁 results/    #    Resultados de validación
-│   │   │   │       ├── 📁 stats/      #    Estadísticas
-│   │   │   │       ├── 📁 data/       #    Datos mock del validador
-│   │   │   │       └── 📁 types/      #    Tipos del validador
-│   │   │   ├── 📄 package.json        #    Dependencias: Next.js 16, React 19, HeroUI, Tailwind 4
-│   │   │   ├── 📄 tailwind.config.ts  #    Design system Material 3 (60+ tokens de color)
-│   │   │   ├── 📄 next.config.ts      #    Configuración de Next.js
-│   │   │   ├── 📄 tsconfig.json       #    TypeScript con paths @/*
-│   │   │   ├── 📄 postcss.config.mjs  #    PostCSS con Tailwind
-│   │   │   └── 📄 eslint.config.mjs   #    ESLint config
-│   │   │
-│   │   ├── 📁 purchases-frontend/     # 🛒 MF de Compras (checkout + mis boletos)
-│   │   │   ├── 📁 app/
-│   │   │   │   ├── 📄 layout.tsx      #    Layout con Inter + JetBrains Mono
-│   │   │   │   ├── 📄 page.tsx        #    Redirect a /mis-boletos
-│   │   │   │   ├── 📄 globals.css     #    Estilos globales
-│   │   │   │   ├── 📁 checkout/       #    Checkout + confirmación
-│   │   │   │   └── 📁 mis-boletos/    #    Mis boletos del comprador
-│   │   │   ├── 📁 components/
-│   │   │   │   ├── 📄 Navbar.tsx
-│   │   │   │   ├── 📄 Footer.tsx
-│   │   │   │   ├── 📄 Stepper.tsx
-│   │   │   │   └── 📄 icons.tsx
-│   │   │   ├── 📄 package.json        #    Next.js 16, React 19, Tailwind 4
-│   │   │   └── 📄 tailwind.config.ts  #    Mismos tokens de diseño
-│   │   │
-│   │   ├── 📁 web-shell/              # 🏗️ Shell/Host (orquestador)
-│   │   │   └── 📄 index.tsx           #    Punto de entrada del host
-│   │   │
-│   │   └── 📁 commons/                # 📦 Librería compartida
-│   │       └── 📄 index.tsx           #    Exports compartidos entre MFs
+│   ├── 📁 frontend/                   # ── Entorno de Microfrontends (NPM) ──
+│   │   ├── 📄 package.json            #    NPM Workspaces ("workspaces": ["commons", "apps/*"])
+│   │   ├── 📁 commons/                # 📦 Librería compartida (UI, Store)
+│   │   │   └── 📄 package.json        #    @nextticket-frontend/commons
+│   │   └── 📁 apps/                   # ── Microfrontends ──
+│   │       ├── 📁 auth-front/         # 🔐 MF de Autenticación
+│   │       │   ├── 📁 src/            #    Código fuente (Vite + React)
+│   │       │   └── 📄 package.json    #    @nextticket-frontend/auth-front
+│   │       │
+│   │       ├── 📁 venues-events-front/ # 🏟️ MF de Eventos y Recintos
+│   │       │   ├── 📁 src/            #    Código fuente
+│   │       │   └── 📄 package.json    #    @nextticket-frontend/venues-events
+│   │       │
+│   │       ├── 📁 purchases-front/    # 🛒 MF de Compras
+│   │       │   ├── 📁 src/            #    Código fuente
+│   │       │   └── 📄 package.json    #    @nextticket-frontend/purchases
+│   │       │
+│   │       ├── 📁 tickets-front/      # 🎫 MF de Boletos
+│   │       │   ├── 📁 src/            #    Código fuente
+│   │       │   └── 📄 package.json    #    @nextticket-frontend/tickets
+│   │       │
+│   │       └── 📁 webshell/           # 🏗️ Shell/Host (Orquestador principal)
+│   │           ├── 📁 src/            #    Configuración de integración
+│   │           └── 📄 package.json    #    @nextticket-frontend/webshell
 │   │
-│   ├── 📁 backend/                    # ── Backend Microservicios ──
-│   │   ├── 📁 api-gateway/            # 🚪 API Gateway (puerto 3001)
-│   │   │   ├── 📁 src/
-│   │   │   │   ├── 📄 main.ts         #    Bootstrap: reverse proxy con http-proxy-middleware
-│   │   │   │   ├── 📄 app.module.ts   #    Módulo raíz (ConfigModule)
-│   │   │   │   └── 📄 app.controller.ts  # GET / (info rutas) + GET /health
-│   │   │   ├── 📄 .env                #    URLs de todos los microservicios
-│   │   │   └── 📄 package.json        #    NestJS, http-proxy-middleware
-│   │   │
-│   │   ├── 📁 auth-service/           # 🔑 Servicio de autenticación (puerto 3002)
-│   │   │   ├── 📁 src/
-│   │   │   │   ├── 📄 main.ts         #    Bootstrap + Swagger/Scalar en /docs/auth
-│   │   │   │   ├── 📄 app.module.ts   #    Módulo raíz
-│   │   │   │   ├── 📁 users/          #    UsersController, UsersService, DTOs
-│   │   │   │   ├── 📁 prisma/         #    PrismaService + PrismaModule (@Global)
-│   │   │   │   ├── 📁 redis/          #    RedisService + RedisModule (@Global)
-│   │   │   │   └── 📁 health/         #    HealthController (GET /health)
-│   │   │   ├── 📁 prisma/             #    schema.prisma + migraciones
-│   │   │   ├── 📄 .env                #    DATABASE_URL, REDIS_URL, PORT
-│   │   │   ├── 📄 .npmrc              #    public-hoist-pattern para pnpm
-│   │   │   └── 📄 package.json        #    NestJS 11.1.27, Prisma, Swagger, Scalar
-│   │   │
-│   │   ├── 📁 venues-events-service/  # 🏟️ Servicio de recintos y eventos (puerto 3003)
-│   │   │   ├── 📁 src/
-│   │   │   │   ├── 📄 main.ts         #    Bootstrap + Swagger/Scalar en /docs/venues
-│   │   │   │   ├── 📁 venues/         #    VenuesController, VenuesService, DTOs
-│   │   │   │   ├── 📁 prisma/         #    PrismaService + PrismaModule
-│   │   │   │   ├── 📁 redis/          #    RedisService + RedisModule
-│   │   │   │   └── 📁 health/         #    HealthController
-│   │   │   ├── 📁 prisma/             #    schema.prisma + migraciones
-│   │   │   └── 📄 package.json
-│   │   │
-│   │   ├── 📁 purchases-service/      # 🛒 Servicio de compras (puerto 3004)
-│   │   │   ├── 📁 src/
-│   │   │   │   ├── 📄 main.ts         #    Bootstrap + Swagger/Scalar en /docs/purchases
-│   │   │   │   ├── 📁 purchases/      #    PurchasesController, PurchasesService, DTOs
-│   │   │   │   ├── 📁 prisma/         #    PrismaService + PrismaModule
-│   │   │   │   ├── 📁 redis/          #    RedisService + RedisModule
-│   │   │   │   └── 📁 health/         #    HealthController
-│   │   │   ├── 📁 prisma/             #    schema.prisma + migraciones
-│   │   │   └── 📄 package.json
-│   │   │
-│   │   └── 📁 tickets-service/        # 🎫 Servicio de tickets (puerto 3005)
-│   │       ├── 📁 src/
-│   │       │   ├── 📄 main.ts         #    Bootstrap + Swagger/Scalar en /docs/tickets
-│   │       │   ├── 📁 tickets/        #    TicketsController, TicketsService, DTOs
-│   │       │   ├── 📁 prisma/         #    PrismaService + PrismaModule
-│   │       │   ├── 📁 redis/          #    RedisService + RedisModule
-│   │       │   └── 📁 health/         #    HealthController
-│   │       ├── 📁 prisma/             #    schema.prisma + migraciones
-│   │       └── 📄 package.json
-│   │
-│   ├── 📁 mobile/                     # ── Aplicación Móvil ──
-│   │   ├── 📁 app-shell/              # Shell de la app móvil
-│   │   ├── 📁 commons/                # Código compartido móvil
-│   │   └── 📁 plugins/                # Plugins nativos
-│   │
-│   ├── 📁 addons/                     # Extensiones/plugins
-│   └── 📁 e2e/                        # Tests end-to-end globales
+│   └── 📁 backend/                    # ── Microservicios Backend (PNPM aislado) ──
+│       ├── 📁 api-gateway/            # 🚪 API Gateway (puerto 3001)
+│       │   ├── 📁 src/
+│       │   │   ├── 📄 main.ts         #    Bootstrap: reverse proxy
+│       │   │   └── 📄 app.module.ts   #    Módulo raíz
+│       │   ├── 📄 .env                #    URLs de los microservicios
+│       │   └── 📄 package.json        #    NestJS
+│       │
+│       ├── 📁 auth-service/           # 🔑 Servicio de autenticación (puerto 3002)
+│       │   ├── 📁 src/
+│       │   │   ├── 📁 users/          #    UsersController, UsersService
+│       │   │   ├── 📁 prisma/         #    PrismaService
+│       │   │   └── 📁 redis/          #    RedisService
+│       │   ├── 📁 prisma/             #    schema.prisma
+│       │   └── 📄 package.json        #    NestJS, Prisma
+│       │
+│       ├── 📁 venues-events-service/  # 🏟️ Servicio de recintos y eventos (puerto 3003)
+│       │   ├── 📁 src/
+│       │   ├── 📁 prisma/
+│       │   └── 📄 package.json
+│       │
+│       ├── 📁 purchases-service/      # 🛒 Servicio de compras (puerto 3004)
+│       │   ├── 📁 src/
+│       │   ├── 📁 prisma/
+│       │   └── 📄 package.json
+│       │
+│       └── 📁 tickets-service/        # 🎫 Servicio de tickets (puerto 3005)
+│           ├── 📁 src/
+│           ├── 📁 prisma/
+│           └── 📄 package.json
 │
-├── 📁 agents/                         # Agentes de IA/Automatización
-├── 📁 docs/                           # Documentación del proyecto
-├── 📁 infra/                          # Infraestructura (Terraform)
-├── 📁 packages/                       # Paquetes compartidos globales
-├── 📁 scripts/                        # Scripts de automatización
-├── 📁 stubs/                          # Datos de prueba/mocks
-│
-├── 📄 package.json                    # Raíz del monorepo (Turbo + Husky)
-├── 📄 pnpm-workspace.yaml            # Definición de workspaces pnpm
-├── 📄 turbo.json                      # Pipeline de Turborepo (build, dev, lint, test)
-├── 📄 tsconfig.base.json             # TypeScript base con path aliases
-├── 📄 biome.json                      # Configuración de Biome (linter/formatter)
-├── 📄 commitlint.config.cjs          # Validación de commits (Conventional Commits)
-├── 📄 .editorconfig                   # Formato consistente entre editores
-├── 📄 .gitignore                      # Archivos ignorados por Git
-├── 📄 .gitattributes                  # Normalización de EOL
-├── 📄 .nvmrc                          # Versión de Node.js (20)
-└── 📄 .env.example                    # Variables de entorno de ejemplo
+├── 📁 docs/                           # Documentación general
+└── 📄 nextticket.sql                  # Respaldo / Base de datos inicial
 ```
+
+---
+
+## 4. Convenciones de Desarrollo y Código
+
+Para garantizar consistencia, escalabilidad y facilidad de mantenimiento, todo el equipo debe adherirse a las siguientes reglas estrictas de codificación.
+
+### 🌐 Reglas Generales y de Idioma
+
+1. **Código en Inglés, Documentación en Español:** 
+   - Todo el código fuente (nombres de variables, funciones, clases, interfaces, archivos y comentarios dentro del código) **DEBE estar en inglés**. Ejemplo: `UsersController`, `findAll()`, `CreateUserDto`.
+   - La documentación a nivel de repositorio (este `README.md`, descripciones de Pull Requests) se mantiene en **español**.
+   - **Nunca mezclar:** No usar "Spanglish" en el código (ej. `obtenerUsers()` ❌ → `getUsers()` ✅).
+2. **Single Responsibility Principle (SRP):** Cada archivo, componente o clase debe hacer **una sola cosa**.
+3. **Nombres Descriptivos:** Prefiere variables y funciones con nombres claros y largos antes que escribir comentarios explicando código confuso.
+
+### ⚙️ Convenciones de Backend (NestJS)
+
+1. **Estructura Estándar:** Cada módulo debe contener su propio `controller`, `service`, y `module`. Las validaciones de entrada van siempre en una subcarpeta `dto/`.
+2. **Nomenclatura de Archivos:** Todo archivo debe estar en `kebab-case` seguido de su tipo. Ejemplos: `users.controller.ts`, `create-user.dto.ts`, `app.module.ts`.
+3. **Nomenclatura de Clases:** Toda clase debe estar en `PascalCase`. Ejemplos: `UsersController`, `UsersService`.
+4. **Documentación de API:** Es **obligatorio** el uso de los decoradores de `@nestjs/swagger` en cada controlador y endpoint:
+   - `@ApiTags('recurso')` en el controlador.
+   - `@ApiOperation({ summary: '...' })` en cada método.
+   - `@ApiParam` o `@ApiQuery` cuando sea necesario.
+5. **Acceso a Datos:** Toda interacción con la base de datos se realiza **única y exclusivamente** mediante `PrismaService` inyectado en la capa de `Service` (nunca en el Controller).
+6. **Caché:** Usar `RedisService` inyectado para aplicar el patrón *cache-aside* en lecturas frecuentes.
+
+### 🎨 Convenciones de Frontend (Vite + React)
+
+1. **Nomenclatura de Archivos y Componentes:**
+   - Componentes de React: `PascalCase.tsx` (ej. `AuthModule.tsx`, `ClientEventsView.tsx`).
+   - Archivos de entrada/configuración: `minúsculas` (ej. `main.tsx`, `index.ts`, `vite.config.ts`).
+2. **Estructura de Microfrontends:**
+   - La convención de nombres para cada paquete de microfrontend es `[service]-front` (ej. `auth-front`, `tickets-front`).
+   - Cada microfrontend debe exportar un módulo raíz (ej. `AuthModule`) desde su `src/index.ts` para que el `webshell` pueda importarlo limpiamente sin la necesidad de usar dependencias asíncronas en runtime.
+3. **Estructura Interna:** Todos los sub-componentes de un microfrontend deben organizarse dentro de su propia carpeta `src/components/`.
+4. **Estilos:** Se utiliza **Tailwind CSS** (v4) para utilidades y **HeroUI** para la base de componentes. No crear CSS personalizado a menos que sea estrictamente necesario.
 
 ---
 
@@ -406,7 +342,7 @@ feat/seat-selection       → Mapa interactivo de asientos
 feat/checkout-flow        → Flujo de checkout con stepper
 feat/organizer-dashboard  → Panel del organizador
 feat/validator-scanner    → Escáner QR del validador
-feat/purchases-frontend   → Microfrontend de compras
+feat/purchases-front      → Microfrontend de compras
 ```
 
 #### 🔴 `fix/*` — Corrección de bugs
@@ -569,21 +505,19 @@ git checkout -b docs/que-se-documenta
 
 ### Paso 3: Desarrollar
 
-Realiza tus cambios en los archivos correspondientes del monorepo. Recuerda respetar la arquitectura de microfrontends:
+Realiza tus cambios en los archivos correspondientes del monorepo. Recuerda respetar ## 2. Arquitectura de Microfrontends:
 
 | Si trabajas en... | Modifica archivos en... |
 |-------------------|------------------------|
-| Login/Registro | `apps/frontend/auth-frontend/app/login/` |
-| Landing page | `apps/frontend/auth-frontend/components/landing/` |
-| Catálogo de eventos | `apps/frontend/auth-frontend/components/client/events/` |
-| Selección de asientos | `apps/frontend/auth-frontend/components/landing/sections/SeatSelection.tsx` |
-| Checkout | `apps/frontend/auth-frontend/app/checkout/` |
-| Mis boletos | `apps/frontend/auth-frontend/components/client/tickets/` |
-| Panel organizador | `apps/frontend/auth-frontend/components/organizer/` |
-| Validador | `apps/frontend/auth-frontend/components/validator/` |
-| Compras (MF separado) | `apps/frontend/purchases-frontend/` |
-| Backend auth | `apps/frontend/auth-backend/src/` |
-| Componentes compartidos | `apps/frontend/commons/` |
+| Login/Registro | `apps/frontend/apps/auth-front/src/` |
+| Landing page | `apps/frontend/apps/venues-events-front/src/` |
+| Catálogo de eventos | `apps/frontend/apps/venues-events-front/src/` |
+| Selección de asientos | `apps/frontend/apps/tickets-front/src/` |
+| Checkout | `apps/frontend/apps/purchases-front/src/` |
+| Mis boletos | `apps/frontend/apps/tickets-front/src/` |
+| Panel organizador | `apps/frontend/apps/venues-events-front/src/` |
+| Validador | `apps/frontend/apps/tickets-front/src/` |
+| Componentes compartidos | `apps/frontend/commons/src/` |
 
 ### Paso 4: Hacer commits
 
@@ -592,7 +526,7 @@ git add .
 git commit -m "[FEAT]: descripción breve y clara"
 ```
 
-> ⚠️ Los commits deben seguir la [convención de commits](#7-convenciones-de-commits). El hook de Husky validará el formato automáticamente.
+> ⚠️ Los commits deben seguir la [convención de commits](#7-convenciones-de-commits).
 
 ### Paso 5: Push de tu rama
 
@@ -709,7 +643,7 @@ graph LR
    - [ ] Documentación
 
    ## ¿Cómo probarlo?
-   1. Ejecutar `pnpm dev` en auth-frontend
+   1. Ejecutar `npm run dev -w @nextticket-frontend/auth-front`
    2. Navegar a /login
    3. Verificar que...
 
@@ -791,8 +725,9 @@ graph TD
 
 ```bash
 # Verificar versiones:
-node -v   # v20 o superior (ver .nvmrc)
-pnpm -v   # v11.9 o superior (ver package.json > packageManager)
+node -v   # v20 o superior
+pnpm -v   # v11.x o superior para el backend
+npm -v    # v10.x o superior para el frontend
 ```
 
 ### Instalación
@@ -802,26 +737,22 @@ pnpm -v   # v11.9 o superior (ver package.json > packageManager)
 git clone <url-del-repositorio>
 cd nextticket
 
-# 2. Instalar dependencias (todas las del monorepo)
-pnpm install
+# 2. Instalar dependencias del Frontend (NPM)
+cd apps/frontend
+npm install
 
-# 3. Copiar variables de entorno
-cp .env.example .env
-
-# 4. Iniciar en modo desarrollo
-pnpm dev
+# 3. Iniciar el Frontend (Web Shell que incluye todos)
+npm run dev
 ```
 
-### Desarrollo por microfrontend
+### Desarrollo por microfrontend individual (Frontend)
 
 ```bash
-# Solo auth-frontend (puerto 3000):
-cd apps/frontend/auth-frontend
-pnpm dev
-
-# Solo purchases-frontend (puerto 3001):
-cd apps/frontend/purchases-frontend
-pnpm dev
+# Desde la carpeta apps/frontend
+npm run dev -w @nextticket-frontend/auth-front
+npm run dev -w @nextticket-frontend/venues-events
+npm run dev -w @nextticket-frontend/purchases
+npm run dev -w @nextticket-frontend/tickets
 ```
 
 ### Desarrollo del backend (microservicios)
@@ -892,42 +823,25 @@ Todo el tráfico de los clientes (frontend/mobile) pasa por el Gateway en `http:
 
 ## 10. Comandos Disponibles
 
-### Comandos raíz (ejecutar desde la raíz del proyecto)
+### Comandos de Frontend (en `apps/frontend`)
+
+Se utilizan **NPM Workspaces**:
 
 | Comando | Descripción |
 |---------|-------------|
-| `pnpm install` | Instala todas las dependencias del monorepo |
-| `pnpm dev` | Inicia TODOS los servicios en modo desarrollo (via Turbo) |
-| `pnpm build` | Compila TODOS los proyectos (via Turbo con caché) |
-| `pnpm lint` | Ejecuta linters en TODOS los proyectos |
-| `pnpm test` | Ejecuta tests en TODOS los proyectos |
+| `npm install` | Instala las dependencias del monorepo frontend |
+| `npm run dev` | Inicia el host web shell en modo desarrollo |
+| `npm run build` | Compila el host web shell |
 
-### Comandos por workspace
+### Comandos de Backend (en cada microservicio, ej. `apps/backend/auth-service`)
 
-```bash
-# Ejecutar un comando en un workspace específico:
-pnpm --filter auth-frontend dev           # Dev solo del auth-frontend
-pnpm --filter purchases-frontend build    # Build solo del purchases-frontend
-pnpm --filter auth-service start:dev      # Dev solo del auth-service
-```
+Se utilizan comandos de **NestJS** y **pnpm**:
 
-### Pipeline de Turbo
-
-Definido en `turbo.json`:
-
-```json
-{
-  "pipeline": {
-    "build": {
-      "dependsOn": ["^build"],     // Compila dependencias primero
-      "outputs": ["dist/**", ".next/**"]
-    },
-    "dev": { "cache": false },     // Dev no cachea
-    "lint": { "outputs": [] },
-    "test": { "outputs": ["coverage/**"] }
-  }
-}
-```
+| Comando | Descripción |
+|---------|-------------|
+| `pnpm install` | Instala las dependencias del microservicio |
+| `pnpm start:dev` | Inicia el servicio en modo desarrollo (con recarga automática) |
+| `pnpm test` | Ejecuta los tests unitarios del servicio |
 
 ---
 
@@ -939,34 +853,34 @@ NextTicket maneja 4 roles de usuario, cada uno con su propio módulo:
 
 | Funcionalidad | Ruta | Archivo principal |
 |---------------|------|-------------------|
-| Landing page | `/` | `app/page.tsx` |
-| Catálogo de eventos | `/eventos` | `components/client/events/ClientEventsView.tsx` |
-| Detalle de evento | `/event/[id]` | `components/landing/sections/EventDetail.tsx` |
-| Selección de asientos | `/seats` | `components/landing/sections/SeatSelection.tsx` |
-| Checkout | `/checkout` | `app/checkout/page.tsx` |
-| Confirmación | `/checkout/confirmacion` | `app/checkout/confirmacion/page.tsx` |
-| Mis boletos | `/mis-boletos` | `components/client/tickets/ClientTicketsView.tsx` |
+| Landing page | `/` | `apps/frontend/apps/venues-events-front/src/...` |
+| Catálogo de eventos | `/eventos` | `apps/frontend/apps/venues-events-front/src/...` |
+| Detalle de evento | `/event/[id]` | `apps/frontend/apps/venues-events-front/src/...` |
+| Selección de asientos | `/seats` | `apps/frontend/apps/tickets-front/src/...` |
+| Checkout | `/checkout` | `apps/frontend/apps/purchases-front/src/...` |
+| Confirmación | `/checkout/confirmacion` | `apps/frontend/apps/purchases-front/src/...` |
+| Mis boletos | `/mis-boletos` | `apps/frontend/apps/tickets-front/src/...` |
 
 ### 🎭 Organizador
 
 | Funcionalidad | Ruta | Archivo principal |
 |---------------|------|-------------------|
-| Dashboard | `/organizer/dashboard` | `app/organizer/dashboard/page.tsx` |
-| Mis eventos | `/organizer/myEvents` | `app/organizer/myEvents/page.tsx` |
-| Ventas por evento | `/organizer/salesEvent` | `app/organizer/salesEvent/page.tsx` |
+| Dashboard | `/organizer/dashboard` | `apps/frontend/apps/venues-events-front/src/...` |
+| Mis eventos | `/organizer/myEvents` | `apps/frontend/apps/venues-events-front/src/...` |
+| Ventas por evento | `/organizer/salesEvent` | `apps/frontend/apps/venues-events-front/src/...` |
 
 ### ✅ Validador
 
 | Funcionalidad | Ruta | Archivo principal |
 |---------------|------|-------------------|
-| Vista principal | `/validator` | `components/validator/ValidatorView.tsx` |
-| Eventos asignados | `/validator/events` | `components/validator/events/ValidatorEventsView.tsx` |
+| Vista principal | `/validator` | `apps/frontend/apps/tickets-front/src/...` |
+| Eventos asignados | `/validator/events` | `apps/frontend/apps/tickets-front/src/...` |
 
 ### 🔐 Autenticación
 
 | Funcionalidad | Ruta | Archivo principal |
 |---------------|------|-------------------|
-| Login/Registro | `/login` | `app/login/page.tsx` |
+| Login/Registro | `/login` | `apps/frontend/apps/auth-front/src/...` |
 
 ---
 
@@ -1002,14 +916,20 @@ NextTicket maneja 4 roles de usuario, cada uno con su propio módulo:
 graph TB
     subgraph "🌐 Frontend (Microfrontends)"
         WS["🏗️ Web Shell<br/>(Host/Orquestador)"]
-        AF["🔐 Auth Frontend<br/>(Next.js 16)"]
-        PF["🛒 Purchases Frontend<br/>(Next.js 16)"]
+        AF["🔐 Auth Front<br/>(Vite / React 18)"]
+        VEF["🏟️ Venues & Events<br/>(Vite / React 18)"]
+        PF["🛒 Purchases Front<br/>(Vite / React 18)"]
+        TF["🎫 Tickets Front<br/>(Vite / React 18)"]
         FC["📦 Frontend Commons<br/>(Shared Components)"]
 
         WS --> AF
+        WS --> VEF
         WS --> PF
+        WS --> TF
         AF --> FC
+        VEF --> FC
         PF --> FC
+        TF --> FC
     end
 
     subgraph "⚙️ Backend (Microservicios)"
@@ -1040,12 +960,14 @@ graph TB
     end
 
     subgraph "🛠️ Infraestructura"
-        TF["☁️ Terraform (IaC)"]
+        TF_INFRA["☁️ Terraform (IaC)"]
         CI["🔄 CI/CD"]
     end
 
     AF -->|"API calls"| GW
+    VEF -->|"API calls"| GW
     PF -->|"API calls"| GW
+    TF -->|"API calls"| GW
     MA -->|"API calls"| GW
     AS --> PG
     VE --> PG
@@ -1058,7 +980,9 @@ graph TB
 
     style WS fill:#7c3aed,color:#fff,stroke:#5b21b6
     style AF fill:#0053db,color:#fff,stroke:#003ea8
+    style VEF fill:#0053db,color:#fff,stroke:#003ea8
     style PF fill:#0053db,color:#fff,stroke:#003ea8
+    style TF fill:#0053db,color:#fff,stroke:#003ea8
     style FC fill:#059669,color:#fff,stroke:#047857
     style GW fill:#f59e0b,color:#000,stroke:#d97706
     style AS fill:#dc2626,color:#fff,stroke:#b91c1c
@@ -1070,16 +994,6 @@ graph TB
     style MA fill:#8b5cf6,color:#fff,stroke:#7c3aed
     style MC fill:#059669,color:#fff,stroke:#047857
     style MP fill:#06b6d4,color:#fff,stroke:#0891b2
-    style TF fill:#6366f1,color:#fff,stroke:#4f46e5
+    style TF_INFRA fill:#6366f1,color:#fff,stroke:#4f46e5
     style CI fill:#6366f1,color:#fff,stroke:#4f46e5
 ```
-
----
-
-<p align="center">
-  <strong>Hecho con 💜 por el equipo NextTicket</strong>
-</p>
-
-<p align="center">
-  <em>Monorepo · Microfrontends · Git Flow · Arquitectura SOFEA</em>
-</p>

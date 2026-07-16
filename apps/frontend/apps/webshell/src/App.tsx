@@ -1,11 +1,15 @@
 // Compara con la variante runtime:
 //   runtime:    const M = lazy(() => import('inventory_front/ProductsModule'))
 //   build-time: import { InventoryModule } from '@nimbus/inventory-front'
+
+import { AuthModule } from "@nextticket-frontend/auth-front";
+
 // Aquí NO hace falta lazy, ni Suspense, ni boundary: ya está en el bundle.
 export function App() {
     return (
         <div>
             <h1>Bienvenido</h1>
+            <AuthModule />
         </div>
     );
 }
