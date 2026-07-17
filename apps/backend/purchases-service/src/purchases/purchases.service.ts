@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import {
@@ -116,10 +117,15 @@ export class PurchasesService {
     const paymentDecision = this.simulatePayment(dto.payment);
 
     const purchase = await this.prisma.$transaction(async (tx) => {
+      const folio = paymentDecision.approved
+        ? await this.nextPurchaseFolio(tx)
+        : null;
+
       const createdPurchase = await tx.purchase.create({
         data: {
           userId: dto.userId,
           eventId: dto.eventId,
+          folio,
           grossSubtotal: totals.grossSubtotal,
           discountAmount: totals.discountAmount,
           netSubtotal: totals.netSubtotal,
@@ -389,6 +395,15 @@ export class PurchasesService {
         'Card expiration date must be in the future',
       );
     }
+  }
+
+  private async nextPurchaseFolio(
+    tx: Prisma.TransactionClient,
+  ): Promise<bigint> {
+    const [{ nextval }] = await tx.$queryRaw<
+      { nextval: bigint }[]
+    >`SELECT nextval('purchase_folio_seq')`;
+    return nextval;
   }
 
   private async releaseRedisLocksForBlocks(blockIds: string[]) {

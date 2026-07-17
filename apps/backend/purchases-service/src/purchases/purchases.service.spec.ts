@@ -87,6 +87,7 @@ describe('PurchasesService', () => {
     prisma.temporaryBlock.updateMany.mockResolvedValue({ count: 0 });
     prisma.$transaction.mockImplementation(async (callback) =>
       callback({
+        $queryRaw: jest.fn().mockResolvedValue([{ nextval: BigInt(1000) }]),
         purchase: {
           create: jest.fn().mockResolvedValue({
             id: 'purchase-id',

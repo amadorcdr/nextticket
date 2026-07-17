@@ -4,6 +4,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
+// Purchase.folio is a BigInt; JSON.stringify cannot serialize BigInt natively,
+// so responses would throw without this global serializer.
+(BigInt.prototype as unknown as { toJSON(): string }).toJSON = function (
+  this: bigint,
+) {
+  return this.toString();
+};
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT ?? 3004;
