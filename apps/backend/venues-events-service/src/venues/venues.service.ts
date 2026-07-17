@@ -14,9 +14,22 @@ export class VenuesService {
     ) { }
 
     async create(dto: CreateVenueDto) {
-        const venue = await this.prisma.venue.create({ data: dto });
-        await this.redis.del(LIST_CACHE_KEY); // la lista cambió → invalida
-        return venue;
+    const venue = await this.prisma.venue.create({
+        data: {
+        name: dto.name,
+        address: dto.address,
+        city: dto.city,
+        state: dto.state,
+        country: dto.country ?? 'Mexico',
+        totalCapacity: dto.totalCapacity,
+        description: dto.description,
+        status: dto.status,
+        },
+    });
+
+    await this.redis.del(LIST_CACHE_KEY);
+
+    return venue;
     }
 
     async findAll() {
@@ -39,9 +52,15 @@ export class VenuesService {
     }
 
     async update(id: string, dto: UpdateVenueDto) {
-        await this.findOne(id); // 404 si no existe
-        const venue = await this.prisma.venue.update({ where: { id }, data: dto });
+        await this.findOne(id);
+
+        const venue = await this.prisma.venue.update({
+            where: { id },
+            data: dto,
+        });
+
         await this.redis.del(LIST_CACHE_KEY);
+
         return venue;
     }
 

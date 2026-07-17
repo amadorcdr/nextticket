@@ -4,6 +4,7 @@ import {
     Delete,
     Get,
     Param,
+    ParseUUIDPipe,
     Patch,
     Post,
 } from '@nestjs/common';
@@ -31,22 +32,34 @@ export class VenuesController {
 
     @Get(':id')
     @ApiOperation({ summary: 'Obtener recinto por id' })
-    @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-    findOne(@Param('id') id: string) {
+    @ApiParam({
+        name: 'id',
+        example: '550e8400-e29b-41d4-a716-446655440000',
+    })
+    findOne(@Param('id', new ParseUUIDPipe()) id: string) {
         return this.venues.findOne(id);
     }
 
     @Patch(':id')
     @ApiOperation({ summary: 'Actualizar recinto' })
-    @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-    update(@Param('id') id: string, @Body() dto: UpdateVenueDto) {
+    @ApiParam({
+        name: 'id',
+        example: '550e8400-e29b-41d4-a716-446655440000',
+    })
+    update(
+        @Param('id', new ParseUUIDPipe()) id: string,
+        @Body() dto: UpdateVenueDto,
+    ) {
         return this.venues.update(id, dto);
     }
 
     @Delete(':id')
     @ApiOperation({ summary: 'Eliminar recinto' })
-    @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-    remove(@Param('id') id: string) {
+    @ApiParam({
+        name: 'id',
+        example: '550e8400-e29b-41d4-a716-446655440000',
+    })
+    remove(@Param('id', new ParseUUIDPipe()) id: string) {
         return this.venues.remove(id);
     }
 }

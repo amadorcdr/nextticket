@@ -4,6 +4,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { VenuesModule } from './venues/venues.module';
 import { HealthController } from './health/health.controller';
+import { EventsModule } from './events/events.module';
+import { EventZonesModule } from './event-zones/event-zones.module';
 
 @Module({
   imports: [
@@ -11,6 +13,8 @@ import { HealthController } from './health/health.controller';
     PrismaModule,
     RedisModule,
     VenuesModule,
+    EventsModule,
+    EventZonesModule,
   ],
   controllers: [HealthController],
 })
