@@ -7,9 +7,162 @@ datasource db {
   provider = "postgresql"
 }
 
+enum VenueStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  UNDER_MAINTENANCE
+  REMOVED
+
+  @@map("venue_status_enum")
+}
+
+enum SectionStatus {
+  ACTIVE
+  INACTIVE
+  REMOVED
+
+  @@map("section_status_enum")
+}
+
+enum SeatType {
+  STANDARD
+  VIP
+  PREMIUM
+  ACCESSIBLE
+
+  @@map("seat_type_enum")
+}
+
+enum SeatStatus {
+  AVAILABLE
+  UNAVAILABLE
+  OUT_OF_SERVICE
+  REMOVED
+
+  @@map("seat_status_enum")
+}
+
+enum CanvasElementType {
+  STAGE
+  SCREEN
+  SPEAKER
+  ENTRANCE
+  EXIT
+  CORRIDOR
+  BATHROOM
+  BAR
+  TEXT
+  SHAPE
+  CUSTOM
+
+  @@map("canvas_element_type_enum")
+}
+
 model Venue {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String      @id @default(uuid()) @db.Uuid
+  createdAt      DateTime    @map("created_at") @db.Timestamp(6)
+  createdBy      String?     @map("created_by") @db.Uuid
+  lastModifiedBy String?     @map("last_modified_by") @db.Uuid
+  updatedAt      DateTime?   @map("updated_at") @db.Timestamp(6)
+  name           String      @db.VarChar(150)
+  address        String      @db.VarChar(255)
+  city           String      @db.VarChar(100)
+  state          String?     @db.VarChar(100)
+  country        String      @default("Mexico") @db.VarChar(100)
+  totalCapacity  Int         @map("total_capacity")
+  description    String?     @db.VarChar(500)
+  status         VenueStatus @default(DRAFT)
+
+  floors         Floor[]
+  sections       Section[]
+
+  @@unique([name, city], map: "uk_venues_name_city")
+  @@index([status], map: "idx_venues_status")
+  @@map("venues")
+}
+
+model Floor {
+  id         String @id @default(uuid()) @db.Uuid
+  venueId    String @map("venue_id") @db.Uuid
+  name       String @db.VarChar(100)
+  levelIndex Int    @map("level_index")
+
+  venue          Venue           @relation(fields: [venueId], references: [id])
+  sections       Section[]
+  canvasElements CanvasElement[]
+
+  @@unique([venueId, levelIndex], map: "uk_floors_venue_level")
+  @@index([venueId], map: "idx_floors_venue")
+  @@map("floors")
+}
+
+model Section {
+  id              String        @id @default(uuid()) @db.Uuid
+  venueId         String        @map("venue_id") @db.Uuid
+  floorId         String        @map("floor_id") @db.Uuid
+  name            String        @db.VarChar(100)
+  description     String?       @db.VarChar(255)
+  capacity        Int
+  status          SectionStatus @default(ACTIVE)
+  color           String?       @db.VarChar(7)
+  prefix          String?       @db.VarChar(20)
+  coordinateX     Int?          @map("coordinate_x")
+  coordinateY     Int?          @map("coordinate_y")
+  width           Int?
+  height          Int?
+  rotationDegrees Decimal       @default(0.00) @map("rotation_degrees") @db.Decimal(5, 2)
+  isEllipse       Boolean       @default(false) @map("is_ellipse")
+  geometryPoints  Json?         @map("geometry_points")
+
+  venue  Venue  @relation(fields: [venueId], references: [id])
+  floor  Floor  @relation(fields: [floorId], references: [id])
+  seats  Seat[]
+
+  @@unique([venueId, name], map: "uk_sections_venue_name")
+  @@index([venueId], map: "idx_sections_venue")
+  @@index([floorId], map: "idx_sections_floor")
+  @@index([status], map: "idx_sections_status")
+  @@map("sections")
+}
+
+model Seat {
+  id          String     @id @default(uuid()) @db.Uuid
+  sectionId   String     @map("section_id") @db.Uuid
+  row         String     @db.VarChar(10)
+  number      String     @db.VarChar(10)
+  type        SeatType   @default(STANDARD)
+  coordinateX Int?       @map("coordinate_x")
+  coordinateY Int?       @map("coordinate_y")
+  status      SeatStatus @default(AVAILABLE)
+
+  section Section @relation(fields: [sectionId], references: [id])
+
+  @@unique([sectionId, id], map: "uk_seats_section_id_id")
+  @@unique([sectionId, row, number], map: "uk_seats_section_row_number")
+  @@index([status], map: "idx_seats_status")
+  @@map("seats")
+}
+
+model CanvasElement {
+  id              String            @id @default(uuid()) @db.Uuid
+  floorId         String            @map("floor_id") @db.Uuid
+  elementType     CanvasElementType @map("element_type")
+  name            String            @db.VarChar(150)
+  status          Boolean           @default(true)
+  color           String?           @db.VarChar(7)
+  coordinateX     Int               @map("coordinate_x")
+  coordinateY     Int               @map("coordinate_y")
+  width           Int?
+  height          Int?
+  rotationDegrees Decimal           @default(0.00) @map("rotation_degrees") @db.Decimal(5, 2)
+  isEllipse       Boolean           @default(false) @map("is_ellipse")
+  geometryPoints  Json?             @map("geometry_points")
+
+  floor Floor @relation(fields: [floorId], references: [id])
+
+  @@index([floorId], map: "idx_ce_floor")
+  @@index([elementType], map: "idx_ce_element_type")
+  @@index([status], map: "idx_ce_status")
+  @@map("canvas_elements")
 }
