@@ -17,12 +17,16 @@ enum VenueStatus {
   INACTIVE
   UNDER_MAINTENANCE
   REMOVED
+
+  @@map("venue_status_enum")
 }
 
 enum SectionStatus {
   ACTIVE
   INACTIVE
   REMOVED
+
+  @@map("section_status_enum")
 }
 
 enum SeatType {
@@ -30,6 +34,8 @@ enum SeatType {
   VIP
   PREMIUM
   ACCESSIBLE
+
+  @@map("seat_type_enum")
 }
 
 enum SeatStatus {
@@ -37,6 +43,8 @@ enum SeatStatus {
   UNAVAILABLE
   OUT_OF_SERVICE
   REMOVED
+
+  @@map("seat_status_enum")
 }
 
 enum CanvasElementType {
@@ -51,6 +59,8 @@ enum CanvasElementType {
   TEXT
   SHAPE
   CUSTOM
+
+  @@map("canvas_element_type_enum")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
