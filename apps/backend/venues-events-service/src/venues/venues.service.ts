@@ -53,17 +53,24 @@ export class VenuesService {
     private readonly redis: RedisService,
   ) { }
 
-  // ═══════════════════════════════════════════════════════════
-  //  VENUES
-  // ═══════════════════════════════════════════════════════════
-
   async createVenue(dto: CreateVenueDto) {
     try {
       const venue = await this.prisma.venue.create({
-        data: { ...dto, createdAt: new Date() },
+        data: {
+          name: dto.name,
+          address: dto.address,
+          city: dto.city,
+          state: dto.state,
+          country: dto.country ?? 'Mexico',
+          totalCapacity: dto.totalCapacity,
+          description: dto.description,
+          status: dto.status,
+        },
         include: VENUE_FULL_INCLUDE,
       });
+
       await this.invalidateVenueCache();
+
       return venue;
     } catch (err) {
       this.handlePrismaError(err, 'Venue');
@@ -99,13 +106,16 @@ export class VenuesService {
 
   async updateVenue(id: string, dto: UpdateVenueDto) {
     await this.ensureVenueExists(id);
+
     try {
       const venue = await this.prisma.venue.update({
         where: { id },
-        data: { ...dto, updatedAt: new Date() },
+        data: dto,
         include: VENUE_FULL_INCLUDE,
       });
+
       await this.invalidateVenueCache(id);
+
       return venue;
     } catch (err) {
       this.handlePrismaError(err, 'Venue');
@@ -115,26 +125,59 @@ export class VenuesService {
   async removeVenue(id: string) {
     await this.ensureVenueExists(id);
 
-    // Eliminación en cascada usando transacción: seats → sections → canvasElements → floors → venue
+    const eventsCount = await this.prisma.event.count({
+      where: {
+        venueId: id,
+      },
+    });
+
+    if (eventsCount > 0) {
+      throw new ConflictException(
+        'No se puede eliminar un recinto que tiene eventos asociados',
+      );
+    }
+
     await this.prisma.$transaction(async (tx) => {
-      // 1. Eliminar seats de todas las secciones del venue
       await tx.seat.deleteMany({
-        where: { section: { venueId: id } },
+        where: {
+          section: {
+            venueId: id,
+          },
+        },
       });
-      // 2. Eliminar secciones del venue
-      await tx.section.deleteMany({ where: { venueId: id } });
-      // 3. Eliminar canvas elements de los pisos del venue
+
+      await tx.section.deleteMany({
+        where: {
+          venueId: id,
+        },
+      });
+
       await tx.canvasElement.deleteMany({
-        where: { floor: { venueId: id } },
+        where: {
+          floor: {
+            venueId: id,
+          },
+        },
       });
-      // 4. Eliminar pisos del venue
-      await tx.floor.deleteMany({ where: { venueId: id } });
-      // 5. Eliminar el venue
-      await tx.venue.delete({ where: { id } });
+
+      await tx.floor.deleteMany({
+        where: {
+          venueId: id,
+        },
+      });
+
+      await tx.venue.delete({
+        where: {
+          id,
+        },
+      });
     });
 
     await this.invalidateVenueCache(id);
-    return { deleted: true };
+
+    return {
+      deleted: true,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -197,18 +240,54 @@ export class VenuesService {
   async removeFloor(floorId: string) {
     const floor = await this.findOneFloor(floorId);
 
-    await this.prisma.$transaction(async (tx) => {
-      // Eliminar seats de las secciones de este piso
-      await tx.seat.deleteMany({
-        where: { section: { floorId } },
+    const assignedSections =
+      await this.prisma.eventZoneSection.count({
+        where: {
+          section: {
+            floorId,
+          },
+        },
       });
-      await tx.section.deleteMany({ where: { floorId } });
-      await tx.canvasElement.deleteMany({ where: { floorId } });
-      await tx.floor.delete({ where: { id: floorId } });
+
+    if (assignedSections > 0) {
+      throw new ConflictException(
+        'No se puede eliminar un piso con secciones asignadas a zonas comerciales',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.seat.deleteMany({
+        where: {
+          section: {
+            floorId,
+          },
+        },
+      });
+
+      await tx.section.deleteMany({
+        where: {
+          floorId,
+        },
+      });
+
+      await tx.canvasElement.deleteMany({
+        where: {
+          floorId,
+        },
+      });
+
+      await tx.floor.delete({
+        where: {
+          id: floorId,
+        },
+      });
     });
 
     await this.invalidateVenueCache(floor.venueId);
-    return { deleted: true };
+
+    return {
+      deleted: true,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -264,13 +343,38 @@ export class VenuesService {
   async removeSection(sectionId: string) {
     const section = await this.findOneSection(sectionId);
 
+    const zoneAssignments =
+      await this.prisma.eventZoneSection.count({
+        where: {
+          sectionId,
+        },
+      });
+
+    if (zoneAssignments > 0) {
+      throw new ConflictException(
+        'No se puede eliminar una sección asignada a una zona comercial',
+      );
+    }
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.seat.deleteMany({ where: { sectionId } });
-      await tx.section.delete({ where: { id: sectionId } });
+      await tx.seat.deleteMany({
+        where: {
+          sectionId,
+        },
+      });
+
+      await tx.section.delete({
+        where: {
+          id: sectionId,
+        },
+      });
     });
 
     await this.invalidateVenueCache(section.venueId);
-    return { deleted: true };
+
+    return {
+      deleted: true,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -322,9 +426,32 @@ export class VenuesService {
 
   async removeSeat(seatId: string) {
     const seat = await this.findOneSeat(seatId);
-    await this.prisma.seat.delete({ where: { id: seatId } });
-    await this.invalidateVenueCache(seat.section.venueId);
-    return { deleted: true };
+
+    const eventSeatsCount = await this.prisma.eventSeat.count({
+      where: {
+        seatId,
+      },
+    });
+
+    if (eventSeatsCount > 0) {
+      throw new ConflictException(
+        'No se puede eliminar un asiento utilizado por uno o más eventos',
+      );
+    }
+
+    await this.prisma.seat.delete({
+      where: {
+        id: seatId,
+      },
+    });
+
+    await this.invalidateVenueCache(
+      seat.section.venueId,
+    );
+
+    return {
+      deleted: true,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════
