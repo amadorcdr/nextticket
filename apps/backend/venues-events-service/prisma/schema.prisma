@@ -7,9 +7,366 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS — VENUES
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum VenueStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  UNDER_MAINTENANCE
+  REMOVED
+
+  @@map("venue_status_enum")
+}
+
+enum SectionStatus {
+  ACTIVE
+  INACTIVE
+  REMOVED
+
+  @@map("section_status_enum")
+}
+
+enum SeatType {
+  STANDARD
+  VIP
+  PREMIUM
+  ACCESSIBLE
+
+  @@map("seat_type_enum")
+}
+
+enum SeatStatus {
+  AVAILABLE
+  UNAVAILABLE
+  OUT_OF_SERVICE
+  REMOVED
+
+  @@map("seat_status_enum")
+}
+
+enum CanvasElementType {
+  STAGE
+  SCREEN
+  SPEAKER
+  ENTRANCE
+  EXIT
+  CORRIDOR
+  BATHROOM
+  BAR
+  TEXT
+  SHAPE
+  CUSTOM
+
+  @@map("canvas_element_type_enum")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS — EVENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELED
+  SOLD_OUT
+  COMPLETED
+}
+
+enum AdmissionType {
+  RESERVED
+  GENERAL
+}
+
+enum EventZoneStatus {
+  ACTIVE
+  INACTIVE
+  SOLD_OUT
+}
+
+enum PriceTierStatus {
+  PENDING
+  ACTIVE
+  EXHAUSTED
+  CLOSED
+}
+
+enum EventSeatStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  DISABLED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VENUES
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Venue {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String      @id @default(uuid()) @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy      String?     @map("created_by") @db.Uuid
+  lastModifiedBy String?     @map("last_modified_by") @db.Uuid
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamp(6)
+  name           String      @db.VarChar(150)
+  address        String      @db.VarChar(255)
+  city           String      @db.VarChar(100)
+  state          String?     @db.VarChar(100)
+  country        String      @default("Mexico") @db.VarChar(100)
+  totalCapacity  Int         @map("total_capacity")
+  description    String?     @db.VarChar(500)
+  status         VenueStatus @default(DRAFT)
+
+  floors   Floor[]
+  sections Section[]
+  events   Event[]
+
+  @@unique([name, city], map: "uk_venues_name_city")
+  @@index([status], map: "idx_venues_status")
+  @@map("venues")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOORS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Floor {
+  id         String @id @default(uuid()) @db.Uuid
+  venueId    String @map("venue_id") @db.Uuid
+  name       String @db.VarChar(100)
+  levelIndex Int    @map("level_index")
+
+  venue          Venue           @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  sections       Section[]
+  canvasElements CanvasElement[]
+
+  @@unique([venueId, levelIndex], map: "uk_floors_venue_level")
+  @@index([venueId], map: "idx_floors_venue")
+  @@map("floors")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Section {
+  id              String        @id @default(uuid()) @db.Uuid
+  venueId         String        @map("venue_id") @db.Uuid
+  floorId         String        @map("floor_id") @db.Uuid
+  name            String        @db.VarChar(100)
+  description     String?       @db.VarChar(255)
+  capacity        Int
+  status          SectionStatus @default(ACTIVE)
+  color           String?       @db.VarChar(7)
+  prefix          String?       @db.VarChar(20)
+  coordinateX     Int?          @map("coordinate_x")
+  coordinateY     Int?          @map("coordinate_y")
+  width           Int?
+  height          Int?
+  rotationDegrees Decimal       @default(0.00) @map("rotation_degrees") @db.Decimal(5, 2)
+  isEllipse       Boolean       @default(false) @map("is_ellipse")
+  geometryPoints  Json?         @map("geometry_points")
+
+  venue             Venue              @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  floor             Floor              @relation(fields: [floorId], references: [id], onDelete: Restrict)
+  seats             Seat[]
+  eventZoneSections EventZoneSection[]
+
+  @@unique([venueId, name], map: "uk_sections_venue_name")
+  @@index([venueId], map: "idx_sections_venue")
+  @@index([floorId], map: "idx_sections_floor")
+  @@index([status], map: "idx_sections_status")
+  @@map("sections")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEATS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Seat {
+  id          String     @id @default(uuid()) @db.Uuid
+  sectionId   String     @map("section_id") @db.Uuid
+  row         String     @db.VarChar(10)
+  number      String     @db.VarChar(10)
+  type        SeatType   @default(STANDARD)
+  coordinateX Int?       @map("coordinate_x")
+  coordinateY Int?       @map("coordinate_y")
+  status      SeatStatus @default(AVAILABLE)
+
+  section    Section     @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  eventSeats EventSeat[] @relation("SeatEventSeats")
+
+  @@unique([sectionId, row, number], map: "uk_seats_section_row_number")
+  @@unique([sectionId, id], map: "uk_seats_section_id_id")
+  @@index([status], map: "idx_seats_status")
+  @@map("seats")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CANVAS ELEMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CanvasElement {
+  id              String            @id @default(uuid()) @db.Uuid
+  floorId         String            @map("floor_id") @db.Uuid
+  elementType     CanvasElementType @map("element_type")
+  name            String            @db.VarChar(150)
+  status          Boolean           @default(true)
+  color           String?           @db.VarChar(7)
+  coordinateX     Int               @map("coordinate_x")
+  coordinateY     Int               @map("coordinate_y")
+  width           Int?
+  height          Int?
+  rotationDegrees Decimal           @default(0.00) @map("rotation_degrees") @db.Decimal(5, 2)
+  isEllipse       Boolean           @default(false) @map("is_ellipse")
+  geometryPoints  Json?             @map("geometry_points")
+  borderRadius    Int?              @map("border_radius")
+
+  floor Floor @relation(fields: [floorId], references: [id], onDelete: Restrict)
+
+  @@index([floorId], map: "idx_ce_floor")
+  @@index([elementType], map: "idx_ce_element_type")
+  @@index([status], map: "idx_ce_status")
+  @@map("canvas_elements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENTS
+// organizerId is an external reference to auth-service.
+// It intentionally has no Prisma relation to User.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Event {
+  id             String      @id @default(uuid()) @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy      String?     @map("created_by") @db.Uuid
+  lastModifiedBy String?     @map("last_modified_by") @db.Uuid
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamp(6)
+  venueId        String      @map("venue_id") @db.Uuid
+  organizerId    String      @map("organizer_id") @db.Uuid
+  name           String      @db.VarChar(200)
+  startsAt       DateTime    @map("starts_at") @db.Timestamp(6)
+  endsAt         DateTime    @map("ends_at") @db.Timestamp(6)
+  imageUrl       String?     @map("image_url") @db.VarChar(500)
+  description    String?     @db.VarChar(1000)
+  status         EventStatus @default(DRAFT)
+
+  venue        Venue              @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  zones        EventZone[]
+  zoneSections EventZoneSection[]
+
+  @@index([venueId], map: "idx_events_venue")
+  @@index([organizerId], map: "idx_events_organizer")
+  @@index([status], map: "idx_events_status")
+  @@index([startsAt], map: "idx_events_starts_at")
+  @@map("events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT ZONES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventZone {
+  id                    String          @id @default(uuid()) @db.Uuid
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy             String?         @map("created_by") @db.Uuid
+  lastModifiedBy        String?         @map("last_modified_by") @db.Uuid
+  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamp(6)
+  eventId               String          @map("event_id") @db.Uuid
+  publicName            String          @map("public_name") @db.VarChar(100)
+  admissionType         AdmissionType   @default(RESERVED) @map("admission_type")
+  eventPrice            Decimal         @map("event_price") @db.Decimal(11, 2)
+  availableCapacity     Int             @map("available_capacity")
+  mapColor              String?         @map("map_color") @db.VarChar(7)
+  maxTicketsPerPurchase Int             @default(10) @map("max_tickets_per_purchase")
+  status                EventZoneStatus @default(ACTIVE)
+
+  event      Event                @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  priceTiers EventZonePriceTier[]
+  sections   EventZoneSection[]
+  eventSeats EventSeat[]
+
+  @@index([eventId], map: "idx_event_zones_event")
+  @@index([admissionType], map: "idx_event_zones_admission_type")
+  @@index([status], map: "idx_event_zones_status")
+  @@map("event_zones")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT ZONE PRICE TIERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventZonePriceTier {
+  id                String          @id @default(uuid()) @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy         String?         @map("created_by") @db.Uuid
+  lastModifiedBy    String?         @map("last_modified_by") @db.Uuid
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamp(6)
+  eventZoneId       String          @map("event_zone_id") @db.Uuid
+  name              String          @db.VarChar(100)
+  price             Decimal         @db.Decimal(11, 2)
+  initialCapacity   Int?            @map("initial_capacity")
+  availableCapacity Int?            @map("available_capacity")
+  startsAt          DateTime?       @map("starts_at") @db.Timestamp(6)
+  endsAt            DateTime?       @map("ends_at") @db.Timestamp(6)
+  sortOrder         Int             @default(0) @map("sort_order")
+  status            PriceTierStatus @default(PENDING)
+
+  eventZone EventZone @relation(fields: [eventZoneId], references: [id], onDelete: Restrict)
+
+  @@unique([eventZoneId, sortOrder], map: "uk_price_tiers_zone_order")
+  @@index([eventZoneId], map: "idx_price_tiers_zone")
+  @@index([status], map: "idx_price_tiers_status")
+  @@map("event_zone_price_tiers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT ZONE SECTIONS
+// A section can belong to only one commercial zone per event.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventZoneSection {
+  id          String @id @default(uuid()) @db.Uuid
+  eventZoneId String @map("event_zone_id") @db.Uuid
+  eventId     String @map("event_id") @db.Uuid
+  sectionId   String @map("section_id") @db.Uuid
+
+  eventZone EventZone @relation(fields: [eventZoneId], references: [id], onDelete: Restrict)
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  section   Section   @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  eventSeats EventSeat[] @relation("ZoneSectionEventSeats")
+
+  @@unique([eventZoneId, sectionId], map: "uk_ezs_zone_section")
+  @@unique([eventId, sectionId], map: "uk_ezs_event_section")
+  @@index([eventZoneId], map: "idx_ezs_event_zone")
+  @@index([sectionId], map: "idx_ezs_section")
+  @@map("event_zone_sections")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT SEATS
+// References the physical seat without copying its data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventSeat {
+  id          String          @id @default(uuid()) @db.Uuid
+  eventZoneId String          @map("event_zone_id") @db.Uuid
+  seatId      String          @map("seat_id") @db.Uuid
+  sectionId   String          @map("section_id") @db.Uuid
+  lockedUntil DateTime?       @map("locked_until") @db.Timestamp(6)
+  status      EventSeatStatus @default(AVAILABLE)
+
+  eventZone   EventZone        @relation(fields: [eventZoneId], references: [id], onDelete: Restrict)
+  zoneSection EventZoneSection @relation("ZoneSectionEventSeats", fields: [eventZoneId, sectionId], references: [eventZoneId, sectionId], onDelete: Restrict)
+  seat        Seat             @relation("SeatEventSeats", fields: [sectionId, seatId], references: [sectionId, id], onDelete: Restrict)
+
+  @@unique([eventZoneId, seatId], map: "uk_event_seats_zone_seat")
+  @@index([eventZoneId], map: "idx_event_seats_event_zone")
+  @@index([sectionId], map: "idx_event_seats_section")
+  @@index([status], map: "idx_event_seats_status")
+  @@index([lockedUntil], map: "idx_event_seats_locked_until")
+  @@map("event_seats")
 }
