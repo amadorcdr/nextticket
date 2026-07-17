@@ -1,10 +1,19 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, Min } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
+
+export enum UpdatePurchaseStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CANCELED = 'CANCELED',
+  REFUNDED = 'REFUNDED',
+}
 
 export class UpdatePurchaseDto {
-  @ApiPropertyOptional({ example: 200.00 })
+  @ApiPropertyOptional({
+    enum: UpdatePurchaseStatus,
+    example: UpdatePurchaseStatus.CANCELED,
+  })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  total?: number;
+  @IsEnum(UpdatePurchaseStatus)
+  status?: UpdatePurchaseStatus;
 }

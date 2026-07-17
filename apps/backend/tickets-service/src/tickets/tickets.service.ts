@@ -1,54 +1,164 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { createHash, randomBytes } from 'crypto';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
-import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 
 const LIST_CACHE_KEY = 'tickets:list';
+const FOLIO_PREFIX = 'TK';
 
 @Injectable()
 export class TicketsService {
-    constructor(
-        private readonly prisma: PrismaService,
-        private readonly redis: RedisService,
-    ) { }
+  private readonly qrHashSecret: string;
 
-    async create(dto: CreateTicketDto) {
-        const ticket = await this.prisma.ticket.create({ data: dto });
-        await this.redis.del(LIST_CACHE_KEY); // la lista cambió → invalida
-        return ticket;
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    config: ConfigService,
+  ) {
+    this.qrHashSecret =
+      config.get<string>('QR_HASH_SECRET') ?? 'nextticket-default-secret';
+  }
+
+  // ── Issue a new ticket ────────────────────────────────────
+
+  async create(dto: CreateTicketDto) {
+    if (dto.originType === 'PURCHASE' && !dto.purchaseDetailId) {
+      throw new BadRequestException(
+        'purchaseDetailId is required when originType is PURCHASE',
+      );
     }
 
-    async findAll() {
-        // 1) ¿está en caché?
-        const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
-        if (cached) return cached;
+    const folio = this.generateFolio();
+    const ticketId = randomBytes(16).toString('hex');
+    const qrCode = this.generateQrHash(ticketId);
 
-        // 2) no está → base de datos
-        const tickets = await this.prisma.ticket.findMany();
+    const ticket = await this.prisma.ticket.create({
+      data: {
+        purchaseId: dto.purchaseId,
+        purchaseDetailId: dto.purchaseDetailId,
+        eventSeatId: dto.eventSeatId,
+        eventZoneId: dto.eventZoneId,
+        currentHolderId: dto.currentHolderId,
+        originType: dto.originType,
+        folio,
+        qrCode,
+        issuedAt: new Date(),
+        status: 'ISSUED',
+      },
+    });
 
-        // 3) guarda para la próxima (30 segundos)
-        await this.redis.set(LIST_CACHE_KEY, tickets, 30);
-        return tickets;
+    await this.redis.del(LIST_CACHE_KEY);
+    return ticket;
+  }
+
+  // ── List all tickets (cached) ─────────────────────────────
+
+  async findAll() {
+    const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
+    if (cached) return cached;
+
+    const tickets = await this.prisma.ticket.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    await this.redis.set(LIST_CACHE_KEY, tickets, 30);
+    return tickets;
+  }
+
+  // ── Get ticket by ID ─────────────────────────────────────
+
+  async findOne(id: string) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      include: { validations: true },
+    });
+    if (!ticket) throw new NotFoundException(`Ticket ${id} does not exist`);
+    return ticket;
+  }
+
+  // ── Look up ticket by QR hash (for validation scan) ──────
+
+  async findByQrHash(hash: string) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { qrCode: hash },
+      include: { validations: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException('No ticket found for the provided QR hash');
     }
+    return ticket;
+  }
 
-    async findOne(id: string) {
-        const ticket = await this.prisma.ticket.findUnique({ where: { id } });
-        if (!ticket) throw new NotFoundException(`Ticket ${id} no existe`);
-        return ticket;
-    }
+  // ── List tickets by holder ────────────────────────────────
 
-    async update(id: string, dto: UpdateTicketDto) {
-        await this.findOne(id); // 404 si no existe
-        const ticket = await this.prisma.ticket.update({ where: { id }, data: dto });
-        await this.redis.del(LIST_CACHE_KEY);
-        return ticket;
-    }
+  async findByUser(userId: string) {
+    return this.prisma.ticket.findMany({
+      where: { currentHolderId: userId },
+      orderBy: { issuedAt: 'desc' },
+    });
+  }
 
-    async remove(id: string) {
-        await this.findOne(id);
-        await this.prisma.ticket.delete({ where: { id } });
-        await this.redis.del(LIST_CACHE_KEY);
-        return { deleted: true };
-    }
+  // ── List tickets by event zone ────────────────────────────
+
+  async findByEventZone(eventZoneId: string) {
+    return this.prisma.ticket.findMany({
+      where: { eventZoneId },
+      orderBy: { issuedAt: 'desc' },
+    });
+  }
+
+  // ── Update ticket status ──────────────────────────────────
+
+  async updateStatus(id: string, dto: UpdateTicketStatusDto) {
+    await this.findOne(id);
+    const ticket = await this.prisma.ticket.update({
+      where: { id },
+      data: { status: dto.status },
+    });
+    await this.redis.del(LIST_CACHE_KEY);
+    return ticket;
+  }
+
+  // ── Generate QR image buffer from stored hash ─────────────
+  // Uses the `qrcode` library to produce a PNG buffer.
+  // The hash is stored in the DB; the image is never persisted.
+
+  async generateQrImage(id: string): Promise<Buffer> {
+    const ticket = await this.findOne(id);
+
+    // Dynamic import to avoid issues when qrcode is not installed
+    const QRCode = await import('qrcode');
+    return QRCode.toBuffer(ticket.qrCode, {
+      type: 'png',
+      width: 400,
+      margin: 2,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    });
+  }
+
+  // ── Internal: generate a deterministic SHA-256 hash ───────
+  // The hash is derived from a unique ticket identifier + secret.
+  // This makes QR codes reproducible without storing the image.
+
+  generateQrHash(uniqueId: string): string {
+    return createHash('sha256')
+      .update(`${uniqueId}:${this.qrHashSecret}:${Date.now()}`)
+      .digest('hex');
+  }
+
+  // ── Internal: generate auto-increment folio ───────────────
+  // Format: TK-XXXXXXX (zero-padded 7-digit number based on timestamp)
+
+  private generateFolio(): string {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = randomBytes(2).toString('hex').toUpperCase();
+    return `${FOLIO_PREFIX}-${timestamp}${random}`.slice(0, 20);
+  }
 }

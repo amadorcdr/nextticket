@@ -1,0 +1,28 @@
+# Local infrastructure for purchases-service (Postgres 16 + Redis 7).
+# Usage: docker compose up -d   (from apps/backend/purchases-service)
+services:
+  purchases-db:
+    image: postgres:16
+    container_name: purchases-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: purchases_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - purchases_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d purchases_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: nextticket-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  purchases_db_data:

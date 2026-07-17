@@ -7,9 +7,161 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────────────────────
+// PURCHASES SERVICE — data model
+//
+// Owns two functional modules from the reference document:
+//   · Module 6 — Simulated Purchase ("Compra Simulada") → Purchase, PurchaseDetail, Payment
+//   · Module 7 — Temporary Hold ("Bloqueo Temporal")    → TemporaryBlock
+//
+// Cross-service references (userId, eventId, eventZoneId, eventSeatId,
+// priceTierId, transferId) are OPAQUE UUIDs: they point at rows owned by
+// other microservices (identity / venues-events / tickets), so they carry
+// no `@relation` and no foreign key. Referential integrity across the
+// service boundary is replaced by eventual consistency (saga + events).
+//
+// Deferred to a later part (not modeled yet): PromoCode, PromoCodeUsage,
+// Refund. Fields that will later reference them (promoCodeUsageId) are kept
+// as opaque nullable UUIDs for now.
+//
+// NOTE: the financial CHECK constraints from the reference schema
+// (net = gross - discount, total = net + tax, subtotal = finalPrice * qty,
+// payment single-origin, etc.) cannot be expressed in schema.prisma. They
+// are added by hand to the generated migration SQL / enforced in the service.
+// ─────────────────────────────────────────────────────────────
+
+enum TemporaryBlockStatus {
+  ACTIVE
+  EXPIRED
+  RELEASED
+  CONVERTED
+}
+
+enum PurchaseStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  TRANSFER
+  DIGITAL_WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+// ── Module 7: Temporary Hold ("Bloqueo Temporal") ───────────
+// Short-lived hold on a seat (or a quantity within a zone) while the user
+// checks out. The Redis key is the runtime source of truth for the TTL;
+// this table is the durable audit/record of the hold.
+model TemporaryBlock {
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+  lastModifiedBy String?  @db.Uuid
+  updatedAt      DateTime @updatedAt
+
+  userId      String               @db.Uuid // opaque → identity service
+  eventZoneId String               @db.Uuid // opaque → venues-events service
+  eventSeatId String?              @db.Uuid // opaque → venues-events (null = general admission by quantity)
+  quantity    Int                  @default(1)
+  startedAt   DateTime
+  expiresAt   DateTime
+  status      TemporaryBlockStatus @default(ACTIVE)
+
+  @@index([userId])
+  @@index([eventZoneId])
+  @@index([eventSeatId])
+  @@index([status, expiresAt])
+}
+
+// ── Module 6: Simulated Purchase ("Compra Simulada") ────────
+// Consolidated order header. Financial columns follow the reference:
+//   netSubtotal = grossSubtotal - discountAmount
+//   total       = netSubtotal + taxAmount
 model Purchase {
-  id        String   @id @default(uuid())
-  total     Decimal  @db.Decimal(11, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+  lastModifiedBy String?  @db.Uuid
+  updatedAt      DateTime @updatedAt
+
+  userId         String         @db.Uuid // opaque → identity service
+  eventId        String         @db.Uuid // opaque → venues-events service
+  folio          BigInt?        @unique
+  grossSubtotal  Decimal        @db.Decimal(11, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(11, 2)
+  netSubtotal    Decimal        @db.Decimal(11, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(11, 2)
+  total          Decimal        @db.Decimal(11, 2)
+  status         PurchaseStatus @default(PENDING)
+
+  details  PurchaseDetail[]
+  payments Payment[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// One row per purchased seat. `quantity` is fixed at 1 in the reference model
+// (each seat is its own row); it is kept for parity with the source schema.
+model PurchaseDetail {
+  id String @id @default(uuid()) @db.Uuid
+
+  purchaseId String   @db.Uuid
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  eventZoneId      String  @db.Uuid // opaque → venues-events service
+  eventSeatId      String? @db.Uuid // opaque → venues-events service
+  priceTierId      String? @db.Uuid // opaque → venues-events service
+  promoCodeUsageId String? @db.Uuid // future FK → PromoCodeUsage (not modeled yet)
+
+  unitPrice      Decimal @db.Decimal(11, 2)
+  discountAmount Decimal @default(0) @db.Decimal(11, 2)
+  finalPrice     Decimal @db.Decimal(11, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(11, 2)
+  quantity       Int     @default(1)
+  subtotal       Decimal @db.Decimal(11, 2)
+
+  @@unique([purchaseId, eventSeatId])
+  @@index([purchaseId])
+  @@index([eventZoneId])
+  @@index([eventSeatId])
+  @@index([priceTierId])
+}
+
+// Payment record. In the reference model a payment belongs to EITHER a
+// purchase OR a ticket transfer (single-origin CHECK). For this service the
+// purchase path is what matters; transferId is kept opaque for model parity.
+model Payment {
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+  lastModifiedBy String?  @db.Uuid
+  updatedAt      DateTime @updatedAt
+
+  purchaseId String?   @db.Uuid
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+  transferId String?   @db.Uuid // opaque → tickets service (transfer flow, out of scope)
+
+  amount            Decimal       @db.Decimal(11, 2)
+  paymentMethod     PaymentMethod
+  externalReference String?       @db.VarChar(100)
+  status            PaymentStatus @default(PENDING)
+
+  @@index([purchaseId])
+  @@index([transferId])
+  @@index([paymentMethod])
+  @@index([status])
 }
