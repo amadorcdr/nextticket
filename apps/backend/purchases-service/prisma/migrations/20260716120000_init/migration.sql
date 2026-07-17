@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "TemporaryBlockStatus" AS ENUM ('ACTIVE', 'EXPIRED', 'RELEASED');
+CREATE TYPE "TemporaryBlockStatus" AS ENUM ('ACTIVE', 'EXPIRED', 'RELEASED', 'CONVERTED');
 
 -- CreateEnum
 CREATE TYPE "PurchaseStatus" AS ENUM ('PENDING', 'CONFIRMED', 'CANCELED', 'REFUNDED');

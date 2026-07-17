@@ -34,6 +34,7 @@ enum TemporaryBlockStatus {
   ACTIVE
   EXPIRED
   RELEASED
+  CONVERTED
 }
 
 enum PurchaseStatus {
