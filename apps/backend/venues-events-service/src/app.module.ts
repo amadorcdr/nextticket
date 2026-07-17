@@ -6,6 +6,8 @@ import { VenuesModule } from './venues/venues.module';
 import { HealthController } from './health/health.controller';
 import { EventsModule } from './events/events.module';
 import { EventZonesModule } from './event-zones/event-zones.module';
+import { EventSectionsModule } from './event-sections/event-sections.module';
+import { EventSeatModule } from './event-seat/event-seat.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { EventZonesModule } from './event-zones/event-zones.module';
     VenuesModule,
     EventsModule,
     EventZonesModule,
+    EventSectionsModule,
+    EventSeatModule,
   ],
   controllers: [HealthController],
 })
