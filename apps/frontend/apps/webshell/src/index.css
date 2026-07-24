@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@config "../../../tailwind.config.ts";
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}
