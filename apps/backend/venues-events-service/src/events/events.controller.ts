@@ -21,11 +21,23 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
+import { AssignEventCategoriesDto } from './dto/assign-event-categories.dto';
 
 @ApiTags('events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly events: EventsService) {}
+  constructor(private readonly events: EventsService) { }
+
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Filtrar por UUID de categoría',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filtrar por slug de categoría',
+  })
 
   @Post()
   @ApiOperation({
@@ -49,6 +61,7 @@ export class EventsController {
     required: false,
     enum: EventStatus,
   })
+
   findAll(
     @Query(
       'organizerId',
@@ -57,6 +70,7 @@ export class EventsController {
       }),
     )
     organizerId?: string,
+
     @Query(
       'status',
       new ParseEnumPipe(EventStatus, {
@@ -64,8 +78,24 @@ export class EventsController {
       }),
     )
     status?: EventStatus,
+
+    @Query(
+      'categoryId',
+      new ParseUUIDPipe({
+        optional: true,
+      }),
+    )
+    categoryId?: string,
+
+    @Query('category')
+    categorySlug?: string,
   ) {
-    return this.events.findAll(organizerId, status);
+    return this.events.findAll(
+      organizerId,
+      status,
+      categoryId,
+      categorySlug,
+    );
   }
 
   @Get(':id')
@@ -124,5 +154,33 @@ export class EventsController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
     return this.events.remove(id);
+  }
+
+  @Post(':eventId/categories')
+  @ApiOperation({
+    summary: 'Asignar categorías a un evento',
+  })
+  assignCategories(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Body() dto: AssignEventCategoriesDto,
+  ) {
+    return this.events.assignCategories(
+      eventId,
+      dto.categoryIds,
+    );
+  }
+
+  @Delete(':eventId/categories/:categoryId')
+  @ApiOperation({
+    summary: 'Eliminar una categoría de un evento',
+  })
+  removeCategory(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('categoryId', new ParseUUIDPipe()) categoryId: string,
+  ) {
+    return this.events.removeCategory(
+      eventId,
+      categoryId,
+    );
   }
 }

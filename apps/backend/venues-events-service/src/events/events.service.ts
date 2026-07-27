@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EventStatus, VenueStatus } from '@prisma/client';
+import { EventCategoryStatus, EventStatus, VenueStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -17,41 +17,93 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) {}
+  ) { }
+
+  private async validateCategories(categoryIds: string[]) {
+    const categories = await this.prisma.eventCategory.findMany({
+      where: {
+        id: {
+          in: categoryIds,
+        },
+        status: EventCategoryStatus.ACTIVE,
+      },
+    });
+
+    if (categories.length !== categoryIds.length) {
+      throw new BadRequestException(
+        'Una o más categorías no existen o no están activas',
+      );
+    }
+  }
 
   async create(dto: CreateEventDto) {
     this.validateDateWindow(dto.startsAt, dto.endsAt);
-
     await this.validateVenue(dto.venueId);
 
-    const event = await this.prisma.event.create({
-      data: {
-        venueId: dto.venueId,
-        organizerId: dto.organizerId,
-        name: dto.name,
-        startsAt: new Date(dto.startsAt),
-        endsAt: new Date(dto.endsAt),
-        imageUrl: dto.imageUrl,
-        description: dto.description,
-        status: dto.status ?? EventStatus.DRAFT,
-        createdBy: dto.organizerId,
+    const categoryIds = [...new Set(dto.categoryIds ?? [])];
+
+    if (categoryIds.length > 0) {
+      await this.validateCategories(categoryIds);
+    }
+
+    const event = await this.prisma.$transaction(
+      async (transaction) => {
+        const createdEvent = await transaction.event.create({
+          data: {
+            venueId: dto.venueId,
+            organizerId: dto.organizerId,
+            name: dto.name,
+            startsAt: new Date(dto.startsAt),
+            endsAt: new Date(dto.endsAt),
+            imageUrl: dto.imageUrl,
+            description: dto.description,
+            status: dto.status ?? EventStatus.DRAFT,
+            createdBy: dto.organizerId,
+          },
+        });
+
+        if (categoryIds.length > 0) {
+          await transaction.eventCategoryAssignment.createMany({
+            data: categoryIds.map((categoryId) => ({
+              eventId: createdEvent.id,
+              categoryId,
+            })),
+          });
+        }
+
+        return transaction.event.findUnique({
+          where: {
+            id: createdEvent.id,
+          },
+          include: {
+            venue: true,
+            categories: {
+              include: {
+                category: true,
+              },
+            },
+          },
+        });
       },
-      include: {
-        venue: true,
-      },
-    });
+    );
 
     await this.invalidateEventCache();
 
     return event;
   }
 
-  async findAll(organizerId?: string, status?: EventStatus) {
+  async findAll(organizerId?: string, status?: EventStatus, categoryId?: string, categorySlug?: string,) {
+    const hasFilters =
+      Boolean(organizerId) ||
+      Boolean(status) ||
+      Boolean(categoryId) ||
+      Boolean(categorySlug);
+
     /*
      * Solo usamos caché para el listado general sin filtros.
      * Las consultas filtradas se resuelven directamente en PostgreSQL.
      */
-    if (!organizerId && !status) {
+    if (!hasFilters) {
       const cached = await this.redis.get<unknown[]>(
         EVENTS_LIST_CACHE_KEY,
       );
@@ -65,9 +117,26 @@ export class EventsService {
       where: {
         organizerId,
         status,
+        categories:
+          categoryId || categorySlug
+            ? {
+              some: {
+                category: {
+                  id: categoryId,
+                  slug: categorySlug,
+                  status: EventCategoryStatus.ACTIVE,
+                },
+              },
+            }
+            : undefined,
       },
       include: {
         venue: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
         zones: {
           select: {
             id: true,
@@ -83,8 +152,12 @@ export class EventsService {
       },
     });
 
-    if (!organizerId && !status) {
-      await this.redis.set(EVENTS_LIST_CACHE_KEY, events, 30);
+    if (!hasFilters) {
+      await this.redis.set(
+        EVENTS_LIST_CACHE_KEY,
+        events,
+        30,
+      );
     }
 
     return events;
@@ -117,6 +190,11 @@ export class EventsService {
                 section: true,
               },
             },
+          },
+        },
+        categories: {
+          include: {
+            category: true,
           },
         },
       },
@@ -370,5 +448,85 @@ export class EventsService {
     if (id) {
       await this.redis.del(this.getEventCacheKey(id));
     }
+  }
+
+  async assignCategories(
+    eventId: string,
+    categoryIds: string[],
+  ) {
+    await this.findOneFromDatabase(eventId);
+
+    const uniqueCategoryIds = [...new Set(categoryIds)];
+
+    await this.validateCategories(uniqueCategoryIds);
+
+    const existingAssignments =
+      await this.prisma.eventCategoryAssignment.findMany({
+        where: {
+          eventId,
+          categoryId: {
+            in: uniqueCategoryIds,
+          },
+        },
+        select: {
+          categoryId: true,
+        },
+      });
+
+    const existingIds = new Set(
+      existingAssignments.map(
+        (assignment) => assignment.categoryId,
+      ),
+    );
+
+    const newCategoryIds = uniqueCategoryIds.filter(
+      (categoryId) => !existingIds.has(categoryId),
+    );
+
+    if (newCategoryIds.length > 0) {
+      await this.prisma.eventCategoryAssignment.createMany({
+        data: newCategoryIds.map((categoryId) => ({
+          eventId,
+          categoryId,
+        })),
+      });
+    }
+
+    await this.invalidateEventCache(eventId);
+
+    return this.findOne(eventId);
+  }
+
+  async removeCategory(
+    eventId: string,
+    categoryId: string,
+  ) {
+    await this.findOneFromDatabase(eventId);
+
+    const assignment =
+      await this.prisma.eventCategoryAssignment.findUnique({
+        where: {
+          eventId_categoryId: {
+            eventId,
+            categoryId,
+          },
+        },
+      });
+
+    if (!assignment) {
+      throw new NotFoundException(
+        'La categoría no está asignada al evento',
+      );
+    }
+
+    await this.prisma.eventCategoryAssignment.delete({
+      where: {
+        id: assignment.id,
+      },
+    });
+
+    await this.invalidateEventCache(eventId);
+
+    return this.findOne(eventId);
   }
 }

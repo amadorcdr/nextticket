@@ -9,6 +9,8 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ArrayUnique,
+  IsArray,
 } from 'class-validator';
 
 export class CreateEventDto {
@@ -23,6 +25,19 @@ export class CreateEventDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
     description: 'Identificador externo del organizador en auth-service',
   })
+  @ApiPropertyOptional({
+    type: [String],
+    example: [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  categoryIds?: string[];
+
   @IsUUID()
   organizerId!: string;
 
