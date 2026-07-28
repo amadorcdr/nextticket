@@ -6,9 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { PurchasesService } from './purchases.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
@@ -51,9 +53,9 @@ export class PurchasesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todas las compras' })
-  findAll() {
-    return this.purchases.findAll();
+  @ApiOperation({ summary: 'Listar compras (paginado)' })
+  findAll(@Query() pagination: PaginationQueryDto) {
+    return this.purchases.findAll(pagination);
   }
 
   @Get(':id')

@@ -3,6 +3,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+    buildPaginatedResponse,
+    isCacheablePage,
+    toPrismaPagination,
+} from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'users:list';
 
@@ -19,17 +26,34 @@ export class UsersService {
         return user;
     }
 
-    async findAll() {
+    async findAll(pagination: PaginationQueryDto) {
+        // Solo la página por defecto usa caché: es la única que cabe en la
+        // llave única que ya invalidan create/update/remove.
+        const useCache = isCacheablePage(pagination);
+
         // 1) ¿está en caché?
-        const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
-        if (cached) return cached;
+        if (useCache) {
+            const cached =
+                await this.redis.get<PaginatedResponseDto<unknown>>(LIST_CACHE_KEY);
+            if (cached) return cached;
+        }
 
         // 2) no está → base de datos
-        const users = await this.prisma.user.findMany();
+        const { skip, take } = toPrismaPagination(pagination);
+        const [users, total] = await this.prisma.$transaction([
+            this.prisma.user.findMany({
+                skip,
+                take,
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.user.count(),
+        ]);
+
+        const response = buildPaginatedResponse(users, total, pagination);
 
         // 3) guarda para la próxima (30 segundos)
-        await this.redis.set(LIST_CACHE_KEY, users, 30);
-        return users;
+        if (useCache) await this.redis.set(LIST_CACHE_KEY, response, 30);
+        return response;
     }
 
     async findOne(id: string) {

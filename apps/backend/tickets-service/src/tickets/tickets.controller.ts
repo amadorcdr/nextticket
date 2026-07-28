@@ -5,11 +5,13 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { TicketsService } from './tickets.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 
@@ -25,9 +27,9 @@ export class TicketsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all tickets' })
-  findAll() {
-    return this.tickets.findAll();
+  @ApiOperation({ summary: 'List tickets (paginated)' })
+  findAll(@Query() pagination: PaginationQueryDto) {
+    return this.tickets.findAll(pagination);
   }
 
   @Get(':id')

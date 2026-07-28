@@ -15,6 +15,13 @@ import {
 } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'purchases:list';
 const BLOCK_TTL_SECONDS = 8 * 60;
@@ -188,17 +195,32 @@ export class PurchasesService {
     };
   }
 
-  async findAll() {
-    const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
-    if (cached) return cached;
+  async findAll(pagination: PaginationQueryDto) {
+    // Only the default page is cached: it is the single entry that the
+    // existing write invalidations already clear.
+    const useCache = isCacheablePage(pagination);
 
-    const purchases = await this.prisma.purchase.findMany({
-      include: { details: true, payments: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(LIST_CACHE_KEY);
+      if (cached) return cached;
+    }
 
-    await this.redis.set(LIST_CACHE_KEY, purchases, 30);
-    return purchases;
+    const { skip, take } = toPrismaPagination(pagination);
+    const [purchases, total] = await this.prisma.$transaction([
+      this.prisma.purchase.findMany({
+        skip,
+        take,
+        include: { details: true, payments: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.purchase.count(),
+    ]);
+
+    const response = buildPaginatedResponse(purchases, total, pagination);
+
+    if (useCache) await this.redis.set(LIST_CACHE_KEY, response, 30);
+    return response;
   }
 
   async findOne(id: string) {

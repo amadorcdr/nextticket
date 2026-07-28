@@ -214,6 +214,83 @@ Para garantizar consistencia, escalabilidad y facilidad de mantenimiento, todo e
    - `@ApiParam` o `@ApiQuery` cuando sea necesario.
 5. **Acceso a Datos:** Toda interacción con la base de datos se realiza **única y exclusivamente** mediante `PrismaService` inyectado en la capa de `Service` (nunca en el Controller).
 6. **Caché:** Usar `RedisService` inyectado para aplicar el patrón *cache-aside* en lecturas frecuentes.
+7. **Paginación:** Todo endpoint que devuelve una colección **debe estar paginado** siguiendo el contrato de la sección [Paginación de listados](#paginación-de-listados).
+
+### 📄 Paginación de listados
+
+Cada microservicio tiene su propia copia de los mismos tres archivos (los servicios son paquetes independientes, igual que `prisma/` y `redis/`):
+
+| Archivo | Responsabilidad |
+|---------|-----------------|
+| `src/common/dto/pagination-query.dto.ts` | `PaginationQueryDto`: valida `page` y `limit` |
+| `src/common/dto/paginated-response.dto.ts` | `PaginatedResponseDto<T>` y `PaginationMetaDto`: forma de la respuesta |
+| `src/common/pagination.helper.ts` | `toPrismaPagination`, `buildPaginatedResponse`, `isCacheablePage` |
+
+**Query params** (ambos opcionales):
+
+| Param | Default | Reglas |
+|-------|---------|--------|
+| `page` | `1` | entero ≥ 1 |
+| `limit` | `20` | entero entre 1 y 100 |
+
+Un valor inválido responde `400` con el mensaje de `class-validator` (ej. `limit must not be greater than 100`).
+
+**Forma de la respuesta** — todos los listados devuelven este envoltorio, nunca un arreglo suelto:
+
+```json
+{
+  "data": [ /* registros de la página */ ],
+  "meta": {
+    "total": 137,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 7,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
+
+**Cómo se usa en un módulo nuevo:**
+
+```ts
+// controller
+@Get()
+@ApiOperation({ summary: 'Listar recursos (paginado)' })
+findAll(@Query() pagination: PaginationQueryDto) {
+  return this.resources.findAll(pagination);
+}
+
+// service
+async findAll(pagination: PaginationQueryDto) {
+  const { skip, take } = toPrismaPagination(pagination);
+
+  const [rows, total] = await this.prisma.$transaction([
+    this.prisma.resource.findMany({ skip, take, where, orderBy: { createdAt: 'desc' } }),
+    this.prisma.resource.count({ where }),
+  ]);
+
+  return buildPaginatedResponse(rows, total, pagination);
+}
+```
+
+Reglas al implementarlo:
+
+1. **Siempre un `orderBy` estable**, si no las páginas se traslapan o pierden registros.
+2. **El `count` usa el mismo `where` que el `findMany`**, para que `total` respete los filtros aplicados.
+3. **Caché:** la llave de lista guarda una sola entrada, así que solo se cachea la página por defecto (`isCacheablePage`). Las demás páginas y las consultas filtradas van directo a PostgreSQL; así las invalidaciones que ya existen (`redis.del`) siguen siendo correctas.
+
+**Endpoints paginados actualmente:**
+
+| Servicio | Endpoint |
+|----------|----------|
+| auth | `GET /users` |
+| venues-events | `GET /venues` |
+| venues-events | `GET /events` (respeta `organizerId`, `status`, `categoryId`, `category`) |
+| venues-events | `GET /event-categories` |
+| venues-events | `GET /events/:eventId/seats` (respeta `eventZoneId`, `sectionId`, `status`) |
+| purchases | `GET /purchases` |
+| tickets | `GET /tickets` |
 
 ### 🎨 Convenciones de Frontend (Vite + React)
 

@@ -8,6 +8,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventCategoryDto } from './dto/create-event-category.dto';
 import { UpdateEventCategoryDto } from './dto/update-event-category.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 const CATEGORIES_LIST_CACHE_KEY = 'event-categories:list';
 
@@ -49,30 +56,51 @@ export class EventCategoriesService {
     }
   }
 
-  async findAll() {
-    const cached =
-      await this.redis.get<unknown[]>(
-        CATEGORIES_LIST_CACHE_KEY,
-      );
+  async findAll(pagination: PaginationQueryDto) {
+    // Solo cacheamos la página por defecto, que es la única que cabe en la
+    // llave única que ya invalidan las escrituras de categorías.
+    const useCache = isCacheablePage(pagination);
 
-    if (cached) {
-      return cached;
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(
+          CATEGORIES_LIST_CACHE_KEY,
+        );
+
+      if (cached) {
+        return cached;
+      }
     }
 
-    const categories =
-      await this.prisma.eventCategory.findMany({
-        orderBy: {
-          name: 'asc',
-        },
-      });
+    const { skip, take } = toPrismaPagination(pagination);
 
-    await this.redis.set(
-      CATEGORIES_LIST_CACHE_KEY,
+    const [categories, total] =
+      await this.prisma.$transaction([
+        this.prisma.eventCategory.findMany({
+          skip,
+          take,
+          orderBy: {
+            name: 'asc',
+          },
+        }),
+        this.prisma.eventCategory.count(),
+      ]);
+
+    const response = buildPaginatedResponse(
       categories,
-      60,
+      total,
+      pagination,
     );
 
-    return categories;
+    if (useCache) {
+      await this.redis.set(
+        CATEGORIES_LIST_CACHE_KEY,
+        response,
+        60,
+      );
+    }
+
+    return response;
   }
 
   async findOne(id: string) {

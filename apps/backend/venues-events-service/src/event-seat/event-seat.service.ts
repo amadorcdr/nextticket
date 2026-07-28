@@ -7,6 +7,11 @@ import { EventSeatStatus, EventStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { UpdateEventSeatDto } from './dto/update-event-seat.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 interface EventSeatFilters {
   eventZoneId?: string;
@@ -21,22 +26,44 @@ export class EventSeatService {
     private readonly redis: RedisService,
   ) {}
 
-  async findAllByEvent(eventId: string, filters: EventSeatFilters) {
+  async findAllByEvent(
+    eventId: string,
+    filters: EventSeatFilters,
+    pagination: PaginationQueryDto,
+  ) {
     await this.findEvent(eventId);
 
-    return this.prisma.eventSeat.findMany({
-      where: {
-        eventZone: { eventId },
-        eventZoneId: filters.eventZoneId,
-        sectionId: filters.sectionId,
-        status: filters.status,
-      },
-      include: {
-        seat: {
-          select: { id: true, row: true, number: true, type: true },
+    const where = {
+      eventZone: { eventId },
+      eventZoneId: filters.eventZoneId,
+      sectionId: filters.sectionId,
+      status: filters.status,
+    };
+
+    const { skip, take } = toPrismaPagination(pagination);
+
+    const [eventSeats, total] = await this.prisma.$transaction([
+      this.prisma.eventSeat.findMany({
+        skip,
+        take,
+        where,
+        include: {
+          seat: {
+            select: { id: true, row: true, number: true, type: true },
+          },
         },
-      },
-    });
+        // Orden estable y con sentido para el mapa de asientos; el id
+        // desempata para que las páginas nunca se traslapen.
+        orderBy: [
+          { seat: { row: 'asc' } },
+          { seat: { number: 'asc' } },
+          { id: 'asc' },
+        ],
+      }),
+      this.prisma.eventSeat.count({ where }),
+    ]);
+
+    return buildPaginatedResponse(eventSeats, total, pagination);
   }
 
   async findOne(eventId: string, seatId: string) {

@@ -7,9 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateVenueDto } from '../dto/venues/create-venue.dto';
 import { UpdateVenueDto } from '../dto/venues/update-venue.dto';
 import { CreateFloorDto } from '../dto/floors/create-floor.dto';
@@ -37,9 +39,11 @@ export class VenuesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todos los recintos (con árbol completo)' })
-  findAllVenues() {
-    return this.venues.findAllVenues();
+  @ApiOperation({
+    summary: 'Listar recintos paginados (con árbol completo)',
+  })
+  findAllVenues(@Query() pagination: PaginationQueryDto) {
+    return this.venues.findAllVenues(pagination);
   }
 
   @Get(':venueId')

@@ -17,6 +17,7 @@ import {
 import { EventSeatStatus } from '@prisma/client';
 import { UpdateEventSeatDto } from './dto/update-event-seat.dto';
 import { EventSeatService } from './event-seat.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('event-seats')
 @Controller('events/:eventId/seats')
@@ -27,7 +28,8 @@ export class EventSeatController {
 
   @Get()
   @ApiOperation({
-    summary: 'Listar asientos del evento (filtrable por zona, sección o estado)',
+    summary:
+      'Listar asientos del evento paginados (filtrable por zona, sección o estado)',
   })
   @ApiQuery({ name: 'eventZoneId', required: false })
   @ApiQuery({ name: 'sectionId', required: false })
@@ -35,15 +37,20 @@ export class EventSeatController {
   findAll(
     @Param('eventId', new ParseUUIDPipe())
     eventId: string,
+    @Query() pagination: PaginationQueryDto,
     @Query('eventZoneId') eventZoneId?: string,
     @Query('sectionId') sectionId?: string,
     @Query('status') status?: EventSeatStatus,
   ) {
-    return this.eventSeat.findAllByEvent(eventId, {
-      eventZoneId,
-      sectionId,
-      status,
-    });
+    return this.eventSeat.findAllByEvent(
+      eventId,
+      {
+        eventZoneId,
+        sectionId,
+        status,
+      },
+      pagination,
+    );
   }
 
   @Get(':seatId')

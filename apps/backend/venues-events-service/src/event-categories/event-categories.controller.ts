@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -16,6 +17,7 @@ import {
 import { CreateEventCategoryDto } from './dto/create-event-category.dto';
 import { UpdateEventCategoryDto } from './dto/update-event-category.dto';
 import { EventCategoriesService } from './event-categories.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('event-categories')
 @Controller('event-categories')
@@ -31,9 +33,11 @@ export class EventCategoriesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar categorías de eventos' })
-  findAll() {
-    return this.eventCategories.findAll();
+  @ApiOperation({
+    summary: 'Listar categorías de eventos (paginado)',
+  })
+  findAll(@Query() pagination: PaginationQueryDto) {
+    return this.eventCategories.findAll(pagination);
   }
 
   @Get(':id')

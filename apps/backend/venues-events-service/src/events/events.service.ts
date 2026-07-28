@@ -9,6 +9,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 const EVENTS_LIST_CACHE_KEY = 'events:list';
 
@@ -92,7 +99,13 @@ export class EventsService {
     return event;
   }
 
-  async findAll(organizerId?: string, status?: EventStatus, categoryId?: string, categorySlug?: string,) {
+  async findAll(
+    pagination: PaginationQueryDto,
+    organizerId?: string,
+    status?: EventStatus,
+    categoryId?: string,
+    categorySlug?: string,
+  ) {
     const hasFilters =
       Boolean(organizerId) ||
       Boolean(status) ||
@@ -100,11 +113,15 @@ export class EventsService {
       Boolean(categorySlug);
 
     /*
-     * Solo usamos caché para el listado general sin filtros.
-     * Las consultas filtradas se resuelven directamente en PostgreSQL.
+     * Solo usamos caché para la página por defecto del listado general sin
+     * filtros, porque es la única que cabe en la llave que ya invalidamos.
+     * El resto de páginas y las consultas filtradas se resuelven
+     * directamente en PostgreSQL.
      */
-    if (!hasFilters) {
-      const cached = await this.redis.get<unknown[]>(
+    const useCache = !hasFilters && isCacheablePage(pagination);
+
+    if (useCache) {
+      const cached = await this.redis.get<PaginatedResponseDto<unknown>>(
         EVENTS_LIST_CACHE_KEY,
       );
 
@@ -113,54 +130,69 @@ export class EventsService {
       }
     }
 
-    const events = await this.prisma.event.findMany({
-      where: {
-        organizerId,
-        status,
-        categories:
-          categoryId || categorySlug
-            ? {
-              some: {
-                category: {
-                  id: categoryId,
-                  slug: categorySlug,
-                  status: EventCategoryStatus.ACTIVE,
-                },
+    const where = {
+      organizerId,
+      status,
+      categories:
+        categoryId || categorySlug
+          ? {
+            some: {
+              category: {
+                id: categoryId,
+                slug: categorySlug,
+                status: EventCategoryStatus.ACTIVE,
               },
-            }
-            : undefined,
-      },
-      include: {
-        venue: true,
-        categories: {
-          include: {
-            category: true,
-          },
-        },
-        zones: {
-          select: {
-            id: true,
-            publicName: true,
-            eventPrice: true,
-            availableCapacity: true,
-            status: true,
-          },
-        },
-      },
-      orderBy: {
-        startsAt: 'asc',
-      },
-    });
+            },
+          }
+          : undefined,
+    };
 
-    if (!hasFilters) {
+    const { skip, take } = toPrismaPagination(pagination);
+
+    const [events, total] = await this.prisma.$transaction([
+      this.prisma.event.findMany({
+        skip,
+        take,
+        where,
+        include: {
+          venue: true,
+          categories: {
+            include: {
+              category: true,
+            },
+          },
+          zones: {
+            select: {
+              id: true,
+              publicName: true,
+              eventPrice: true,
+              availableCapacity: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: {
+          startsAt: 'asc',
+        },
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    const response = buildPaginatedResponse(
+      events,
+      total,
+      pagination,
+    );
+
+    if (useCache) {
       await this.redis.set(
         EVENTS_LIST_CACHE_KEY,
-        events,
+        response,
         30,
       );
     }
 
-    return events;
+    return response;
   }
 
   async findOne(id: string) {

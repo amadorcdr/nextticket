@@ -6,11 +6,13 @@ import {
     Param,
     Patch,
     Post,
+    Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -24,9 +26,9 @@ export class UsersController {
     }
 
     @Get()
-    @ApiOperation({ summary: 'Listar todos los usuarios' })
-    findAll() {
-        return this.users.findAll();
+    @ApiOperation({ summary: 'Listar usuarios (paginado)' })
+    findAll(@Query() pagination: PaginationQueryDto) {
+        return this.users.findAll(pagination);
     }
 
     @Get(':id')

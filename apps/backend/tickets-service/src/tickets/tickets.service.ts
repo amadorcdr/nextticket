@@ -9,6 +9,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'tickets:list';
 const FOLIO_PREFIX = 'TK';
@@ -60,16 +67,31 @@ export class TicketsService {
 
   // ── List all tickets (cached) ─────────────────────────────
 
-  async findAll() {
-    const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
-    if (cached) return cached;
+  async findAll(pagination: PaginationQueryDto) {
+    // Only the default page is cached: it is the single entry that the
+    // existing write invalidations already clear.
+    const useCache = isCacheablePage(pagination);
 
-    const tickets = await this.prisma.ticket.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(LIST_CACHE_KEY);
+      if (cached) return cached;
+    }
 
-    await this.redis.set(LIST_CACHE_KEY, tickets, 30);
-    return tickets;
+    const { skip, take } = toPrismaPagination(pagination);
+    const [tickets, total] = await this.prisma.$transaction([
+      this.prisma.ticket.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.ticket.count(),
+    ]);
+
+    const response = buildPaginatedResponse(tickets, total, pagination);
+
+    if (useCache) await this.redis.set(LIST_CACHE_KEY, response, 30);
+    return response;
   }
 
   // ── Get ticket by ID ─────────────────────────────────────

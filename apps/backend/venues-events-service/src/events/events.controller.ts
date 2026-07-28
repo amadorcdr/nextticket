@@ -22,22 +22,12 @@ import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
 import { AssignEventCategoriesDto } from './dto/assign-event-categories.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('events')
 @Controller('events')
 export class EventsController {
   constructor(private readonly events: EventsService) { }
-
-  @ApiQuery({
-    name: 'categoryId',
-    required: false,
-    description: 'Filtrar por UUID de categoría',
-  })
-  @ApiQuery({
-    name: 'category',
-    required: false,
-    description: 'Filtrar por slug de categoría',
-  })
 
   @Post()
   @ApiOperation({
@@ -49,7 +39,7 @@ export class EventsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Listar eventos',
+    summary: 'Listar eventos paginados',
   })
   @ApiQuery({
     name: 'organizerId',
@@ -61,8 +51,19 @@ export class EventsController {
     required: false,
     enum: EventStatus,
   })
-
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Filtrar por UUID de categoría',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filtrar por slug de categoría',
+  })
   findAll(
+    @Query() pagination: PaginationQueryDto,
+
     @Query(
       'organizerId',
       new ParseUUIDPipe({
@@ -91,6 +92,7 @@ export class EventsController {
     categorySlug?: string,
   ) {
     return this.events.findAll(
+      pagination,
       organizerId,
       status,
       categoryId,

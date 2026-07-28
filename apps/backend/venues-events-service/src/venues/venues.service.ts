@@ -16,6 +16,13 @@ import { CreateSeatDto } from '../dto/seats/create-seat.dto';
 import { UpdateSeatDto } from '../dto/seats/update-seat.dto';
 import { CreateCanvasElementDto } from '../dto/canvas-elements/create-canvas-element.dto';
 import { UpdateCanvasElementDto } from '../dto/canvas-elements/update-canvas-element.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 // ─── Cache keys ──────────────────────────────────────────────
 const VENUES_LIST_KEY = 'venues:list';
@@ -77,16 +84,32 @@ export class VenuesService {
     }
   }
 
-  async findAllVenues() {
-    const cached = await this.redis.get<unknown[]>(VENUES_LIST_KEY);
-    if (cached) return cached;
+  async findAllVenues(pagination: PaginationQueryDto) {
+    // Solo la página por defecto se cachea: es la única que cabe en la llave
+    // única que ya invalidan las escrituras de recintos.
+    const useCache = isCacheablePage(pagination);
 
-    const venues = await this.prisma.venue.findMany({
-      include: VENUE_FULL_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    await this.redis.set(VENUES_LIST_KEY, venues, 30);
-    return venues;
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(VENUES_LIST_KEY);
+      if (cached) return cached;
+    }
+
+    const { skip, take } = toPrismaPagination(pagination);
+    const [venues, total] = await this.prisma.$transaction([
+      this.prisma.venue.findMany({
+        skip,
+        take,
+        include: VENUE_FULL_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.venue.count(),
+    ]);
+
+    const response = buildPaginatedResponse(venues, total, pagination);
+
+    if (useCache) await this.redis.set(VENUES_LIST_KEY, response, 30);
+    return response;
   }
 
   async findOneVenue(id: string) {
