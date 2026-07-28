@@ -3,19 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateValidationDto } from './dto/create-validation.dto';
 
+const LIST_CACHE_KEY = 'tickets:list';
+const VALIDATION_RESULT_ACCEPTED = 1;
+const VALIDATION_RESULT_REJECTED = 0;
+
 @Injectable()
 export class TicketValidationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
-
-  // ── Validate a ticket by QR hash ─────────────────────────
-  // 1. Look up ticket by qrCode (hash)
-  // 2. If not found → rejection
-  // 3. If status !== ISSUED → rejection with reason
-  // 4. If already successfully validated → rejection
-  // 5. Otherwise → mark ticket as USED + create validation record
 
   async validate(dto: CreateValidationDto) {
     const now = new Date();
@@ -25,92 +22,123 @@ export class TicketValidationsService {
       include: { validations: true },
     });
 
-    // Ticket not found
     if (!ticket) {
       return {
         success: false,
-        result: 0,
+        result: VALIDATION_RESULT_REJECTED,
         rejectionReason: 'QR hash does not match any ticket',
         validatedAt: now,
       };
     }
 
-    // Ticket already used
     if (ticket.status === 'USED') {
-      const validation = await this.createValidationRecord(
+      const validation = await this.createRejectedValidation(
         ticket.id,
         dto.validatorId,
-        0,
         'Ticket has already been used',
         now,
       );
+
       return { success: false, ticket, validation };
     }
 
-    // Ticket canceled or expired
     if (ticket.status !== 'ISSUED') {
-      const validation = await this.createValidationRecord(
+      const validation = await this.createRejectedValidation(
         ticket.id,
         dto.validatorId,
-        0,
         `Ticket status is ${ticket.status}`,
         now,
       );
+
       return { success: false, ticket, validation };
     }
 
-    // Already has a successful validation (should not happen, but guard)
-    const alreadyValidated = ticket.validations.some((v) => v.result === 1);
+    const alreadyValidated = ticket.validations.some(
+      (validation) => validation.result === VALIDATION_RESULT_ACCEPTED,
+    );
+
     if (alreadyValidated) {
-      const validation = await this.createValidationRecord(
+      const validation = await this.createRejectedValidation(
         ticket.id,
         dto.validatorId,
-        0,
         'Ticket was already validated successfully',
         now,
       );
+
       return { success: false, ticket, validation };
     }
 
-    // Success: mark ticket as USED and create successful validation
-    const [updatedTicket, validation] = await this.prisma.$transaction([
-      this.prisma.ticket.update({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          status: 'ISSUED',
+        },
+        data: {
+          status: 'USED',
+        },
+      });
+
+      if (updated.count === 0) {
+        const currentTicket = await tx.ticket.findUnique({
+          where: { id: ticket.id },
+        });
+
+        const validation = await tx.ticketValidation.create({
+          data: {
+            ticketId: ticket.id,
+            validatorId: dto.validatorId,
+            validatedAt: now,
+            result: VALIDATION_RESULT_REJECTED,
+            rejectionReason: currentTicket
+              ? `Ticket status is ${currentTicket.status}`
+              : 'Ticket is no longer available for validation',
+          },
+        });
+
+        return {
+          success: false,
+          ticket: currentTicket ?? ticket,
+          validation,
+        };
+      }
+
+      const updatedTicket = await tx.ticket.findUniqueOrThrow({
         where: { id: ticket.id },
-        data: { status: 'USED' },
-      }),
-      this.prisma.ticketValidation.create({
+      });
+
+      const validation = await tx.ticketValidation.create({
         data: {
           ticketId: ticket.id,
           validatorId: dto.validatorId,
           validatedAt: now,
-          result: 1,
+          result: VALIDATION_RESULT_ACCEPTED,
           rejectionReason: null,
         },
-      }),
-    ]);
+      });
 
-    // Invalidate tickets list cache
-    await this.redis.del('tickets:list');
+      return { success: true, ticket: updatedTicket, validation };
+    });
 
-    return { success: true, ticket: updatedTicket, validation };
+    await this.redis.del(LIST_CACHE_KEY);
+
+    return result;
   }
-
-  // ── Get validation history for a ticket ───────────────────
 
   async findByTicket(ticketId: string) {
     const validations = await this.prisma.ticketValidation.findMany({
       where: { ticketId },
       orderBy: { validatedAt: 'desc' },
     });
+
     if (validations.length === 0) {
       throw new NotFoundException(
         `No validations found for ticket ${ticketId}`,
       );
     }
+
     return validations;
   }
-
-  // ── Get validations by validator ──────────────────────────
 
   async findByValidator(validatorId: string) {
     return this.prisma.ticketValidation.findMany({
@@ -119,17 +147,20 @@ export class TicketValidationsService {
     });
   }
 
-  // ── Internal helper ───────────────────────────────────────
-
-  private async createValidationRecord(
+  private async createRejectedValidation(
     ticketId: string,
     validatorId: string,
-    result: number,
-    rejectionReason: string | null,
+    rejectionReason: string,
     validatedAt: Date,
   ) {
     return this.prisma.ticketValidation.create({
-      data: { ticketId, validatorId, validatedAt, result, rejectionReason },
+      data: {
+        ticketId,
+        validatorId,
+        validatedAt,
+        result: VALIDATION_RESULT_REJECTED,
+        rejectionReason,
+      },
     });
   }
 }

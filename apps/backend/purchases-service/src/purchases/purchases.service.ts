@@ -40,6 +40,12 @@ export class PurchasesService {
   ) {}
 
   async createTemporaryBlock(dto: CreateTemporaryBlockDto) {
+    if (dto.eventSeatId && dto.quantity && dto.quantity > 1) {
+      throw new BadRequestException(
+        'quantity must be 1 when blocking a specific seat',
+      );
+    }
+
     const quantity = dto.eventSeatId ? 1 : (dto.quantity ?? 1);
     const startedAt = new Date();
     const expiresAt = new Date(startedAt.getTime() + BLOCK_TTL_SECONDS * 1000);

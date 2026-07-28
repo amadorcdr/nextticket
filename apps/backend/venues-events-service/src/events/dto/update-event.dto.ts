@@ -14,7 +14,7 @@ export class UpdateEventDto {
     example: '889e819f-b0c1-44e0-a502-3695c25b1215',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   venueId?: string;
 
   @ApiPropertyOptional({

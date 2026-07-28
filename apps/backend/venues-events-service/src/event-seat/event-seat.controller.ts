@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseEnumPipe,
   ParseUUIDPipe,
   Patch,
   Query,
@@ -38,9 +39,12 @@ export class EventSeatController {
     @Param('eventId', new ParseUUIDPipe())
     eventId: string,
     @Query() pagination: PaginationQueryDto,
-    @Query('eventZoneId') eventZoneId?: string,
-    @Query('sectionId') sectionId?: string,
-    @Query('status') status?: EventSeatStatus,
+    @Query('eventZoneId', new ParseUUIDPipe({ optional: true }))
+    eventZoneId?: string,
+    @Query('sectionId', new ParseUUIDPipe({ optional: true }))
+    sectionId?: string,
+    @Query('status', new ParseEnumPipe(EventSeatStatus, { optional: true }))
+    status?: EventSeatStatus,
   ) {
     return this.eventSeat.findAllByEvent(
       eventId,

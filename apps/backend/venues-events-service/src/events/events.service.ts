@@ -18,13 +18,14 @@ import {
 } from '../common/pagination.helper';
 
 const EVENTS_LIST_CACHE_KEY = 'events:list';
+const CATEGORY_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 @Injectable()
 export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   private async validateCategories(categoryIds: string[]) {
     const categories = await this.prisma.eventCategory.findMany({
@@ -106,6 +107,12 @@ export class EventsService {
     categoryId?: string,
     categorySlug?: string,
   ) {
+    if (categorySlug && !CATEGORY_SLUG_REGEX.test(categorySlug)) {
+      throw new BadRequestException(
+        'category solo puede contener letras minusculas, numeros y guiones',
+      );
+    }
+
     const hasFilters =
       Boolean(organizerId) ||
       Boolean(status) ||

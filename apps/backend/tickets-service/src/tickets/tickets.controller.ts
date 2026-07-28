@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -35,7 +36,7 @@ export class TicketsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get ticket by ID' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.tickets.findOne(id);
   }
 
@@ -44,7 +45,10 @@ export class TicketsController {
     summary: 'Get QR code image (PNG) generated from stored hash',
   })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  async getQrImage(@Param('id') id: string, @Res() res: Response) {
+  async getQrImage(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Res() res: Response,
+  ) {
     const buffer = await this.tickets.generateQrImage(id);
     res.set({ 'Content-Type': 'image/png', 'Content-Length': buffer.length });
     res.end(buffer);
@@ -63,7 +67,7 @@ export class TicketsController {
     name: 'userId',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  findByUser(@Param('userId') userId: string) {
+  findByUser(@Param('userId', new ParseUUIDPipe()) userId: string) {
     return this.tickets.findByUser(userId);
   }
 
@@ -73,14 +77,19 @@ export class TicketsController {
     name: 'eventZoneId',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  findByEventZone(@Param('eventZoneId') eventZoneId: string) {
+  findByEventZone(
+    @Param('eventZoneId', new ParseUUIDPipe()) eventZoneId: string,
+  ) {
     return this.tickets.findByEventZone(eventZoneId);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update ticket status' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateTicketStatusDto) {
+  updateStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateTicketStatusDto,
+  ) {
     return this.tickets.updateStatus(id, dto);
   }
 }

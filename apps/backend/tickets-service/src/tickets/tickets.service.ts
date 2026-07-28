@@ -19,6 +19,7 @@ import {
 
 const LIST_CACHE_KEY = 'tickets:list';
 const FOLIO_PREFIX = 'TK';
+const SHA_256_HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 
 @Injectable()
 export class TicketsService {
@@ -108,6 +109,12 @@ export class TicketsService {
   // ── Look up ticket by QR hash (for validation scan) ──────
 
   async findByQrHash(hash: string) {
+    if (!SHA_256_HASH_REGEX.test(hash)) {
+      throw new BadRequestException(
+        'hash must be a valid SHA-256 hexadecimal hash',
+      );
+    }
+
     const ticket = await this.prisma.ticket.findUnique({
       where: { qrCode: hash },
       include: { validations: true },

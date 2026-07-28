@@ -14,7 +14,7 @@ export class CreateTicketDto {
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   purchaseId?: string;
 
   @ApiPropertyOptional({
@@ -22,7 +22,7 @@ export class CreateTicketDto {
     example: '550e8400-e29b-41d4-a716-446655440002',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   purchaseDetailId?: string;
 
   @ApiPropertyOptional({
@@ -30,21 +30,21 @@ export class CreateTicketDto {
     example: '550e8400-e29b-41d4-a716-446655440003',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   eventSeatId?: string;
 
   @ApiProperty({
     description: 'Opaque reference to the event zone in venues-events-service',
     example: '550e8400-e29b-41d4-a716-446655440004',
   })
-  @IsUUID()
+  @IsUUID('4')
   eventZoneId!: string;
 
   @ApiProperty({
     description: 'Opaque reference to the ticket holder in identity-service',
     example: '550e8400-e29b-41d4-a716-446655440005',
   })
-  @IsUUID()
+  @IsUUID('4')
   currentHolderId!: string;
 
   @ApiProperty({

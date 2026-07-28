@@ -18,13 +18,16 @@ export class CreateEventDto {
     example: '889e819f-b0c1-44e0-a502-3695c25b1215',
     description: 'Identificador del recinto',
   })
-  @IsUUID()
+  @IsUUID('4')
   venueId!: string;
 
   @ApiProperty({
     example: '550e8400-e29b-41d4-a716-446655440000',
     description: 'Identificador externo del organizador en auth-service',
   })
+  @IsUUID('4')
+  organizerId!: string;
+
   @ApiPropertyOptional({
     type: [String],
     example: [
@@ -37,9 +40,6 @@ export class CreateEventDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   categoryIds?: string[];
-
-  @IsUUID()
-  organizerId!: string;
 
   @ApiProperty({
     example: 'Rock Revolution Tour',

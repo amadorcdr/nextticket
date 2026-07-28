@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -29,7 +30,9 @@ export class PurchasesController {
   @Get('temporary-blocks/user/:userId')
   @ApiOperation({ summary: 'Listar bloqueos temporales activos de un usuario' })
   @ApiParam({ name: 'userId', example: '550e8400-e29b-41d4-a716-446655440000' })
-  findActiveBlocksByUser(@Param('userId') userId: string) {
+  findActiveBlocksByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ) {
     return this.purchases.findActiveBlocksByUser(userId);
   }
 
@@ -42,7 +45,7 @@ export class PurchasesController {
   @Delete('temporary-blocks/:id')
   @ApiOperation({ summary: 'Liberar manualmente un bloqueo temporal' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440020' })
-  releaseTemporaryBlock(@Param('id') id: string) {
+  releaseTemporaryBlock(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.purchases.releaseTemporaryBlock(id);
   }
 
@@ -61,21 +64,21 @@ export class PurchasesController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener compra por id' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.purchases.findOne(id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar estado de compra' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  update(@Param('id') id: string, @Body() dto: UpdatePurchaseDto) {
+  update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdatePurchaseDto) {
     return this.purchases.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Cancelar compra' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.purchases.remove(id);
   }
 }
