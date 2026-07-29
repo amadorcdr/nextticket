@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -55,7 +55,6 @@ describe('PurchasesService', () => {
         userId: '550e8400-e29b-41d4-a716-446655440000',
         eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
         eventSeatId: '550e8400-e29b-41d4-a716-446655440002',
-        quantity: 5,
       }),
     ).resolves.toEqual({ id: 'block-id' });
 
@@ -69,6 +68,21 @@ describe('PurchasesService', () => {
         data: expect.objectContaining({ quantity: 1 }),
       }),
     );
+  });
+
+  it('rejects a seat block asking for more than one place', async () => {
+    await expect(
+      service.createTemporaryBlock({
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
+        eventSeatId: '550e8400-e29b-41d4-a716-446655440002',
+        quantity: 5,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // The request is rejected before taking the lock, so no lock is leaked.
+    expect(redis.setIfAbsent).not.toHaveBeenCalled();
+    expect(prisma.temporaryBlock.create).not.toHaveBeenCalled();
   });
 
   it('rejects a temporary block when Redis lock already exists', async () => {
