@@ -18,7 +18,14 @@ async function bootstrap() {
     // venues-events-service
     {
       target: process.env.VENUES_SERVICE_URL ?? 'http://localhost:3003',
-      prefixes: ['/venues', '/docs/venues', '/api-json/venues', '/swagger/venues'],
+      prefixes: [
+        '/venues',
+        '/events',
+        '/event-categories',
+        '/docs/venues',
+        '/api-json/venues',
+        '/swagger/venues',
+      ],
     },
     // purchases-service
     {

@@ -891,6 +891,8 @@ Todo el tráfico de los clientes (frontend/mobile) pasa por el Gateway en `http:
 | `GET /health` | Estado del gateway |
 | `/users/**` | → auth-service |
 | `/venues/**` | → venues-events-service |
+| `/events/**` | → venues-events-service (incluye `/events/:id/zones`, `/sections` y `/seats`) |
+| `/event-categories/**` | → venues-events-service |
 | `/purchases/**` | → purchases-service |
 | `/tickets/**` | → tickets-service |
 | `/docs/{servicio}` | Documentación Scalar del servicio |

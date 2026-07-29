@@ -10,6 +10,8 @@ export class AppController {
       routes: {
         '/users': `${process.env.AUTH_SERVICE_URL ?? 'http://localhost:3002'}/users (auth-service)`,
         '/venues': `${process.env.VENUES_SERVICE_URL ?? 'http://localhost:3003'}/venues (venues-events-service)`,
+        '/events': `${process.env.VENUES_SERVICE_URL ?? 'http://localhost:3003'}/events (venues-events-service)`,
+        '/event-categories': `${process.env.VENUES_SERVICE_URL ?? 'http://localhost:3003'}/event-categories (venues-events-service)`,
         '/purchases': `${process.env.PURCHASES_SERVICE_URL ?? 'http://localhost:3004'}/purchases (purchases-service)`,
         '/tickets': `${process.env.TICKETS_SERVICE_URL ?? 'http://localhost:3005'}/tickets (tickets-service)`,
         '/docs/...': `Scalar docs: /docs/auth, /docs/venues, /docs/purchases, /docs/tickets`,
