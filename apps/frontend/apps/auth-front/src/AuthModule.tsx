@@ -1,10 +1,25 @@
-// El CONTENIDO es el mismo CRUD. La ÚNICA diferencia relevante es la exportación:
-//   runtime:    export default function ProductsModule()
-//   build-time: export function InventoryModule()   ← named export de paquete
+import { Button, Icon, Link, Logo, Router, PrismaticBurst } from "@nextticket-frontend/commons";
+
 export function AuthModule() {
   return (
-    <div>
-      <h1>Auth Module</h1>
+    <div className="relative flex h-full w-full">
+      <div className="absolute inset-0 z-0">
+        <PrismaticBurst
+          animationType="hover"
+          intensity={2}
+          speed={2}
+          distort={0}
+          paused={false}
+          offset={{ x: 0, y: 0 }}
+          hoverDampness={0.32}
+          rayCount={0}
+          colors={['#cc4cfa', '#00cfff', '#cc4cfa', '#ff0084', '#fca400', '#ffff00', '#00ff8a']}
+        />
+      </div>
+
+      <div className="flex-1 p-4 z-10 relative flex items-center justify-center pointer-events-none">
+        <Router.Outlet />
+      </div>
     </div>
   );
 }

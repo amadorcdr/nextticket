@@ -1,5 +1,5 @@
 {
-    "name": "@nextticket-frontend/auth-front",
+    "name": "@nextticket-frontend/tickets-front",
     "version": "1.0.0",
     "private": true,
     "type": "module",
@@ -9,7 +9,8 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
-        "@nextticket-frontend/commons": "1.0.0"
+        "@nextticket-frontend/commons": "1.0.0",
+        "react-parallax-tilt": "^1.7.315"
     },
     "peerDependencies": {
         "react": "^19.0.0"
