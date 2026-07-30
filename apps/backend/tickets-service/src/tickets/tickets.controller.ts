@@ -8,13 +8,18 @@ import {
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { TicketsService } from './tickets.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { ParseQrHashPipe } from '../ticket-validations/pipes/parse-qr-hash.pipe';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
+import { TicketsService } from './tickets.service';
 
 @ApiTags('tickets')
 @Controller('tickets')
@@ -22,9 +27,11 @@ export class TicketsController {
   constructor(private readonly tickets: TicketsService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Issue a new ticket and generate QR hash' })
-  create(@Body() dto: CreateTicketDto) {
-    return this.tickets.create(dto);
+  create(@Body() dto: CreateTicketDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.tickets.create(dto, user.sub);
   }
 
   @Get()
@@ -56,8 +63,12 @@ export class TicketsController {
 
   @Get('hash/:hash')
   @ApiOperation({ summary: 'Look up ticket by QR hash (for validation scan)' })
-  @ApiParam({ name: 'hash', example: 'abc123def456...' })
-  findByQrHash(@Param('hash') hash: string) {
+  @ApiParam({
+    name: 'hash',
+    example:
+      'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9',
+  })
+  findByQrHash(@Param('hash', ParseQrHashPipe) hash: string) {
     return this.tickets.findByQrHash(hash);
   }
 

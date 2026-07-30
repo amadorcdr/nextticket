@@ -14,7 +14,7 @@ export class TicketValidationsService {
     private readonly redis: RedisService,
   ) {}
 
-  async validate(dto: CreateValidationDto) {
+  async validate(dto: CreateValidationDto, validatorId: string) {
     const now = new Date();
 
     const ticket = await this.prisma.ticket.findUnique({
@@ -34,7 +34,7 @@ export class TicketValidationsService {
     if (ticket.status === 'USED') {
       const validation = await this.createRejectedValidation(
         ticket.id,
-        dto.validatorId,
+        validatorId,
         'Ticket has already been used',
         now,
       );
@@ -45,7 +45,7 @@ export class TicketValidationsService {
     if (ticket.status !== 'ISSUED') {
       const validation = await this.createRejectedValidation(
         ticket.id,
-        dto.validatorId,
+        validatorId,
         `Ticket status is ${ticket.status}`,
         now,
       );
@@ -60,7 +60,7 @@ export class TicketValidationsService {
     if (alreadyValidated) {
       const validation = await this.createRejectedValidation(
         ticket.id,
-        dto.validatorId,
+        validatorId,
         'Ticket was already validated successfully',
         now,
       );
@@ -87,7 +87,7 @@ export class TicketValidationsService {
         const validation = await tx.ticketValidation.create({
           data: {
             ticketId: ticket.id,
-            validatorId: dto.validatorId,
+            validatorId,
             validatedAt: now,
             result: VALIDATION_RESULT_REJECTED,
             rejectionReason: currentTicket
@@ -110,7 +110,7 @@ export class TicketValidationsService {
       const validation = await tx.ticketValidation.create({
         data: {
           ticketId: ticket.id,
-          validatorId: dto.validatorId,
+          validatorId,
           validatedAt: now,
           result: VALIDATION_RESULT_ACCEPTED,
           rejectionReason: null,

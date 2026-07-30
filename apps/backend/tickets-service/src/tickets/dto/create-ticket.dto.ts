@@ -41,13 +41,6 @@ export class CreateTicketDto {
   eventZoneId!: string;
 
   @ApiProperty({
-    description: 'Opaque reference to the ticket holder in identity-service',
-    example: '550e8400-e29b-41d4-a716-446655440005',
-  })
-  @IsUUID('4')
-  currentHolderId!: string;
-
-  @ApiProperty({
     enum: TicketOriginTypeDto,
     example: TicketOriginTypeDto.PURCHASE,
     description: 'How the ticket was originated',

@@ -112,10 +112,6 @@ export class SimulatedPaymentDto {
 }
 
 export class CreatePurchaseDto {
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
-  @IsUUID('4')
-  userId!: string;
-
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440010' })
   @IsUUID('4')
   eventId!: string;

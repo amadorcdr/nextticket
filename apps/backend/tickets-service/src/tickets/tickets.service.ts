@@ -36,7 +36,7 @@ export class TicketsService {
 
   // ── Issue a new ticket ────────────────────────────────────
 
-  async create(dto: CreateTicketDto) {
+  async create(dto: CreateTicketDto, currentHolderId: string) {
     if (dto.originType === 'PURCHASE' && !dto.purchaseDetailId) {
       throw new BadRequestException(
         'purchaseDetailId is required when originType is PURCHASE',
@@ -53,7 +53,7 @@ export class TicketsService {
         purchaseDetailId: dto.purchaseDetailId,
         eventSeatId: dto.eventSeatId,
         eventZoneId: dto.eventZoneId,
-        currentHolderId: dto.currentHolderId,
+        currentHolderId,
         originType: dto.originType,
         folio,
         qrCode,

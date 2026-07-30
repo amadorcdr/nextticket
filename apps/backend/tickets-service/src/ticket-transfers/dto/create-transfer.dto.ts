@@ -12,13 +12,6 @@ export class CreateTransferDto {
   ticketId!: string;
 
   @ApiProperty({
-    description: 'ID of the user sending the ticket',
-    example: '550e8400-e29b-41d4-a716-446655440001',
-  })
-  @IsUUID('4')
-  fromUserId!: string;
-
-  @ApiProperty({
     description: 'ID of the user receiving the ticket',
     example: '550e8400-e29b-41d4-a716-446655440002',
   })

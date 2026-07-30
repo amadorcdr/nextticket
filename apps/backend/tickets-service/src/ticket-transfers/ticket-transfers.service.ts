@@ -18,8 +18,8 @@ export class TicketTransfersService {
 
   // ── Request a transfer ────────────────────────────────────
 
-  async create(dto: CreateTransferDto) {
-    if (dto.fromUserId === dto.toUserId) {
+  async create(dto: CreateTransferDto, fromUserId: string) {
+    if (fromUserId === dto.toUserId) {
       throw new BadRequestException(
         'Sender and receiver must be different users',
       );
@@ -32,7 +32,7 @@ export class TicketTransfersService {
         `Ticket status is ${ticket.status} — only ISSUED tickets can be transferred`,
       );
     }
-    if (ticket.currentHolderId !== dto.fromUserId) {
+    if (ticket.currentHolderId !== fromUserId) {
       throw new BadRequestException(
         'Only the current ticket holder can initiate a transfer',
       );
@@ -51,7 +51,7 @@ export class TicketTransfersService {
     const transfer = await this.prisma.ticketTransfer.create({
       data: {
         ticketId: dto.ticketId,
-        fromUserId: dto.fromUserId,
+        fromUserId,
         toUserId: dto.toUserId,
         transferFee: dto.transferFee ?? 0,
         status: 'PENDING',
@@ -67,8 +67,15 @@ export class TicketTransfersService {
   //   2. Issue a new ticket with fresh QR hash for the receiver
   //   3. Update the transfer record with issuedTicketId
 
-  async complete(id: string) {
+  async complete(id: string, userId: string) {
     const transfer = await this.findOne(id);
+
+    // Solo el destinatario acepta la transferencia.
+    if (transfer.toUserId !== userId) {
+      throw new BadRequestException(
+        'Only the receiver can complete this transfer',
+      );
+    }
 
     if (transfer.status !== 'PENDING') {
       throw new BadRequestException(
@@ -125,8 +132,16 @@ export class TicketTransfersService {
 
   // ── Reject a transfer ─────────────────────────────────────
 
-  async reject(id: string) {
+  async reject(id: string, userId: string) {
     const transfer = await this.findOne(id);
+
+    // Solo el destinatario rechaza la transferencia.
+    if (transfer.toUserId !== userId) {
+      throw new BadRequestException(
+        'Only the receiver can reject this transfer',
+      );
+    }
+
     if (transfer.status !== 'PENDING') {
       throw new BadRequestException(
         `Transfer status is ${transfer.status} — only PENDING transfers can be rejected`,
@@ -141,8 +156,16 @@ export class TicketTransfersService {
 
   // ── Cancel a transfer ─────────────────────────────────────
 
-  async cancel(id: string) {
+  async cancel(id: string, userId: string) {
     const transfer = await this.findOne(id);
+
+    // Solo quien la inicio puede cancelarla.
+    if (transfer.fromUserId !== userId) {
+      throw new BadRequestException(
+        'Only the sender can cancel this transfer',
+      );
+    }
+
     if (transfer.status !== 'PENDING') {
       throw new BadRequestException(
         `Transfer status is ${transfer.status} — only PENDING transfers can be canceled`,

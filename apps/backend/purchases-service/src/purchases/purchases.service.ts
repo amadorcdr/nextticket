@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -39,7 +40,7 @@ export class PurchasesService {
     private readonly redis: RedisService,
   ) {}
 
-  async createTemporaryBlock(dto: CreateTemporaryBlockDto) {
+  async createTemporaryBlock(dto: CreateTemporaryBlockDto, userId: string) {
     if (dto.eventSeatId && dto.quantity && dto.quantity > 1) {
       throw new BadRequestException(
         'quantity must be 1 when blocking a specific seat',
@@ -52,7 +53,7 @@ export class PurchasesService {
     const lockKey = this.buildBlockKey(dto.eventZoneId, dto.eventSeatId);
 
     const lockPayload = {
-      userId: dto.userId,
+      userId,
       eventZoneId: dto.eventZoneId,
       eventSeatId: dto.eventSeatId ?? null,
       quantity,
@@ -74,7 +75,7 @@ export class PurchasesService {
     try {
       return await this.prisma.temporaryBlock.create({
         data: {
-          userId: dto.userId,
+          userId,
           eventZoneId: dto.eventZoneId,
           eventSeatId: dto.eventSeatId,
           quantity,
@@ -105,12 +106,18 @@ export class PurchasesService {
     );
   }
 
-  async releaseTemporaryBlock(id: string) {
+  async releaseTemporaryBlock(id: string, userId: string) {
     const block = await this.prisma.temporaryBlock.findUnique({
       where: { id },
     });
     if (!block)
       throw new NotFoundException(`Temporary block ${id} does not exist`);
+
+    if (block.userId !== userId) {
+      throw new BadRequestException(
+        'Temporary block does not belong to the authenticated user',
+      );
+    }
 
     await this.redis.del(
       this.buildBlockKey(block.eventZoneId, block.eventSeatId ?? undefined),
@@ -122,9 +129,9 @@ export class PurchasesService {
     });
   }
 
-  async create(dto: CreatePurchaseDto) {
+  async create(dto: CreatePurchaseDto, userId: string) {
     await this.expireElapsedBlocks();
-    await this.assertBlocksCanBeConverted(dto);
+    await this.assertBlocksCanBeConverted(dto, userId);
 
     const totals = this.calculateTotals(dto.details);
     const paymentDecision = this.simulatePayment(dto.payment);
@@ -136,7 +143,7 @@ export class PurchasesService {
 
       const createdPurchase = await tx.purchase.create({
         data: {
-          userId: dto.userId,
+          userId,
           eventId: dto.eventId,
           folio,
           grossSubtotal: totals.grossSubtotal,
@@ -167,7 +174,7 @@ export class PurchasesService {
 
       if (dto.temporaryBlockIds?.length) {
         await tx.temporaryBlock.updateMany({
-          where: { id: { in: dto.temporaryBlockIds }, userId: dto.userId },
+          where: { id: { in: dto.temporaryBlockIds }, userId },
           data: { status: paymentDecision.approved ? 'CONVERTED' : 'RELEASED' },
         });
       }
@@ -238,8 +245,8 @@ export class PurchasesService {
     return purchase;
   }
 
-  async update(id: string, dto: UpdatePurchaseDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdatePurchaseDto, userId: string) {
+    await this.assertPurchaseBelongsToUser(id, userId);
     const purchase = await this.prisma.purchase.update({
       where: { id },
       data: dto,
@@ -249,14 +256,25 @@ export class PurchasesService {
     return purchase;
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string) {
+    await this.assertPurchaseBelongsToUser(id, userId);
     await this.prisma.purchase.update({
       where: { id },
       data: { status: 'CANCELED' },
     });
     await this.redis.del(LIST_CACHE_KEY);
     return { canceled: true };
+  }
+
+  /** La identidad viene del token, nunca del body ni de la ruta. */
+  private async assertPurchaseBelongsToUser(id: string, userId: string) {
+    const purchase = await this.findOne(id);
+
+    if (purchase.userId !== userId) {
+      throw new ForbiddenException('Purchase does not belong to the authenticated user');
+    }
+
+    return purchase;
   }
 
   async expireElapsedBlocks() {
@@ -270,7 +288,7 @@ export class PurchasesService {
     });
   }
 
-  private async assertBlocksCanBeConverted(dto: CreatePurchaseDto) {
+  private async assertBlocksCanBeConverted(dto: CreatePurchaseDto, userId: string) {
     if (!dto.temporaryBlockIds?.length) return;
 
     const blocks = await this.prisma.temporaryBlock.findMany({
@@ -285,7 +303,7 @@ export class PurchasesService {
 
     const now = Date.now();
     for (const block of blocks) {
-      if (block.userId !== dto.userId) {
+      if (block.userId !== userId) {
         throw new BadRequestException(
           'Temporary block does not belong to the user',
         );

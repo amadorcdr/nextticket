@@ -44,7 +44,7 @@ export class EventsService {
     }
   }
 
-  async create(dto: CreateEventDto) {
+  async create(dto: CreateEventDto, organizerId: string) {
     this.validateDateWindow(dto.startsAt, dto.endsAt);
     await this.validateVenue(dto.venueId);
 
@@ -59,14 +59,14 @@ export class EventsService {
         const createdEvent = await transaction.event.create({
           data: {
             venueId: dto.venueId,
-            organizerId: dto.organizerId,
+            organizerId,
             name: dto.name,
             startsAt: new Date(dto.startsAt),
             endsAt: new Date(dto.endsAt),
             imageUrl: dto.imageUrl,
             description: dto.description,
             status: dto.status ?? EventStatus.DRAFT,
-            createdBy: dto.organizerId,
+            createdBy: organizerId,
           },
         });
 
@@ -248,7 +248,7 @@ export class EventsService {
     return event;
   }
 
-  async update(id: string, dto: UpdateEventDto) {
+  async update(id: string, dto: UpdateEventDto, userId: string) {
     const currentEvent = await this.findOneFromDatabase(id);
 
     const startsAt = dto.startsAt
@@ -288,7 +288,7 @@ export class EventsService {
         endsAt: dto.endsAt ? endsAt : undefined,
         imageUrl: dto.imageUrl,
         description: dto.description,
-        lastModifiedBy: currentEvent.organizerId,
+        lastModifiedBy: userId,
       },
       include: {
         venue: true,
@@ -300,7 +300,7 @@ export class EventsService {
     return event;
   }
 
-  async updateStatus(id: string, status: EventStatus) {
+  async updateStatus(id: string, status: EventStatus, userId: string) {
     const currentEvent = await this.findOneFromDatabase(id);
 
     this.validateStatusTransition(currentEvent.status, status);
@@ -315,7 +315,7 @@ export class EventsService {
       },
       data: {
         status,
-        lastModifiedBy: currentEvent.organizerId,
+        lastModifiedBy: userId,
       },
       include: {
         venue: true,
@@ -327,7 +327,7 @@ export class EventsService {
     return event;
   }
 
-  async remove(id: string) {
+  async remove(id: string, _userId: string) {
     const event = await this.findOneFromDatabase(id);
 
     const zonesCount = await this.prisma.eventZone.count({
@@ -492,6 +492,7 @@ export class EventsService {
   async assignCategories(
     eventId: string,
     categoryIds: string[],
+    userId: string,
   ) {
     await this.findOneFromDatabase(eventId);
 
@@ -533,12 +534,22 @@ export class EventsService {
 
     await this.invalidateEventCache(eventId);
 
+    await this.prisma.event.update({
+      where: {
+        id: eventId,
+      },
+      data: {
+        lastModifiedBy: userId,
+      },
+    });
+
     return this.findOne(eventId);
   }
 
   async removeCategory(
     eventId: string,
     categoryId: string,
+    userId: string,
   ) {
     await this.findOneFromDatabase(eventId);
 
@@ -565,6 +576,15 @@ export class EventsService {
     });
 
     await this.invalidateEventCache(eventId);
+
+    await this.prisma.event.update({
+      where: {
+        id: eventId,
+      },
+      data: {
+        lastModifiedBy: userId,
+      },
+    });
 
     return this.findOne(eventId);
   }

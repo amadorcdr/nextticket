@@ -1,5 +1,13 @@
 allowBuilds:
-  '@prisma/engines': true
-  '@scarf/scarf': true
-  prisma: true
-  unrs-resolver: true
+  '@prisma/engines': set this to true or false
+  '@scarf/scarf': set this to true or false
+  prisma: set this to true or false
+  unrs-resolver: set this to true or false
+# pnpm 11 ya no lee estos ajustes desde .npmrc; deben vivir aqui.
+# Sin el hoisting el cliente generado en node_modules/.prisma/client
+# no puede resolver @prisma/client-runtime-utils.
+publicHoistPattern:
+  - '*@nestjs*'
+  - '*class-transformer*'
+  - '*class-validator*'
+  - '*@prisma*'

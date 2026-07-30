@@ -5,8 +5,12 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateValidationDto } from './dto/create-validation.dto';
 import { TicketValidationsService } from './ticket-validations.service';
 
@@ -16,11 +20,16 @@ export class TicketValidationsController {
   constructor(private readonly validations: TicketValidationsService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Validate a ticket by scanning its QR code hash',
   })
-  validate(@Body() dto: CreateValidationDto) {
-    return this.validations.validate(dto);
+  validate(
+    @Body() dto: CreateValidationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.validations.validate(dto, user.sub);
   }
 
   @Get('ticket/:ticketId')
@@ -29,9 +38,7 @@ export class TicketValidationsController {
     name: 'ticketId',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  findByTicket(
-    @Param('ticketId', new ParseUUIDPipe()) ticketId: string,
-  ) {
+  findByTicket(@Param('ticketId', new ParseUUIDPipe()) ticketId: string) {
     return this.validations.findByTicket(ticketId);
   }
 

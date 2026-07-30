@@ -21,13 +21,6 @@ export class CreateEventDto {
   @IsUUID('4')
   venueId!: string;
 
-  @ApiProperty({
-    example: '550e8400-e29b-41d4-a716-446655440000',
-    description: 'Identificador externo del organizador en auth-service',
-  })
-  @IsUUID('4')
-  organizerId!: string;
-
   @ApiPropertyOptional({
     type: [String],
     example: [

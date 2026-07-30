@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches } from 'class-validator';
+import { IsString, Matches } from 'class-validator';
 
 export class CreateValidationDto {
   @ApiProperty({
@@ -12,11 +12,4 @@ export class CreateValidationDto {
     message: 'qrHash must be a valid SHA-256 hexadecimal hash',
   })
   qrHash!: string;
-
-  @ApiProperty({
-    description: 'ID of the staff member performing the validation',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  @IsUUID('4')
-  validatorId!: string;
 }

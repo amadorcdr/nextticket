@@ -13,7 +13,7 @@ async function bootstrap() {
     // auth-service
     {
       target: process.env.AUTH_SERVICE_URL ?? 'http://localhost:3002',
-      prefixes: ['/users', '/docs/auth', '/api-json/auth', '/swagger/auth'],
+      prefixes: ['/auth', '/users', '/docs/auth', '/api-json/auth', '/swagger/auth'],
     },
     // venues-events-service
     {
