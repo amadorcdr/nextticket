@@ -184,9 +184,34 @@ nextticket/
 │           ├── 📁 prisma/
 │           └── 📄 package.json
 │
+├── 📁 docker/                         # Scripts de arranque de la infraestructura
+│   └── 📄 init-databases.sql          # Crea las 4 bases la primera vez
 ├── 📁 docs/                           # Documentación general
+│   └── 📄 doc.md                      # Mapa de endpoints y permisos
+├── 📄 docker-compose.yml              # Postgres 16 + Redis 7 (levantar desde aquí)
 └── 📄 nextticket.sql                  # Respaldo / Base de datos inicial
 ```
+
+### Estructura interna de un microservicio
+
+```
+src/
+├── 📁 <módulo>/           # Un módulo por dominio: users/, events/, venues/…
+│   ├── 📄 *.controller.ts
+│   ├── 📄 *.service.ts
+│   ├── 📄 *.module.ts
+│   └── 📁 dto/            # TODOS los DTOs del módulo viven aquí
+├── 📁 auth/               # Guard de JWT, roles y decoradores (igual en los 4)
+├── 📁 common/             # Paginación compartida (igual en los 4)
+├── 📁 health/             # HealthController
+├── 📁 prisma/             # PrismaService
+├── 📁 redis/              # RedisService
+├── 📄 app.module.ts
+└── 📄 main.ts
+```
+
+> Los DTOs van **siempre** en la carpeta `dto/` del módulo que los usa. No crear
+> carpetas de DTOs sueltas en la raíz de `src/`.
 
 ---
 
@@ -837,9 +862,25 @@ npm run dev -w @nextticket-frontend/tickets
 Cada microservicio tiene su propia base de datos PostgreSQL y comparte Redis. Antes de levantar los servicios, asegúrate de tener Docker corriendo:
 
 ```bash
-# 1. Levantar infraestructura (Postgres + Redis)
+# 1. Levantar infraestructura (Postgres + Redis), desde la raíz del repo
 docker compose up -d
 ```
+
+El `docker-compose.yml` de la raíz levanta un solo Postgres con las cuatro
+bases (`auth_db`, `venues_events_db`, `purchases_db`, `tickets_db`), que crea
+`docker/init-databases.sql` la primera vez.
+
+```bash
+# 2. Crear el .env de cada servicio a partir de su ejemplo
+for s in api-gateway auth-service venues-events-service purchases-service tickets-service; do
+  cp apps/backend/$s/.env.example apps/backend/$s/.env
+done
+```
+
+> ⚠️ `JWT_SECRET` debe tener **el mismo valor en los cuatro microservicios**: si
+> no, los tokens que emite auth-service no se validan en los demás. Las
+> credenciales de Google van solo en `auth-service/.env` y **nunca** se suben al
+> repositorio.
 
 Cada microservicio se levanta de forma independiente en su propia terminal:
 

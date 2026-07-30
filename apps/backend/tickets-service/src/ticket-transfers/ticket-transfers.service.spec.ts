@@ -25,7 +25,7 @@ describe('TicketTransfersService', () => {
     $transaction: jest.fn(),
   };
   const redis = { del: jest.fn() };
-  const tickets = { findOne: jest.fn(), generateQrHash: jest.fn() };
+  const tickets = { findOneOrFail: jest.fn(), generateQrHash: jest.fn() };
 
   const pendingTransfer = {
     id: TRANSFER_ID,
@@ -58,7 +58,7 @@ describe('TicketTransfersService', () => {
     });
 
     it('rejects a transfer when the sender is not the current holder', async () => {
-      tickets.findOne.mockResolvedValue({
+      tickets.findOneOrFail.mockResolvedValue({
         id: TICKET_ID,
         status: 'ISSUED',
         currentHolderId: STRANGER,
@@ -70,7 +70,7 @@ describe('TicketTransfersService', () => {
     });
 
     it('rejects a transfer of a ticket that is not ISSUED', async () => {
-      tickets.findOne.mockResolvedValue({
+      tickets.findOneOrFail.mockResolvedValue({
         id: TICKET_ID,
         status: 'USED',
         currentHolderId: SENDER,
@@ -82,7 +82,7 @@ describe('TicketTransfersService', () => {
     });
 
     it('rejects a second pending transfer for the same ticket', async () => {
-      tickets.findOne.mockResolvedValue({
+      tickets.findOneOrFail.mockResolvedValue({
         id: TICKET_ID,
         status: 'ISSUED',
         currentHolderId: SENDER,
@@ -95,7 +95,7 @@ describe('TicketTransfersService', () => {
     });
 
     it('takes fromUserId from the token, never from the body', async () => {
-      tickets.findOne.mockResolvedValue({
+      tickets.findOneOrFail.mockResolvedValue({
         id: TICKET_ID,
         status: 'ISSUED',
         currentHolderId: SENDER,

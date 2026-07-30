@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import {
@@ -208,10 +210,18 @@ export class PurchasesService {
     };
   }
 
-  async findAll(pagination: PaginationQueryDto) {
-    // Only the default page is cached: it is the single entry that the
-    // existing write invalidations already clear.
-    const useCache = isCacheablePage(pagination);
+  async findAll(pagination: PaginationQueryDto, requester: AuthenticatedUser) {
+    const isAdmin = requester.role === AUTH_ROLES.ADMIN;
+
+    // Cada quien ve solo sus compras; el ADMIN ve todas.
+    const where = isAdmin ? {} : { userId: requester.sub };
+
+    /*
+     * La llave de caché es única para todo el servicio, así que solo se
+     * cachea la vista global del ADMIN. Si cacheáramos la de cada usuario
+     * bajo esa misma llave, un usuario vería las compras de otro.
+     */
+    const useCache = isAdmin && isCacheablePage(pagination);
 
     if (useCache) {
       const cached =
@@ -224,10 +234,11 @@ export class PurchasesService {
       this.prisma.purchase.findMany({
         skip,
         take,
+        where,
         include: { details: true, payments: true },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.purchase.count(),
+      this.prisma.purchase.count({ where }),
     ]);
 
     const response = buildPaginatedResponse(purchases, total, pagination);
@@ -236,12 +247,20 @@ export class PurchasesService {
     return response;
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, requester: AuthenticatedUser) {
     const purchase = await this.prisma.purchase.findUnique({
       where: { id },
       include: { details: true, payments: true },
     });
     if (!purchase) throw new NotFoundException(`Purchase ${id} does not exist`);
+
+    if (
+      purchase.userId !== requester.sub &&
+      requester.role !== AUTH_ROLES.ADMIN
+    ) {
+      throw new ForbiddenException('Solo puedes consultar tus propias compras');
+    }
+
     return purchase;
   }
 
@@ -268,7 +287,12 @@ export class PurchasesService {
 
   /** La identidad viene del token, nunca del body ni de la ruta. */
   private async assertPurchaseBelongsToUser(id: string, userId: string) {
-    const purchase = await this.findOne(id);
+    const purchase = await this.prisma.purchase.findUnique({
+      where: { id },
+      include: { details: true, payments: true },
+    });
+
+    if (!purchase) throw new NotFoundException(`Purchase ${id} does not exist`);
 
     if (purchase.userId !== userId) {
       throw new ForbiddenException('Purchase does not belong to the authenticated user');

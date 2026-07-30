@@ -8,8 +8,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -18,6 +20,10 @@ import {
 import { EventSeatStatus } from '@prisma/client';
 import { UpdateEventSeatDto } from './dto/update-event-seat.dto';
 import { EventSeatService } from './event-seat.service';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('event-seats')
@@ -72,6 +78,9 @@ export class EventSeatController {
   }
 
   @Patch(':seatId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Actualizar estado o bloqueo temporal de un asiento del evento',
   })
@@ -87,6 +96,9 @@ export class EventSeatController {
   }
 
   @Delete(':seatId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Retirar un asiento de la venta del evento',
   })

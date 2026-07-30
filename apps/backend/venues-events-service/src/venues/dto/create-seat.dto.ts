@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, IsEnum, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsEnum,
+  MinLength,
+} from 'class-validator';
 import { SeatType, SeatStatus } from '@prisma/client';
 
 export class CreateSeatDto {

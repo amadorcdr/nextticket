@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -8,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { AUTH_ROLES } from '../auth/auth.constants';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -67,19 +69,39 @@ export class TicketTransfersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get transfer by ID' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Get transfer by ID (only its participants or ADMIN)',
+  })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.transfers.findOne(id);
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transfers.findOne(id, user);
   }
 
   @Get('user/:userId')
-  @ApiOperation({ summary: 'Get transfers involving a user (sent or received)' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Get transfers involving a user, sent or received (self or ADMIN)',
+  })
   @ApiParam({
     name: 'userId',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  findByUser(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  findByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.role !== AUTH_ROLES.ADMIN && user.sub !== userId) {
+      throw new ForbiddenException(
+        'Solo puedes consultar tus propias transferencias',
+      );
+    }
+
     return this.transfers.findByUser(userId);
   }
 }

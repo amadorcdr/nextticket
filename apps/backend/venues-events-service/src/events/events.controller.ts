@@ -22,6 +22,9 @@ import { EventStatus } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { AssignEventCategoriesDto } from './dto/assign-event-categories.dto';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -35,7 +38,8 @@ export class EventsController {
   constructor(private readonly events: EventsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Crear un evento',
@@ -101,7 +105,8 @@ export class EventsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Actualizar evento',
@@ -119,7 +124,8 @@ export class EventsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Cambiar estado del evento',
@@ -137,7 +143,8 @@ export class EventsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Eliminar evento sin configuracion comercial',
@@ -154,7 +161,8 @@ export class EventsController {
   }
 
   @Post(':eventId/categories')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Asignar categorias a un evento',
@@ -168,7 +176,8 @@ export class EventsController {
   }
 
   @Delete(':eventId/categories/:categoryId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Eliminar una categoria de un evento',

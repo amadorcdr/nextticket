@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, Min, IsEnum, IsBoolean, IsNumber, IsArray, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  Min,
+  IsEnum,
+  IsBoolean,
+  IsNumber,
+  IsArray,
+  MinLength,
+} from 'class-validator';
 import { SectionStatus } from '@prisma/client';
 
 export class CreateSectionDto {

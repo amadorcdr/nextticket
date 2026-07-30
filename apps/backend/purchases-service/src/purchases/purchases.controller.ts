@@ -14,6 +14,9 @@ import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger'
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { PurchasesService } from './purchases.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
@@ -45,7 +48,12 @@ export class PurchasesController {
   }
 
   @Post('temporary-blocks/expire')
-  @ApiOperation({ summary: 'Marcar bloqueos vencidos como expirados' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Marcar bloqueos vencidos como expirados (solo ADMIN)',
+  })
   expireElapsedBlocks() {
     return this.purchases.expireElapsedBlocks();
   }
@@ -74,16 +82,28 @@ export class PurchasesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar compras (paginado)' })
-  findAll(@Query() pagination: PaginationQueryDto) {
-    return this.purchases.findAll(pagination);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Listar compras propias, paginadas (el ADMIN ve todas)',
+  })
+  findAll(
+    @Query() pagination: PaginationQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.purchases.findAll(pagination, user);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener compra por id' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Obtener compra por id (propia o ADMIN)' })
   @ApiParam({ name: 'id', example: '550e8400-e29b-41d4-a716-446655440000' })
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.purchases.findOne(id);
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.purchases.findOne(id, user);
   }
 
   @Patch(':id')

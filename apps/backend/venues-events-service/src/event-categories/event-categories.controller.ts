@@ -8,8 +8,10 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -17,6 +19,10 @@ import {
 import { CreateEventCategoryDto } from './dto/create-event-category.dto';
 import { UpdateEventCategoryDto } from './dto/update-event-category.dto';
 import { EventCategoriesService } from './event-categories.service';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('event-categories')
@@ -27,6 +33,9 @@ export class EventCategoriesController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear categoría de evento' })
   create(@Body() dto: CreateEventCategoryDto) {
     return this.eventCategories.create(dto);
@@ -50,6 +59,9 @@ export class EventCategoriesController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar categoría' })
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -59,6 +71,9 @@ export class EventCategoriesController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Eliminar categoría' })
   remove(
     @Param('id', new ParseUUIDPipe()) id: string,

@@ -1,8 +1,11 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -26,7 +29,7 @@ export class TicketTransfersService {
     }
 
     // Verify the ticket exists, is ISSUED, and belongs to the sender
-    const ticket = await this.ticketsService.findOne(dto.ticketId);
+    const ticket = await this.ticketsService.findOneOrFail(dto.ticketId);
     if (ticket.status !== 'ISSUED') {
       throw new BadRequestException(
         `Ticket status is ${ticket.status} — only ISSUED tickets can be transferred`,
@@ -68,7 +71,7 @@ export class TicketTransfersService {
   //   3. Update the transfer record with issuedTicketId
 
   async complete(id: string, userId: string) {
-    const transfer = await this.findOne(id);
+    const transfer = await this.findTransferOrFail(id);
 
     // Solo el destinatario acepta la transferencia.
     if (transfer.toUserId !== userId) {
@@ -83,7 +86,7 @@ export class TicketTransfersService {
       );
     }
 
-    const originalTicket = await this.ticketsService.findOne(transfer.ticketId);
+    const originalTicket = await this.ticketsService.findOneOrFail(transfer.ticketId);
     const now = new Date();
     const newQrHash = this.ticketsService.generateQrHash(
       `transfer-${id}-${Date.now()}`,
@@ -133,7 +136,7 @@ export class TicketTransfersService {
   // ── Reject a transfer ─────────────────────────────────────
 
   async reject(id: string, userId: string) {
-    const transfer = await this.findOne(id);
+    const transfer = await this.findTransferOrFail(id);
 
     // Solo el destinatario rechaza la transferencia.
     if (transfer.toUserId !== userId) {
@@ -157,7 +160,7 @@ export class TicketTransfersService {
   // ── Cancel a transfer ─────────────────────────────────────
 
   async cancel(id: string, userId: string) {
-    const transfer = await this.findOne(id);
+    const transfer = await this.findTransferOrFail(id);
 
     // Solo quien la inicio puede cancelarla.
     if (transfer.fromUserId !== userId) {
@@ -180,14 +183,35 @@ export class TicketTransfersService {
 
   // ── Get transfer by ID ────────────────────────────────────
 
-  async findOne(id: string) {
+  /** Uso interno: sin control de acceso. No exponer en un endpoint. */
+  private async findTransferOrFail(id: string) {
     const transfer = await this.prisma.ticketTransfer.findUnique({
       where: { id },
-      include: { ticket: true, issuedTicket: true },
+      // Sin omit, la transferencia expondría el qrCode de los dos boletos.
+      include: {
+        ticket: { omit: { qrCode: true } },
+        issuedTicket: { omit: { qrCode: true } },
+      },
     });
     if (!transfer) {
       throw new NotFoundException(`Transfer ${id} does not exist`);
     }
+    return transfer;
+  }
+
+  async findOne(id: string, requester: AuthenticatedUser) {
+    const transfer = await this.findTransferOrFail(id);
+
+    const isParticipant =
+      requester.sub === transfer.fromUserId ||
+      requester.sub === transfer.toUserId;
+
+    if (!isParticipant && requester.role !== AUTH_ROLES.ADMIN) {
+      throw new ForbiddenException(
+        'Solo quienes participan en la transferencia pueden consultarla',
+      );
+    }
+
     return transfer;
   }
 
@@ -198,7 +222,10 @@ export class TicketTransfersService {
       where: {
         OR: [{ fromUserId: userId }, { toUserId: userId }],
       },
-      include: { ticket: true, issuedTicket: true },
+      include: {
+        ticket: { omit: { qrCode: true } },
+        issuedTicket: { omit: { qrCode: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

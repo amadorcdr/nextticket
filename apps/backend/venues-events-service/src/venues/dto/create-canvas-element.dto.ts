@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, IsEnum, IsBoolean, IsNumber, IsArray, Min, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsEnum,
+  IsBoolean,
+  IsNumber,
+  IsArray,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { CanvasElementType } from '@prisma/client';
 
 export class CreateCanvasElementDto {

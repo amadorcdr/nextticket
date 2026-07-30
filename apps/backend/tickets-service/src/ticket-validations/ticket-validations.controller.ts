@@ -8,6 +8,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -20,7 +23,8 @@ export class TicketValidationsController {
   constructor(private readonly validations: TicketValidationsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.VALIDATOR, AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Validate a ticket by scanning its QR code hash',

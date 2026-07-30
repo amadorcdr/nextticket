@@ -90,10 +90,20 @@ export class UsersService {
         description: 'Validador',
       },
     });
+
+    await this.prisma.role.upsert({
+      where: { name: 'ADMIN' },
+      update: {},
+      create: {
+        id: '44444444-4444-4444-8444-444444444444',
+        name: 'ADMIN',
+        description: 'Administrador',
+      },
+    });
   }
 
-  async create(dto: CreateUserDto) {
-    return this.createLocalUser(dto);
+  async create(dto: CreateUserDto, createdBy?: string | null) {
+    return this.createLocalUser(dto, createdBy);
   }
 
   async createLocalUser(dto: CreateUserDto, createdBy?: string | null) {
@@ -220,13 +230,13 @@ export class UsersService {
     return this.findPublicById(id);
   }
 
-  async update(id: string, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto, updatedBy?: string | null) {
     await this.findPublicById(id);
 
     const data: Record<string, unknown> = {
       name: dto.name,
       email: dto.email,
-      roleId: dto.roleId,
+      lastModifiedBy: updatedBy ?? null,
     };
 
     if (dto.password) {
@@ -236,6 +246,21 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id },
       data,
+      select: USER_PUBLIC_SELECT,
+    });
+
+    await this.redis.del(LIST_CACHE_KEY);
+    return user;
+  }
+
+  /** Reservado a ADMIN: es el único camino para cambiar de rol. */
+  async updateRole(id: string, roleId: string, updatedBy?: string | null) {
+    await this.findPublicById(id);
+    const role = await this.resolveRole(roleId);
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { roleId: role.id, lastModifiedBy: updatedBy ?? null },
       select: USER_PUBLIC_SELECT,
     });
 

@@ -6,16 +6,16 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CreateVenueDto } from '../dto/venues/create-venue.dto';
-import { UpdateVenueDto } from '../dto/venues/update-venue.dto';
-import { CreateFloorDto } from '../dto/floors/create-floor.dto';
-import { UpdateFloorDto } from '../dto/floors/update-floor.dto';
-import { CreateSectionDto } from '../dto/sections/create-section.dto';
-import { UpdateSectionDto } from '../dto/sections/update-section.dto';
-import { CreateSeatDto } from '../dto/seats/create-seat.dto';
-import { UpdateSeatDto } from '../dto/seats/update-seat.dto';
-import { CreateCanvasElementDto } from '../dto/canvas-elements/create-canvas-element.dto';
-import { UpdateCanvasElementDto } from '../dto/canvas-elements/update-canvas-element.dto';
+import { CreateVenueDto } from './dto/create-venue.dto';
+import { UpdateVenueDto } from './dto/update-venue.dto';
+import { CreateFloorDto } from './dto/create-floor.dto';
+import { UpdateFloorDto } from './dto/update-floor.dto';
+import { CreateSectionDto } from './dto/create-section.dto';
+import { UpdateSectionDto } from './dto/update-section.dto';
+import { CreateSeatDto } from './dto/create-seat.dto';
+import { UpdateSeatDto } from './dto/update-seat.dto';
+import { CreateCanvasElementDto } from './dto/create-canvas-element.dto';
+import { UpdateCanvasElementDto } from './dto/update-canvas-element.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import {
@@ -38,6 +38,17 @@ const VENUE_FULL_INCLUDE = {
       },
       canvasElements: true,
     },
+  },
+};
+
+/*
+ * El listado NO trae el árbol completo: con un recinto tipo Azteca serían
+ * decenas de miles de asientos por fila de la lista. Devuelve solo cuántos
+ * hay; el árbol se obtiene en GET /venues/:venueId.
+ */
+const VENUE_SUMMARY_INCLUDE = {
+  _count: {
+    select: { floors: true, sections: true },
   },
 };
 
@@ -100,7 +111,7 @@ export class VenuesService {
       this.prisma.venue.findMany({
         skip,
         take,
-        include: VENUE_FULL_INCLUDE,
+        include: VENUE_SUMMARY_INCLUDE,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.venue.count(),
