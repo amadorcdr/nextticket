@@ -329,7 +329,7 @@ export class VenuesService {
   // ═══════════════════════════════════════════════════════════
 
   async createSection(venueId: string, floorId: string, dto: CreateSectionDto) {
-    const floor = await this.ensureFloorBelongsToVenue(floorId, venueId);
+    await this.ensureFloorBelongsToVenue(floorId, venueId);
     try {
       const section = await this.prisma.section.create({
         data: { ...dto, venueId, floorId },
@@ -417,6 +417,19 @@ export class VenuesService {
 
   async createSeat(venueId: string, floorId: string, sectionId: string, dto: CreateSeatDto) {
     await this.ensureSectionBelongsToChain(sectionId, floorId, venueId);
+
+    const assignedZonesCount = await this.prisma.eventZoneSection.count({
+      where: {
+        sectionId,
+      },
+    });
+
+    if (assignedZonesCount > 0) {
+      throw new ConflictException(
+        'No se pueden agregar asientos a una sección ya configurada en un evento',
+      );
+    }
+
     try {
       const seat = await this.prisma.seat.create({
         data: { ...dto, sectionId },

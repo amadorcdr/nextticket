@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EventCategoryStatus, EventStatus, VenueStatus } from '@prisma/client';
+import {
+  AdmissionType,
+  EventCategoryStatus,
+  EventStatus,
+  PriceTierStatus,
+  VenueStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -458,22 +464,78 @@ export class EventsService {
   }
 
   private async validateEventCanBePublished(eventId: string) {
-    /*
-     * Temporalmente permitimos publicar sin zonas para poder construir
-     * y probar el módulo Events primero.
-     *
-     * Cuando terminemos EventZones, esta validación exigirá:
-     * - Al menos una zona.
-     * - Al menos una sección por zona.
-     * - Precio configurado.
-     * - EventSeats generados.
-     */
-    const event = await this.findOneFromDatabase(eventId);
+    const event = await this.prisma.event.findUnique({
+      where: {
+        id: eventId,
+      },
+      select: {
+        startsAt: true,
+        endsAt: true,
+        zones: {
+          select: {
+            id: true,
+            publicName: true,
+            admissionType: true,
+            sections: {
+              select: {
+                id: true,
+              },
+            },
+            priceTiers: {
+              where: {
+                status: PriceTierStatus.ACTIVE,
+              },
+              select: {
+                id: true,
+              },
+            },
+            eventSeats: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event ${eventId} no existe`);
+    }
 
     if (event.startsAt >= event.endsAt) {
       throw new BadRequestException(
         'El evento no tiene un intervalo de fechas válido',
       );
+    }
+
+    if (event.zones.length === 0) {
+      throw new ConflictException(
+        'No se puede publicar un evento sin zonas configuradas',
+      );
+    }
+
+    for (const zone of event.zones) {
+      if (zone.sections.length === 0) {
+        throw new ConflictException(
+          `La zona "${zone.publicName}" no tiene secciones asignadas`,
+        );
+      }
+
+      if (zone.priceTiers.length === 0) {
+        throw new ConflictException(
+          `La zona "${zone.publicName}" no tiene al menos un price tier activo`,
+        );
+      }
+
+      if (
+        zone.admissionType === AdmissionType.RESERVED &&
+        zone.eventSeats.length === 0
+      ) {
+        throw new ConflictException(
+          `La zona "${zone.publicName}" no tiene asientos generados`,
+        );
+      }
     }
   }
 
