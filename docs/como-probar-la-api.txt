@@ -37,6 +37,10 @@ Comprueba que los 5 respondan:
 
     for p in 3001 3002 3003 3004 3005; do curl -s http://localhost:$p/health; echo ""; done
 
+Y crea los usuarios de prueba en tu base (solo la primera vez):
+
+    bash scripts/seed-users.sh
+
 Si alguno falla, casi siempre es una de estas tres:
   - Docker Desktop cerrado
   - Falta el archivo .env (cópialo del .env.example de ese servicio)
@@ -77,7 +81,7 @@ PASO 1 — Consigue un token
   Click en "Try it out", pega esto en el cuerpo y dale "Execute":
 
       {
-        "email": "angel@test.com",
+        "email": "organizador@test.com",
         "password": "Test1234"
       }
 
@@ -107,11 +111,24 @@ PASO 3 — Ya puedes probar
   El token dura 1 día. Si de pronto todo te empieza a dar 401, vuelve al
   paso 1 y saca uno nuevo.
 
-USUARIOS QUE YA EXISTEN EN LA BASE
+USUARIOS DE PRUEBA: TIENES QUE CREARLOS EN TU MÁQUINA
 
-  angel@test.com     / Test1234      rol ORGANIZER   <- usa este para tu bloque
-  admin@test.com     / Admin1234     rol ADMIN
-  cliente1@test.com  / Cliente1234   rol CLIENT
+  ⚠️ Cada quien tiene su propia base de datos local. Los usuarios que use
+  Angel en su computadora NO existen en la tuya, aunque tengas su contraseña.
+
+  Créalos con el script del repositorio. Corre esto UNA VEZ, con Docker y
+  auth-service ya levantados:
+
+      bash scripts/seed-users.sh
+
+  Te deja estos cuatro, uno por rol:
+
+      organizador@test.com  / Test1234     rol ORGANIZER  <- usa este
+      admin@test.com        / Admin1234    rol ADMIN
+      cliente@test.com      / Cliente1234  rol CLIENT
+      validador@test.com    / Valida1234   rol VALIDATOR
+
+  Puedes volver a correrlo cuando quieras: si ya existen, no hace nada.
 
   Si quieres uno tuyo: POST /auth/register con nombre, email y password
   (mínimo 8 caracteres). Sale con rol CLIENT.
@@ -175,7 +192,7 @@ Resumen para tu bloque (eventos, zonas, secciones, asientos):
   LEER    (GET)                    público, sin token
   CREAR / EDITAR / BORRAR          token con rol ORGANIZER o ADMIN
 
-Por eso el usuario angel@test.com (ORGANIZER) es el que te sirve.
+Por eso el usuario organizador@test.com es el que te sirve.
 
 
 ================================================================================
@@ -188,8 +205,8 @@ Por eso el usuario angel@test.com (ORGANIZER) es el que te sirve.
 
   403 Forbidden
       El token está bien pero tu rol no alcanza.
-      → Te pasa si usas cliente1@test.com para crear un evento.
-        Usa angel@test.com, que es ORGANIZER.
+      → Te pasa si usas cliente@test.com para crear un evento.
+        Usa organizador@test.com, que es ORGANIZER.
 
   400 Bad Request
       Los datos del cuerpo no pasaron las validaciones. Lee el campo
@@ -209,7 +226,7 @@ Sacar el token y guardarlo en una variable:
 
     TOKEN=$(curl -s -X POST http://localhost:3001/auth/login \
       -H "Content-Type: application/json" \
-      -d '{"email":"angel@test.com","password":"Test1234"}' \
+      -d '{"email":"organizador@test.com","password":"Test1234"}' \
       | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 
 Usarlo:
