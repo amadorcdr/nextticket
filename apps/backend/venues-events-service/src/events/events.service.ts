@@ -476,6 +476,7 @@ export class EventsService {
             id: true,
             publicName: true,
             admissionType: true,
+            eventPrice: true,
             sections: {
               select: {
                 id: true,
@@ -519,6 +520,12 @@ export class EventsService {
       if (zone.sections.length === 0) {
         throw new ConflictException(
           `La zona "${zone.publicName}" no tiene secciones asignadas`,
+        );
+      }
+
+      if (zone.eventPrice === null || zone.eventPrice === undefined || Number(zone.eventPrice) <= 0) {
+        throw new ConflictException(
+          `La zona "${zone.publicName}" no tiene un precio configurado`,
         );
       }
 

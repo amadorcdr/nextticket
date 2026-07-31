@@ -89,6 +89,37 @@ describe('EventsService', () => {
     expect(prisma.event.update).not.toHaveBeenCalled();
   });
 
+  test('does not publish an event with a zone without a configured price', async () => {
+    prisma.event.findUnique
+      .mockResolvedValueOnce({
+        id: EVENT_ID,
+        status: EventStatus.DRAFT,
+        startsAt: new Date('2026-07-30T10:00:00Z'),
+        endsAt: new Date('2026-07-30T12:00:00Z'),
+      })
+      .mockResolvedValueOnce({
+        startsAt: new Date('2026-07-30T10:00:00Z'),
+        endsAt: new Date('2026-07-30T12:00:00Z'),
+        zones: [
+          {
+            id: 'zone-1',
+            publicName: 'Zona principal',
+            admissionType: AdmissionType.RESERVED,
+            eventPrice: 0,
+            sections: [{ id: 'section-1' }],
+            priceTiers: [{ id: 'tier-1' }],
+            eventSeats: [{ id: 'event-seat-1' }],
+          },
+        ],
+      });
+
+    await expect(
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
   test('does not publish an event with a zone without an active price tier', async () => {
     prisma.event.findUnique
       .mockResolvedValueOnce({
@@ -105,6 +136,7 @@ describe('EventsService', () => {
             id: 'zone-1',
             publicName: 'Zona principal',
             admissionType: AdmissionType.RESERVED,
+            eventPrice: 100,
             sections: [{ id: 'section-1' }],
             priceTiers: [],
             eventSeats: [{ id: 'event-seat-1' }],
@@ -135,6 +167,7 @@ describe('EventsService', () => {
             id: 'zone-1',
             publicName: 'Zona principal',
             admissionType: AdmissionType.RESERVED,
+            eventPrice: 100,
             sections: [{ id: 'section-1' }],
             priceTiers: [{ id: 'tier-1' }],
             eventSeats: [{ id: 'event-seat-1' }],
