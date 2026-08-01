@@ -20,10 +20,12 @@ async function bootstrap() {
       target: process.env.VENUES_SERVICE_URL ?? 'http://localhost:3003',
       prefixes: ['/venues', '/docs/venues', '/api-json/venues', '/swagger/venues'],
     },
-    // purchases-service
+    // purchases-service (ws: true proxies the temporary-block socket.io
+    // gateway, mounted under /purchases/socket.io so it matches this same prefix)
     {
       target: process.env.PURCHASES_SERVICE_URL ?? 'http://localhost:3004',
       prefixes: ['/purchases', '/docs/purchases', '/api-json/purchases', '/swagger/purchases'],
+      ws: true,
     },
     // tickets-service
     {
@@ -37,6 +39,7 @@ async function bootstrap() {
       createProxyMiddleware({
         target: proxy.target,
         changeOrigin: true,
+        ws: proxy.ws ?? false,
         pathFilter: (pathname) =>
           proxy.prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`)),
       }),
