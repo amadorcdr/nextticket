@@ -15,6 +15,7 @@
         "@nextticket-frontend/tickets-front": "1.0.0",
         "@nextticket-frontend/venues-front": "1.0.0",
         "@nextticket-frontend/events-front": "1.0.0",
+        "@nextticket-frontend/validator-front": "1.0.0",
         "@nextticket-frontend/users-front": "1.0.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
