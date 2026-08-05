@@ -242,7 +242,7 @@ const PrismaticBurst = ({
     const container = containerRef.current;
     if (!container) return;
 
-    const dpr = 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const renderer = new Renderer({ dpr, alpha: true, antialias: false });
     rendererRef.current = renderer;
 

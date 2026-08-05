@@ -305,3 +305,29 @@
     width: 16px;
     height: 16px;
 }
+
+@keyframes hero-wave-move {
+    0% {
+        transform: translateX(-50%);
+    }
+    100% {
+        transform: translateX(0%);
+    }
+}
+
+@keyframes hero-particle-float {
+    0% {
+        transform: translateY(0);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(calc(-1 * var(--rise, 220px)));
+        opacity: 0;
+    }
+}

@@ -19,6 +19,7 @@ import {
 } from "@nextticket-frontend/purchases-front";
 import { ValidatorModule } from "@nextticket-frontend/validator-front";
 import { UsersModule } from "@nextticket-frontend/users-front";
+import { OrganizerLayout, OrganizerDashboard, MyEvents, SalesEvent, ZonesEditor } from "@nextticket-frontend/organizer-front";
 import { Dashboard } from "./Dashboard";
 import { Home } from "./Home";
 import { NotFound } from "./NotFound";
@@ -35,6 +36,15 @@ createRoot(document.getElementById('root')!).render(
 
                     {/* El Validador tiene su propio layout: no usa el panel administrativo */}
                     <Router.Route path="validator/*" element={<ValidatorModule />} />
+
+                    {/* El Organizador tiene su propio sidebar (mismo estilo que App), sin las
+                        secciones de admin (Recintos/Usuarios) que no le corresponden */}
+                    <Router.Route element={<OrganizerLayout />}>
+                        <Router.Route path="organizer/dashboard" element={<OrganizerDashboard />} />
+                        <Router.Route path="organizer/myEvents" element={<MyEvents />} />
+                        <Router.Route path="organizer/salesEvent" element={<SalesEvent />} />
+                        <Router.Route path="organizer/zonas" element={<ZonesEditor />} />
+                    </Router.Route>
 
                     {/* El Cliente tampoco: navega el catálogo, compra y ve sus boletos.
                         Sus pantallas viven en varios microfrontends, por eso el layout

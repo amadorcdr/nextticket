@@ -11,6 +11,10 @@ import { Button, Description } from "@heroui/react";
 import { Trash2, GripVertical, Check, Layers } from "lucide-react";
 import { sectionColorFor, ELEMENT_TYPE_DEFAULT_COLOR } from "./constants";
 import { ConfirmAlertDialog } from "./layout-components";
+const fieldLabelClassName = "text-muted text-[10px] font-semibold uppercase tracking-wide";
+const fieldInputClassName =
+  "w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none focus:border-foreground transition-colors";
+
 export const NumField: React.FC<{
   label: string;
   value: number;
@@ -27,21 +31,24 @@ export const NumField: React.FC<{
     if (!Number.isNaN(n)) onCommit(n);
   };
   return (
-    <div>
-      <label>{label}</label>
-      <input
-        type="number"
-        value={local}
-        step={step}
-        min={min}
-        max={max}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-      />
-      {suffix && <span>{suffix}</span>}
+    <div className="flex flex-col gap-1">
+      <label className={fieldLabelClassName}>{label}</label>
+      <div className="relative">
+        <input
+          type="number"
+          value={local}
+          step={step}
+          min={min}
+          max={max}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className={`${fieldInputClassName} ${suffix ? "pr-8" : ""}`}
+        />
+        {suffix && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted text-[11px]">{suffix}</span>}
+      </div>
     </div>
   );
 };
@@ -55,8 +62,8 @@ export const TextField: React.FC<{
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   return (
-    <div>
-      {label && <label>{label}</label>}
+    <div className="flex flex-col gap-1">
+      {label && <label className={fieldLabelClassName}>{label}</label>}
       <input
         type="text"
         value={local}
@@ -66,6 +73,7 @@ export const TextField: React.FC<{
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
+        className={fieldInputClassName}
       />
     </div>
   );
@@ -192,9 +200,9 @@ export function SelectField<T extends string>({
   onCommit: (v: T) => void;
 }) {
   return (
-    <div>
-      <label>{label}</label>
-      <select value={value} onChange={(e) => onCommit(e.target.value as T)}>
+    <div className="flex flex-col gap-1">
+      <label className={fieldLabelClassName}>{label}</label>
+      <select value={value} onChange={(e) => onCommit(e.target.value as T)} className={`${fieldInputClassName} cursor-pointer`}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -210,12 +218,13 @@ export const CheckField: React.FC<{
   checked: boolean;
   onCommit: (v: boolean) => void;
 }> = ({ label, checked, onCommit }) => (
-  <div>
-    <label>
+  <div className="flex items-center gap-2">
+    <label className="flex items-center gap-2 text-foreground text-xs cursor-pointer">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onCommit(e.target.checked)}
+        className="size-3.5 cursor-pointer accent-foreground"
       />
       {label}
     </label>
@@ -230,19 +239,29 @@ export const DateTimeField: React.FC<{
   const [local, setLocal] = useState(value ? value.slice(0, 16) : "");
   useEffect(() => setLocal(value ? value.slice(0, 16) : ""), [value]);
   return (
-    <div>
-      <label>{label}</label>
-      <input
-        type="datetime-local"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => onCommit(local ? new Date(local).toISOString() : null)}
-      />
-      {value && (
-        <button onClick={() => { setLocal(""); onCommit(null); }} style={{ fontSize: "0.7rem" }}>
-          Limpiar
-        </button>
-      )}
+    <div className="flex flex-col gap-1">
+      <label className={fieldLabelClassName}>{label}</label>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="datetime-local"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={() => onCommit(local ? new Date(local).toISOString() : null)}
+          className={fieldInputClassName}
+        />
+        {value && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => {
+              setLocal("");
+              onCommit(null);
+            }}
+          >
+            Limpiar
+          </Button>
+        )}
+      </div>
     </div>
   );
 };
