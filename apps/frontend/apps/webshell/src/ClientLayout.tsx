@@ -1,0 +1,140 @@
+import {
+    Button,
+    Icon,
+    Logo,
+    Router,
+    ScrollShadow,
+    Tabs,
+    Tooltip,
+} from "@nextticket-frontend/commons";
+
+/*
+ * Shell del cliente. Es aparte del de organizador (App.tsx) a proposito:
+ * el cliente no administra recintos ni usuarios, solo navega el catalogo,
+ * compra y consulta sus boletos.
+ */
+const CLIENT_LINKS = [
+    { to: "/eventos", icon: Icon.Calendar, label: "Eventos" },
+    { to: "/mis-boletos", icon: Icon.Ticket, label: "Mis boletos" },
+];
+
+export function ClientLayout() {
+    const location = Router.useLocation();
+    const navigate = Router.useNavigate();
+
+    const activeKey =
+        CLIENT_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ??
+        "none";
+
+    return (
+        <div className="flex flex-col h-full w-full relative p-2 gap-2">
+            <header className="flex items-center justify-between gap-4 shrink-0 px-2">
+                <Router.Link
+                    to="/eventos"
+                    className="flex items-center gap-2 text-accent shrink-0"
+                >
+                    <Logo size={20} />
+                    <h4>Nextticket</h4>
+                </Router.Link>
+
+                {/* Navegacion: en movil se va a la barra inferior */}
+                <nav className="hidden md:flex flex-1 justify-center">
+                    <Tabs
+                        aria-label="Navegacion del cliente"
+                        variant="secondary"
+                        selectedKey={activeKey}
+                    >
+                        <Tabs.ListContainer className="border-none">
+                            <Tabs.List>
+                                {CLIENT_LINKS.map(({ to, icon: NavIcon, label }) => (
+                                    <Tabs.Tab
+                                        key={to}
+                                        id={to}
+                                        href={to}
+                                        className="flex items-center gap-2 whitespace-nowrap"
+                                        render={({ href, ...domProps }: any) => (
+                                            <Router.Link to={href} {...domProps} />
+                                        )}
+                                    >
+                                        <NavIcon className="size-4 shrink-0" />
+                                        <span>{label}</span>
+                                        <Tabs.Indicator className="rounded-full" />
+                                    </Tabs.Tab>
+                                ))}
+                            </Tabs.List>
+                        </Tabs.ListContainer>
+                    </Tabs>
+                </nav>
+
+                <div className="flex items-center md:gap-2 gap-1 shrink-0">
+                    <Tooltip>
+                        <Tooltip.Trigger>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => navigate("/checkout")}
+                            >
+                                <Icon.ShoppingCart />
+                            </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>Carrito</Tooltip.Content>
+                    </Tooltip>
+                    <Tooltip>
+                        <Tooltip.Trigger>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => navigate("/users/profile")}
+                            >
+                                <Icon.User />
+                            </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>Mi cuenta</Tooltip.Content>
+                    </Tooltip>
+                </div>
+            </header>
+
+            <ScrollShadow className="flex-1 overflow-auto relative pb-[88px] md:pb-2 px-2">
+                <Router.Outlet />
+            </ScrollShadow>
+
+            {/* Navegacion inferior en movil, igual que en el shell de organizador */}
+            <div className="md:hidden absolute inset-x-0 bottom-0 p-4 z-50 pointer-events-none flex justify-center">
+                <ScrollShadow
+                    orientation="horizontal"
+                    className="px-2 flex bg-surface shadow-overlay rounded-[10px] pointer-events-auto max-w-full"
+                >
+                    <Tabs
+                        aria-label="Navegacion del cliente en movil"
+                        variant="secondary"
+                        selectedKey={activeKey}
+                    >
+                        <Tabs.ListContainer className="border-none">
+                            <Tabs.List>
+                                {CLIENT_LINKS.map(({ to, icon: NavIcon, label }) => (
+                                    <Tabs.Tab
+                                        key={to}
+                                        id={to}
+                                        href={to}
+                                        className="flex gap-2 h-fit w-20 pt-4 pb-2"
+                                        render={({ href, ...domProps }: any) => (
+                                            <Router.Link to={href} {...domProps} />
+                                        )}
+                                    >
+                                        <div className="flex flex-col items-center gap-2">
+                                            <NavIcon className="size-4" />
+                                            <span className="text-xs">{label}</span>
+                                        </div>
+                                        <Tabs.Indicator className="rounded-full" />
+                                    </Tabs.Tab>
+                                ))}
+                            </Tabs.List>
+                        </Tabs.ListContainer>
+                    </Tabs>
+                </ScrollShadow>
+            </div>
+        </div>
+    );
+}

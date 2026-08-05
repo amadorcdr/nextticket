@@ -5,6 +5,7 @@ export * from "./hooks/useBreakpoint";
 export * from "./components/organisms/Panel";
 export * from "./components/molecules/ThemeSwitcher";
 export * from "./providers/ThemeProvider";
+export * from "./providers/CartProvider";
 export * from "./components/atoms/Plasma";
 export * from "./components/atoms/SideRays";
 export * as Tanstack from "@tanstack/react-table";
