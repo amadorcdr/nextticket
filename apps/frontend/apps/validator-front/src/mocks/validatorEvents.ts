@@ -23,7 +23,11 @@ export interface ValidatorEvent {
     startsAt: string;
     endsAt: string;
     status: ValidatorEventStatus;
-    /** Portada simulada: degradado local, sin imágenes remotas. */
+    /**
+     * Portada del evento. URL de la imagen que se muestra en la card y en el detalle del evento.
+     */
+    imageUrl: string;
+    /** Degradado de respaldo: se ve mientras carga la imagen o si la URL falla. */
     cover: { from: string; to: string };
 }
 
@@ -60,6 +64,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: todayAt(-45),
         endsAt: todayAt(150),
         status: "IN_PROGRESS",
+        imageUrl:
+            "https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#7c3aed", to: "#db2777" },
     },
     {
@@ -71,6 +77,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: todayAt(40),
         endsAt: todayAt(220),
         status: "AVAILABLE",
+        imageUrl:
+            "https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#0ea5e9", to: "#14b8a6" },
     },
     {
@@ -82,6 +90,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: todayAt(330),
         endsAt: todayAt(450),
         status: "UPCOMING",
+        imageUrl:
+            "https://images.unsplash.com/photo-1585699324551-f6c309eedeca?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#f59e0b", to: "#ef4444" },
     },
     {
@@ -93,6 +103,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: todayAt(200),
         endsAt: todayAt(420),
         status: "BLOCKED",
+        imageUrl:
+            "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#6366f1", to: "#22d3ee" },
     },
     {
@@ -104,6 +116,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: todayAt(-360),
         endsAt: todayAt(-180),
         status: "FINISHED",
+        imageUrl:
+            "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#334155", to: "#0f172a" },
     },
     {
@@ -115,6 +129,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: dayAt(1, 19, 30),
         endsAt: dayAt(1, 21, 30),
         status: "UPCOMING",
+        imageUrl:
+            "https://images.unsplash.com/photo-1503095396549-807759245b35?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#8b5cf6", to: "#3b82f6" },
     },
     {
@@ -126,6 +142,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: dayAt(1, 21, 0),
         endsAt: dayAt(1, 23, 30),
         status: "UPCOMING",
+        imageUrl:
+            "https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#f97316", to: "#facc15" },
     },
     {
@@ -137,6 +155,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: dayAt(6, 18, 0),
         endsAt: dayAt(6, 23, 59),
         status: "UPCOMING",
+        imageUrl:
+            "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#10b981", to: "#0ea5e9" },
     },
     {
@@ -148,6 +168,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: dayAt(9, 16, 0),
         endsAt: dayAt(9, 22, 0),
         status: "BLOCKED",
+        imageUrl:
+            "https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#ec4899", to: "#6366f1" },
     },
     {
@@ -159,6 +181,8 @@ export const VALIDATOR_EVENTS: ValidatorEvent[] = [
         startsAt: dayAt(12, 20, 30),
         endsAt: dayAt(12, 23, 59),
         status: "UPCOMING",
+        imageUrl:
+            "https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=1200&auto=format&fit=crop",
         cover: { from: "#22c55e", to: "#84cc16" },
     },
 ];

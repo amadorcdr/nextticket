@@ -13,7 +13,7 @@ import {
 function EventCardSkeleton() {
     return (
         <div className="flex flex-col gap-3 rounded-[10px] bg-surface p-4">
-            <Skeleton className="h-32 w-full rounded-[10px]" />
+            <Skeleton className="aspect-[16/10] w-full rounded-[10px]" />
             <Skeleton className="h-5 w-3/4 rounded" />
             <Skeleton className="h-4 w-1/2 rounded" />
             <Skeleton className="h-4 w-2/3 rounded" />

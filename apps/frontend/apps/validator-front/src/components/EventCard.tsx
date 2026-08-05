@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, Card, Chip, Icon } from "@nextticket-frontend/commons";
 import { getEventAvailability, type ValidatorEvent } from "../mocks/validatorEvents";
 import { formatEventDate, formatEventSchedule } from "../utils/format";
@@ -10,50 +11,69 @@ interface EventCardProps {
 export function EventCard({ event, onSelect }: EventCardProps) {
     const availability = getEventAvailability(event);
     const isBlocked = !availability.canValidate;
+    const [imageFailed, setImageFailed] = useState(false);
 
     return (
         <Card
             variant="default"
-            className={`flex flex-col overflow-hidden h-full transition-opacity ${isBlocked ? "opacity-60" : ""
+            className={`group flex flex-col overflow-hidden h-full transition-shadow ${isBlocked ? "opacity-60" : "hover:shadow-overlay"
                 }`}
         >
-            {/* Portada simulada */}
             <div
-                className="relative h-32 flex items-end p-3"
+                className="relative aspect-[16/10] overflow-hidden"
                 style={{
                     backgroundImage: `linear-gradient(135deg, ${event.cover.from}, ${event.cover.to})`,
                 }}
-                aria-hidden="true"
             >
+                {/* Degradado de fondo visible mientras carga la imagen o como
+                    alternativa si la URL falla (imageFailed). */}
+                {!imageFailed && (
+                    <img
+                        src={event.imageUrl}
+                        alt={event.name}
+                        loading="lazy"
+                        onError={() => setImageFailed(true)}
+                        className={`size-full object-cover transition-transform duration-500 ${isBlocked ? "" : "group-hover:scale-105"
+                            }`}
+                    />
+                )}
+                {imageFailed && (
+                    <Icon.ImageOff className="absolute inset-0 m-auto size-8! text-white/70" />
+                )}
                 <div className="absolute inset-0 bg-black/25" />
-                <Icon.Ticket className="absolute top-3 left-3 size-6! text-white/80" />
-                <span className="relative text-xs font-medium text-white/90">{event.city}</span>
+
+                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-surface/85 px-2 py-1 backdrop-blur-sm">
+                    <Icon.MapPin className="size-3.5 shrink-0" />
+                    <span className="text-xs font-medium">{event.city}</span>
+                </div>
+                <div className="absolute right-3 top-3 rounded-full bg-surface/85 backdrop-blur-sm">
+                    <Chip variant="soft" color={availability.color} size="sm">
+                        {isBlocked ? <Icon.Lock /> : <Icon.CircleCheck />}
+                        {availability.label}
+                    </Chip>
+                </div>
             </div>
 
-            <Card.Header className="flex items-start justify-between gap-2">
-                <Card.Title className="text-base leading-snug">{event.name}</Card.Title>
-                <Chip variant="soft" color={availability.color} size="sm" className="shrink-0">
-                    {isBlocked ? <Icon.Lock /> : <Icon.CircleCheck />}
-                    {availability.label}
-                </Chip>
+            <Card.Header>
+                <Card.Title className="text-base leading-snug line-clamp-2">{event.name}</Card.Title>
             </Card.Header>
 
             <Card.Content className="flex-1 flex flex-col gap-2 text-sm text-muted">
                 <span className="flex items-center gap-2">
                     <Icon.CalendarDays className="size-4 shrink-0" />
-                    {formatEventDate(event.startsAt)}
+                    <span className="truncate">{formatEventDate(event.startsAt)}</span>
                 </span>
                 <span className="flex items-center gap-2">
                     <Icon.Clock className="size-4 shrink-0" />
-                    {formatEventSchedule(event.startsAt, event.endsAt)}
+                    <span className="truncate">{formatEventSchedule(event.startsAt, event.endsAt)}</span>
                 </span>
                 <span className="flex items-center gap-2">
                     <Icon.Building2 className="size-4 shrink-0" />
-                    {event.venue}
+                    <span className="truncate">{event.venue}</span>
                 </span>
                 <span className="flex items-center gap-2">
                     <Icon.MapPin className="size-4 shrink-0" />
-                    {event.area}
+                    <span className="truncate">{event.area}</span>
                 </span>
             </Card.Content>
 
