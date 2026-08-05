@@ -78,6 +78,7 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
     const navigate = Router.useNavigate();
 
     const isValidationRoute = location.pathname.includes("/validate");
+    const isProfileRoute = location.pathname.includes("/profile");
 
     return (
         <div className="flex h-full w-full relative p-2">
@@ -120,21 +121,35 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                             <Breadcrumbs>
                                 <Breadcrumbs.Item>Validador</Breadcrumbs.Item>
                                 <Breadcrumbs.Item
-                                    onPress={isValidationRoute ? () => navigate("/validator") : undefined}
+                                    onPress={
+                                        isValidationRoute || isProfileRoute
+                                            ? () => navigate("/validator")
+                                            : undefined
+                                    }
                                 >
                                     Eventos
                                 </Breadcrumbs.Item>
                                 {isValidationRoute ? (
                                     <Breadcrumbs.Item>Validación</Breadcrumbs.Item>
                                 ) : null}
+                                {isProfileRoute ? <Breadcrumbs.Item>Perfil</Breadcrumbs.Item> : null}
                             </Breadcrumbs>
                         </ScrollShadow>
                     </div>
 
-                    <Chip variant="soft" color="default" className="shrink-0">
-                        <Icon.ShieldCheck />
-                        Validador
-                    </Chip>
+                    <Tooltip>
+                        <Tooltip.Trigger>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => navigate("/validator/profile")}
+                            >
+                                <Icon.User />
+                            </Button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>Perfil</Tooltip.Content>
+                    </Tooltip>
                 </div>
 
                 <ScrollShadow className="flex-1 overflow-auto relative px-2 pb-2">

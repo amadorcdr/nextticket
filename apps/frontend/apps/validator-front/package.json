@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@nextticket-frontend/commons": "1.0.0"
+    "@nextticket-frontend/commons": "1.0.0",
+    "@nextticket-frontend/users-front": "1.0.0"
   }
 }
