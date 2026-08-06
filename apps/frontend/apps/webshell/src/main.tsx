@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Router, ThemeProvider, CartProvider, PhysicalEditor } from '@nextticket-frontend/commons';
+import { Router, ThemeProvider, CartProvider, SessionProvider, PhysicalEditor } from '@nextticket-frontend/commons';
 
 import { App } from './App';
 import { AuthModule, SignIn, SignUp } from "@nextticket-frontend/auth-front";
@@ -29,6 +29,7 @@ import './index.css';
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <ThemeProvider>
+          <SessionProvider>
           <CartProvider>
             <Router.BrowserRouter>
                 <Router.Routes>
@@ -87,6 +88,7 @@ createRoot(document.getElementById('root')!).render(
                 </Router.Routes>
             </Router.BrowserRouter>
           </CartProvider>
+          </SessionProvider>
         </ThemeProvider>
     </StrictMode>
 );

@@ -1,6 +1,27 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router } from "@nextticket-frontend/commons";
+import {
+  Button,
+  HeroParticles,
+  HeroWaves,
+  HOME_BY_ROLE,
+  Icon,
+  Router,
+  useSession,
+} from "@nextticket-frontend/commons";
 import { CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
 import { InputField, RoleSelector, UserType, authCardClassName } from "./AuthCardUI";
+
+/** "juan.perez@correo.com" -> "Juan Perez". Solo para la demo. */
+function nameFromEmail(email: string) {
+  const local = email.split("@")[0];
+
+  if (!local) return "Invitado";
+
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 function BackToHome() {
   return (
@@ -18,6 +39,7 @@ function BackToHome() {
 
 function LoginFace({ onFlip }: { onFlip: () => void }) {
   const navigate = Router.useNavigate();
+  const { signIn } = useSession();
   const [userType, setUserType] = useState<UserType>("usuario");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,15 +47,16 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (userType === "validador") {
-      navigate("/validator");
-    } else if (userType === "usuario") {
-      navigate("/eventos");
-    } else if (userType === "organizador") {
-      navigate("/organizer/dashboard");
-    } else {
-      navigate("/dashboard");
-    }
+
+    // Se guarda la sesión antes de navegar: así cada layout sabe quién entró
+    // y el usuario llega a su pantalla ya identificado.
+    signIn({
+      name: nameFromEmail(email),
+      email: email || `${userType}@nextticket.com`,
+      role: userType,
+    });
+
+    navigate(HOME_BY_ROLE[userType]);
   };
 
   return (

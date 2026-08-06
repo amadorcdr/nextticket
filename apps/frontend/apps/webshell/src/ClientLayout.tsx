@@ -1,11 +1,16 @@
 import {
     Button,
+    Chip,
+    Dropdown,
+    getInitials,
     Icon,
     Logo,
     Router,
     ScrollShadow,
     Tabs,
     Tooltip,
+    useCart,
+    useSession,
 } from "@nextticket-frontend/commons";
 
 /*
@@ -21,10 +26,17 @@ const CLIENT_LINKS = [
 export function ClientLayout() {
     const location = Router.useLocation();
     const navigate = Router.useNavigate();
+    const { user, isAuthenticated, signOut } = useSession();
+    const { seats } = useCart();
 
     const activeKey =
         CLIENT_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ??
         "none";
+
+    const handleSignOut = () => {
+        signOut();
+        navigate("/");
+    };
 
     return (
         <div className="flex flex-col h-full w-full relative p-2 gap-2">
@@ -76,23 +88,70 @@ export function ClientLayout() {
                                 onPress={() => navigate("/checkout")}
                             >
                                 <Icon.ShoppingCart />
+                                {seats.length > 0 && (
+                                    <Chip size="sm" variant="soft" className="ml-1">
+                                        {seats.length}
+                                    </Chip>
+                                )}
                             </Button>
                         </Tooltip.Trigger>
-                        <Tooltip.Content>Carrito</Tooltip.Content>
+                        <Tooltip.Content>
+                            {seats.length > 0
+                                ? `${seats.length} ${seats.length === 1 ? "asiento" : "asientos"} en el carrito`
+                                : "Carrito"}
+                        </Tooltip.Content>
                     </Tooltip>
-                    <Tooltip>
-                        <Tooltip.Trigger>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                isIconOnly
-                                onPress={() => navigate("/users/profile")}
-                            >
-                                <Icon.User />
+
+                    {isAuthenticated && user ? (
+                        <Dropdown>
+                            <Button size="sm" variant="ghost" className="gap-2">
+                                <span className="flex size-6 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-semibold">
+                                    {getInitials(user.name)}
+                                </span>
+                                <span className="hidden md:inline max-w-[140px] truncate">
+                                    {user.name}
+                                </span>
+                                <Icon.ChevronDown className="size-4" />
                             </Button>
-                        </Tooltip.Trigger>
-                        <Tooltip.Content>Mi cuenta</Tooltip.Content>
-                    </Tooltip>
+
+                            <Dropdown.Popover placement="bottom end" className="min-w-0">
+                                <Dropdown.Menu>
+                                    <Dropdown.Item
+                                        id="perfil"
+                                        textValue="Mi perfil"
+                                        onAction={() => navigate("/users/profile")}
+                                    >
+                                        <Icon.User className="size-4" />
+                                        Mi perfil
+                                    </Dropdown.Item>
+                                    <Dropdown.Item
+                                        id="boletos"
+                                        textValue="Mis boletos"
+                                        onAction={() => navigate("/mis-boletos")}
+                                    >
+                                        <Icon.Ticket className="size-4" />
+                                        Mis boletos
+                                    </Dropdown.Item>
+                                    <Dropdown.Item
+                                        id="salir"
+                                        textValue="Cerrar sesión"
+                                        onAction={handleSignOut}
+                                    >
+                                        <Icon.LogOut className="size-4" />
+                                        Cerrar sesión
+                                    </Dropdown.Item>
+                                </Dropdown.Menu>
+                            </Dropdown.Popover>
+                        </Dropdown>
+                    ) : (
+                        <Button
+                            size="sm"
+                            onPress={() => navigate("/sign-in")}
+                        >
+                            <Icon.LogIn />
+                            <span className="hidden md:inline">Iniciar sesión</span>
+                        </Button>
+                    )}
                 </div>
             </header>
 
