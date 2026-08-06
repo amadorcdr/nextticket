@@ -122,7 +122,9 @@ export function SeatSelection() {
                                                 className={[
                                                     "size-6 rounded-[4px] text-[10px] transition-colors",
                                                     occupied
-                                                        ? "bg-default cursor-not-allowed opacity-40"
+                                                        // Contorno punteado en vez de solo opacidad: en tema
+                                                        // oscuro un relleno atenuado se confunde con "disponible".
+                                                        ? "border border-dashed border-muted/50 text-muted/50 cursor-not-allowed"
                                                         : selected
                                                             ? "bg-accent text-accent-foreground"
                                                             : "bg-surface-secondary hover:bg-default cursor-pointer",
@@ -147,7 +149,7 @@ export function SeatSelection() {
                             Seleccionado
                         </span>
                         <span className="flex items-center gap-2 text-xs text-muted">
-                            <span className="size-3 rounded-[3px] bg-default opacity-40" />
+                            <span className="size-3 rounded-[3px] border border-dashed border-muted/50" />
                             Ocupado
                         </span>
                     </div>
