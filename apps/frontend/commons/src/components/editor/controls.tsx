@@ -365,13 +365,13 @@ export function FloorsToolbarReorderList({
   return (
     <>
       <Reorder.Group
-        axis="x"
+        axis="y"
         values={localFloors.map(f => f.id)}
         onReorder={(newIds) => {
           const next = newIds.map(id => localFloors.find(f => f.id === id)!);
           setLocalFloors(next);
         }}
-        className="flex gap-2"
+        className="flex flex-col gap-2"
       >
         {localFloors.map((floor) => (
           <Reorder.Item

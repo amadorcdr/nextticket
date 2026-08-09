@@ -12,6 +12,10 @@
 }
 
 @layer base {
+    * {
+        @apply scrollbar;
+    }
+
     h1 {
         @apply md:text-4xl text-3xl font-bold;
     }
@@ -164,7 +168,7 @@
         --overlay-foreground: oklch(99.11% 0.0000 0.00);
 
         --muted: oklch(70.50% 0.0000 0.00);
-        --scrollbar: oklch(70.50% 0.0000 0.00);
+        --scrollbar: oklch(30.50% 0.0000 0.00);
 
         --default: oklch(27.40% 0.0000 0.00);
         --default-foreground: oklch(99.11% 0 0);
@@ -203,22 +207,31 @@
         --backdrop: rgba(0, 0, 0, 0.6);
 
         /* Shadows */
-        --surface-shadow: 0 0 0 0 transparent inset;
-        /* No shadow on dark mode */
-        --overlay-shadow: 0 0 0 0 transparent inset;
-        /* No shadow on dark mode */
-        --field-shadow: 0 0 0 0 transparent inset;
+        --surface-shadow:
+            0 2px 4px 0 rgba(0, 0, 0, 0.20),
+            0 1px 2px 0 rgba(0, 0, 0, 0.30),
+            0 0 1px 0 rgba(0, 0, 0, 0.30);
+
+        /* Overlay shadow */
+        --overlay-shadow:
+            0 4px 16px 0 rgba(0, 0, 0, 0.40),
+            0 8px 24px 0 rgba(0, 0, 0, 0.45);
+
+        --field-shadow:
+            0 2px 4px 0 rgba(0, 0, 0, 0.20),
+            0 1px 2px 0 rgba(0, 0, 0, 0.30),
+            0 0 1px 0 rgba(0, 0, 0, 0.30);
         /* Transparent shadow to allow ring utilities to work */
     }
 }
 
 @layer components {
     .close-button {
-        @apply bg-transparent text-foreground;
+        @apply bg-transparent text-foreground size-4 rounded-[2px];
     }
 
     .tooltip {
-        @apply rounded-[10px] px-4 py-2;
+        @apply rounded-[10px] px-3 py-2 text-sm;
     }
 
     .table__column {
@@ -266,11 +279,11 @@
     }
 
     .accordion__body-inner {
-        @apply px-4 pb-4 pt-2 bg-transparent;
+        @apply px-2 pb-2 pt-0 bg-transparent;
     }
 
     .accordion__trigger {
-        @apply pl-4 pr-6 py-2 text-left text-base font-medium no-highlight;
+        @apply pl-4 pr-6 py-1 text-left text-xs text-wrap wrap-break-word text-muted gap-1;
     }
 
     .accordion__heading {
@@ -310,6 +323,7 @@
     0% {
         transform: translateX(-50%);
     }
+
     100% {
         transform: translateX(0%);
     }
@@ -320,12 +334,15 @@
         transform: translateY(0);
         opacity: 0;
     }
+
     12% {
         opacity: 1;
     }
+
     85% {
         opacity: 1;
     }
+
     100% {
         transform: translateY(calc(-1 * var(--rise, 220px)));
         opacity: 0;
