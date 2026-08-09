@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { PurchasesGateway } from './purchases.gateway';
 import {
   CreatePurchaseDto,
   PurchaseDetailDto,
@@ -30,6 +31,7 @@ export class PurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly gateway: PurchasesGateway,
   ) {}
 
   async createTemporaryBlock(dto: CreateTemporaryBlockDto) {
@@ -59,7 +61,7 @@ export class PurchasesService {
     }
 
     try {
-      return await this.prisma.temporaryBlock.create({
+      const block = await this.prisma.temporaryBlock.create({
         data: {
           userId: dto.userId,
           eventZoneId: dto.eventZoneId,
@@ -69,6 +71,14 @@ export class PurchasesService {
           expiresAt,
         },
       });
+
+      this.gateway.emitBlockLocked({
+        blockId: block.id,
+        eventZoneId: block.eventZoneId,
+        eventSeatId: block.eventSeatId,
+      });
+
+      return block;
     } catch (error) {
       await this.redis.del(lockKey);
       throw error;
@@ -103,10 +113,18 @@ export class PurchasesService {
       this.buildBlockKey(block.eventZoneId, block.eventSeatId ?? undefined),
     );
 
-    return this.prisma.temporaryBlock.update({
+    const released = await this.prisma.temporaryBlock.update({
       where: { id },
       data: { status: 'RELEASED' },
     });
+
+    this.gateway.emitBlockReleased({
+      blockId: released.id,
+      eventZoneId: released.eventZoneId,
+      eventSeatId: released.eventSeatId,
+    });
+
+    return released;
   }
 
   async create(dto: CreatePurchaseDto) {
@@ -163,7 +181,10 @@ export class PurchasesService {
     });
 
     if (dto.temporaryBlockIds?.length) {
-      await this.releaseRedisLocksForBlocks(dto.temporaryBlockIds);
+      await this.releaseRedisLocksForBlocks(
+        dto.temporaryBlockIds,
+        paymentDecision.approved,
+      );
     }
     await this.redis.del(LIST_CACHE_KEY);
 
@@ -233,13 +254,29 @@ export class PurchasesService {
 
   async expireElapsedBlocks() {
     const now = new Date();
-    return this.prisma.temporaryBlock.updateMany({
+    const elapsed = await this.prisma.temporaryBlock.findMany({
       where: {
         status: 'ACTIVE',
         expiresAt: { lte: now },
       },
+    });
+
+    if (elapsed.length === 0) return { count: 0 };
+
+    const result = await this.prisma.temporaryBlock.updateMany({
+      where: { id: { in: elapsed.map((block) => block.id) } },
       data: { status: 'EXPIRED' },
     });
+
+    for (const block of elapsed) {
+      this.gateway.emitBlockExpired({
+        blockId: block.id,
+        eventZoneId: block.eventZoneId,
+        eventSeatId: block.eventSeatId,
+      });
+    }
+
+    return result;
   }
 
   private async assertBlocksCanBeConverted(dto: CreatePurchaseDto) {
@@ -406,7 +443,10 @@ export class PurchasesService {
     return nextval;
   }
 
-  private async releaseRedisLocksForBlocks(blockIds: string[]) {
+  private async releaseRedisLocksForBlocks(
+    blockIds: string[],
+    approved: boolean,
+  ) {
     const blocks = await this.prisma.temporaryBlock.findMany({
       where: { id: { in: blockIds } },
     });
@@ -418,6 +458,19 @@ export class PurchasesService {
         ),
       ),
     );
+
+    for (const block of blocks) {
+      const payload = {
+        blockId: block.id,
+        eventZoneId: block.eventZoneId,
+        eventSeatId: block.eventSeatId,
+      };
+      if (approved) {
+        this.gateway.emitBlockConverted(payload);
+      } else {
+        this.gateway.emitBlockReleased(payload);
+      }
+    }
   }
 
   private buildBlockKey(eventZoneId: string, eventSeatId?: string) {
