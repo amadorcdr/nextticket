@@ -8,6 +8,7 @@ export interface PanelProps {
     placement: "left" | "right";
     width?: string;
     className?: string;
+    margin?: number;
     children: React.ReactNode;
 }
 
@@ -18,9 +19,9 @@ export function Panel({
     placement,
     width = "w-[276px]",
     className = "",
+    margin = 8,
     children,
 }: PanelProps) {
-    const marginSide = isOpen ? (placement === "left" ? "mr-2" : "ml-2") : "m-0";
 
     if (isDrawer) {
         return (
@@ -37,13 +38,12 @@ export function Panel({
 
     return (
         <aside
-            className={`transition-[width,margin] duration-500 ease-in-out shadow-surface bg-surface overflow-hidden shrink-0 rounded-[10px] ${isOpen ? width : "w-0"} ${marginSide}`}
+            className={`transition-[width,margin] duration-500 ease-in-out shadow-surface bg-surface overflow-hidden shrink-0 rounded-[10px] ${isOpen ? width : "w-0"}`}
+            style={{ [placement === "left" ? "marginRight" : "marginLeft"]: isOpen ? margin : 0 }}
             inert={!isOpen ? true : undefined}
         >
             <div className={`${width} h-full ${className} flex flex-col overflow-y-auto relative`}>
-                <CloseButton className="absolute top-4 right-4 z-50"
-                    onPress={() => onOpenChange(false)}
-                />
+
                 {children}
             </div>
         </aside>

@@ -139,14 +139,14 @@ export const drawRuler = (
   rulerGfx.rect(0, ch - RULER_SIZE, cw, RULER_SIZE);
   rulerGfx.rect(0, RULER_SIZE, RULER_SIZE, ch - RULER_SIZE * 2);
   rulerGfx.rect(cw - RULER_SIZE, RULER_SIZE, RULER_SIZE, ch - RULER_SIZE * 2);
-  rulerGfx.fill({ color: 0x0c0b0b, alpha: 0 });
+  rulerGfx.fill({ color: 0xf31260, alpha: 0 });
 
   // Puntos de intersección (esquinas)
   rulerGfx.rect(0, 0, RULER_SIZE, RULER_SIZE);
   rulerGfx.rect(cw - RULER_SIZE, 0, RULER_SIZE, RULER_SIZE);
   rulerGfx.rect(0, ch - RULER_SIZE, RULER_SIZE, RULER_SIZE);
   rulerGfx.rect(cw - RULER_SIZE, ch - RULER_SIZE, RULER_SIZE, RULER_SIZE);
-  rulerGfx.fill({ color: 0x0c0b0b, alpha: 0 });
+  rulerGfx.fill({ color: 0xf31260, alpha: 0 });
 
   let ti = 0;
   const res = textResolution(1); // La regla no se escala con el zoom, está en espacio de pantalla

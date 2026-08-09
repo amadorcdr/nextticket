@@ -291,6 +291,7 @@ export function ConfirmSelect({
     <>
       <Select
         placeholder={placeholder}
+        variant="secondary"
         value={value}
         onChange={handleChange}
       >

@@ -22,7 +22,7 @@ import {
   materializePoints, rectPoints, boundsFromPoints, polygonSelfIntersects,
   defaultControlPoint,
 } from "./geometry";
-import { Reorder } from "framer-motion";
+import { Reorder, motion } from "framer-motion";
 import { sectionColorFor, ELEMENT_TYPE_LABEL, ELEMENT_TYPE_DEFAULT_COLOR, BRAND_COLOR, SEAT_RADIUS } from "./constants";
 import { buildSeatsForSection, generateRowName } from "./seats";
 import { hasStructuralConflict } from "./collisions";
@@ -46,8 +46,8 @@ import {
 import { useKeyboardShortcuts } from "./keyboard";
 import { SmartPanel, useIsDesktop, ConfirmSwitch, ConfirmSelect } from "./layout-components";
 import { ColorField, CheckField } from "./controls";
-import { Accordion, Button, ButtonGroup, Checkbox, Chip, Description, Kbd, Label, NumberField, ScrollShadow, Separator, Toolbar, Tooltip, ToggleButton, ToggleButtonGroup, InputGroup, TextField, TextArea, ListBox, Select, Switch, Input, Dropdown, CloseButton } from "@heroui/react";
-import { Armchair, ClipboardPaste, ClipboardPlus, Copy, CopyPlus, LocateFixed, PanelLeftOpen, PanelRightOpen, Plus, Redo2, SquareDashedMousePointer, Trash2, Undo2, Users, X, ZoomIn, ZoomOut, Circle, Square, LockKeyhole, LockKeyholeOpen, Link, Unlink, Spline, MousePointer2, Hand, Theater, TvMinimal, Speaker, LogIn, LogOut, Route, Toilet, Wine, Type, Shapes, Component, Crown, Gem, Accessibility, LayersPlus, FileUp, Save, Check, Download, ChevronDown, GripVertical, Pencil, CheckCircle2, Ban, Wrench, Construction } from "lucide-react";
+import { Accordion, Button, ButtonGroup, Checkbox, Chip, SearchField, Description, Kbd, Label, NumberField, ScrollShadow, Separator, Toolbar, Tooltip, ToggleButton, ToggleButtonGroup, InputGroup, TextField, TextArea, ListBox, Select, Switch, Input, Dropdown, CloseButton, Tabs, Spinner } from "@heroui/react";
+import { Armchair, Search, ClipboardPaste, ClipboardPlus, Copy, CopyPlus, LocateFixed, PanelLeftOpen, PanelRightOpen, Plus, Redo2, SquareDashedMousePointer, Trash2, Undo2, Users, X, ZoomIn, ZoomOut, Circle, Square, LockKeyhole, LockKeyholeOpen, Link, Unlink, Spline, MousePointer2, Hand, Theater, TvMinimal, Speaker, LogIn, LogOut, Route, Toilet, Wine, Type, Shapes, Component, Crown, Gem, Accessibility, LayersPlus, FileUp, Save, Check, Download, ChevronDown, GripVertical, Pencil, CheckCircle2, Ban, Wrench, Construction, Upload, SquareSquare, ChevronRight, ChevronLeft, SquarePen, Layers } from "lucide-react";
 
 const ELEMENT_ICONS: Record<CanvasElementType, React.ElementType> = {
   STAGE: Theater,
@@ -63,6 +63,8 @@ const ELEMENT_ICONS: Record<CanvasElementType, React.ElementType> = {
   CUSTOM: Component,
 };
 import { StaticMiniMap, FloorsToolbarReorderList } from "./controls";
+import { Panel } from "../organisms/Panel";
+import { Icon } from "../..";
 
 // ── Fábrica de estatus vacío ───────────────────────────────────────────────
 
@@ -116,6 +118,94 @@ export interface PhysicalEditorProps {
   /** Callback al presionar el botón principal (Crear / Guardar). */
   onSave?: (state: PhysicalVenueState) => void;
 }
+import { worldOutline } from "./geometry";
+
+const StaticSectionPreview = ({ section, seats }: { section: Section, seats: Seat[] }) => {
+  if (seats.length === 0) return null;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  seats.forEach(s => {
+    const cx = s.coordinateX ?? 0;
+    const cy = s.coordinateY ?? 0;
+    minX = Math.min(minX, cx - SEAT_RADIUS);
+    minY = Math.min(minY, cy - SEAT_RADIUS);
+    maxX = Math.max(maxX, cx + SEAT_RADIUS);
+    maxY = Math.max(maxY, cy + SEAT_RADIUS);
+  });
+
+  const pts = worldOutline({
+    ...section,
+    coordinateX: section.coordinateX ?? 0,
+    coordinateY: section.coordinateY ?? 0,
+    width: section.width ?? 100,
+    height: section.height ?? 100,
+  });
+  pts.forEach(p => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  });
+
+  const pad = 20;
+  const vMinX = minX - pad;
+  const vMinY = minY - pad;
+  const vW = Math.max(10, (maxX - minX) + pad * 2);
+  const vH = Math.max(10, (maxY - minY) + pad * 2);
+
+  const renderSectionShape = () => {
+    const color = section.color || "#14c9e1";
+    let d = `M${pts[0].x},${pts[0].y}`;
+    for (let i = 0; i < pts.length; i++) {
+      const ni = (i + 1) % pts.length;
+      const p0 = section.points?.[i];
+      if (p0 && p0.controlX !== null && p0.controlY !== null && (!section.isEllipse)) {
+        const rad = ((section.rotationDegrees || 0) * Math.PI) / 180;
+        const cos = Math.cos(rad), sin = Math.sin(rad);
+        const cx = section.coordinateX ?? 0, cy = section.coordinateY ?? 0;
+        const cpx = cx + p0.controlX * cos - p0.controlY * sin;
+        const cpy = cy + p0.controlX * sin + p0.controlY * cos;
+        d += ` Q${cpx},${cpy} ${pts[ni].x},${pts[ni].y}`;
+      } else {
+        d += ` L${pts[ni].x},${pts[ni].y}`;
+      }
+    }
+    d += "Z";
+    return <path d={d} fill="transparent" stroke={color} strokeWidth={2} opacity={0.5} />;
+  };
+
+  return (
+    <div className="w-full h-full overflow-hidden relative shrink-0">
+      <svg
+        viewBox={`${vMinX} ${vMinY} ${vW} ${vH}`}
+        className="w-full h-full bg-transparent"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {renderSectionShape()}
+        {seats.map(s => {
+          const cx = s.coordinateX ?? 0;
+          const cy = s.coordinateY ?? 0;
+          const w = SEAT_RADIUS * 2;
+          const h = SEAT_RADIUS * 2;
+          return (
+            <rect
+              key={s.id}
+              x={cx - SEAT_RADIUS}
+              y={cy - SEAT_RADIUS}
+              width={w}
+              height={h}
+              rx={4}
+              fill={s.status === 'AVAILABLE' ? (section.color || "#14c9e1") : "#525252"}
+              opacity={s.status === 'AVAILABLE' ? 0.85 : 0.35}
+              transform={`rotate(${s.rotationDegrees || 0} ${cx} ${cy})`}
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
 
 export default function PhysicalEditor({ initialState, onChange, mode = "create", onSave }: PhysicalEditorProps) {
   const { state: venue, commit: setVenue, mutateSilently: setVenueSilent, settle, undo, redo, canUndo, canRedo } =
@@ -130,6 +220,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
   const [activeFloorIdState, setActiveFloorIdState] = useState<Id>("");
   const activeFloorId = venue.floors.some((f) => f.id === activeFloorIdState) ? activeFloorIdState : (venue.floors[0]?.id ?? "");
   const [selectedIds, setSelectedIds] = useState<Set<Id>>(new Set());
+  const [localFloors, setLocalFloors] = useState(venue.floors);
+  useEffect(() => { setLocalFloors(venue.floors); }, [venue.floors]);
   const handleFloorChange = useCallback((id: Id) => { setActiveFloorIdState(id); setSelectedIds(new Set()); }, []);
   const reorderFloors = useCallback((sourceId: Id, targetId: Id) => {
     setVenue((prev) => {
@@ -845,6 +937,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
   const isDesktop = useIsDesktop();
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [floorsPanelOpen, setFloorsPanelOpen] = useState(false);
 
   // Auto-abrir panel derecho dependiendo de si hay selección
   useEffect(() => {
@@ -855,30 +948,55 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
   return (
     // Contenedor principal de la pantalla
-    <div className="h-full w-full flex flex-col overflow-hidden p-2">
+    <div className="h-full flex flex-col gap-3">
+      <div className="flex flex-col gap-3 shrink-0">
+        {/* Fila 1: Título y Botón principal */}
+        <div className="flex flex-row items-end justify-between gap-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 items-center">
+              <h2>Crear nuevo recinto</h2>
 
-      {/* Tu Header aquí */}
-      <header className="flex gap-3 justify-between shrink-0 z-20 py-4">
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            className="shrink-0"
-            onPress={() => fileInputRef.current?.click()}
-          >
-            <FileUp /> Importar
-          </Button>
-          <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
-        </div>
-        <div className="flex gap-2">
+              {importedFileName && <Description><Icon.FileBracesCorner /> {importedFileName}</Description>}
 
-          <ButtonGroup variant="ghost">
-            <Button onPress={handleExportJSON} variant="ghost">
-              <Download /> Exportar
-            </Button>
-            <Dropdown>
-              <Button isIconOnly variant="ghost">
-                <ChevronDown />
+            </div>
+            <div className="flex gap-1 items-center">
+              <Chip variant="primary" className="shrink-0"> {venue.floors.length} {venue.floors.length === 1 ? 'Piso' : 'Pisos'}</Chip>
+              <Chip variant="primary" className="shrink-0"> {venue.sections.length} {venue.sections.length === 1 ? 'Sección' : 'Secciones'}</Chip>
+              <Chip variant="primary" className="shrink-0"> {venue.canvasElements.length} {venue.canvasElements.length === 1 ? 'Elemento' : 'Elementos'}</Chip>
+              <Chip variant="primary" className="shrink-0"> {venue.seats.length} {venue.seats.length === 1 ? 'Lugar' : 'Lugares'} </Chip>
+            </div>
+
+          </div>
+
+          <div className="flex gap-1 items-center">
+            <Tooltip>
+              <Button
+                isIconOnly
+                variant="tertiary"
+                onPress={() => fileInputRef.current?.click()}
+              >
+                <Upload />
               </Button>
+              <Tooltip.Content showArrow offset={12}>
+                <Tooltip.Arrow />
+                <span>Importar</span>
+              </Tooltip.Content>
+            </Tooltip>
+
+            <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
+
+            <Dropdown>
+              <Tooltip>
+                <Button isIconOnly
+                  variant="tertiary"
+                >
+                  <Download />
+                </Button>
+                <Tooltip.Content showArrow offset={12}>
+                  <Tooltip.Arrow />
+                  <span>Exportar</span>
+                </Tooltip.Content>
+              </Tooltip>
 
               <Dropdown.Popover placement="bottom end" className="min-w-0">
                 <Dropdown.Menu>
@@ -905,778 +1023,791 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
-          </ButtonGroup>
-          <Button onPress={() => onSave?.(venue)}>
-            {mode === "create" ? (<><Plus className="w-4 h-4" /> Crear recinto</>) : (<><Save /> Guardar cambios</>)}
-          </Button>
-        </div>
-      </header>
 
-      {/* Contenedor Base Relativo */}
-      <main className="relative flex-1 overflow-hidden w-full h-full shadow-overlay rounded-[10px]">
-
-        {/* ======================================================== */}
-        {/* CAPA 1: EL CANVAS (Fondo completo e imperturbable)         */}
-        {/* ======================================================== */}
-        <div
-          className="absolute inset-0 z-0 overflow-hidden bg-background w-full h-full"
-          ref={containerRef}
-        ></div>
-
-        {/* Capa de carga bloqueante (Solo cubre el fondo si no está listo) */}
-        {!ready && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm pointer-events-auto">
-            Cargando…
+            <Button onPress={() => onSave?.(venue)}>
+              {mode === "create" ? (<><Plus /> Registrar</>) : (<><Save /> Guardar cambios</>)}
+            </Button>
           </div>
-        )}
+        </div>
 
-        {/* ======================================================== */}
-        {/* CAPA 2: INTERFAZ FLOTANTE (HUD Compartido)               */}
-        {/* Replica el Flexbox del HTML original sin tocar al canvas */}
-        {/* ======================================================== */}
-        <div className="absolute inset-0 z-10 p-4 flex pointer-events-none overflow-hidden w-full h-full">
+
+      </div>
+
+      {/* Contenedor Combinado de Fila 2 (Tabs) + Canvas */}
+      <div className="flex flex-col gap-3 flex-1 min-h-0">
+
+        {/* Fila 2: Movida adentro para unificarse con el Canvas */}
+        <div className="flex flex-row items-center gap-1 p-2 shrink-0 bg-surface shadow-surface rounded-[10px]">
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={() => setLeftOpen(!leftOpen)}
+            >
+              {leftOpen ? <PanelRightOpen /> : <PanelLeftOpen />}
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span>{leftOpen ? 'Ocultar panel izquierdo' : 'Mostrar panel izquierdo'}</span>
+            </Tooltip.Content>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <div className="flex-1 min-w-0 flex items-center flex gap-1">
+            <ScrollShadow orientation="horizontal" hideScrollBar className="min-w-0">
+              <Tabs
+                variant="secondary"
+                selectedKey={activeFloorId}
+                onSelectionChange={(key) => handleFloorChange(key as string)}
+              >
+                <Tabs.ListContainer className="border-none">
+                  <Reorder.Group
+                    axis="x"
+                    values={localFloors.map(f => f.id)}
+                    onReorder={(newIds) => {
+                      const next = newIds.map(id => localFloors.find(f => f.id === id)!);
+                      setLocalFloors(next);
+                    }}
+                  >
+                    <Tabs.List aria-label="Pisos">
+                      {localFloors.map((floor) => (
+                        <Tooltip key={floor.id}>
+                          <Tabs.Tab id={floor.id} className="w-max px-0 h-9">
+                            <Reorder.Item
+                              value={floor.id}
+                              onDragEnd={() => {
+                                React.startTransition(() => {
+                                  setVenue((prev) => ({
+                                    ...prev,
+                                    floors: localFloors.map((f, i) => ({ ...f, levelIndex: i })),
+                                  }));
+                                });
+                              }}
+                              as="div"
+                              className="px-3 h-full flex items-center justify-center cursor-grab active:cursor-grabbing w-max relative"
+                            >
+                              <span className="relative z-10">{floor.name}</span>
+                              <Tabs.Indicator className="bg-default size-full rounded-[10px]" />
+                            </Reorder.Item>
+                          </Tabs.Tab>
+                          <Tooltip.Content showArrow offset={12} className="p-0 h-40 aspect-video">
+                            <Tooltip.Arrow />
+                            <StaticMiniMap venue={venue} floorId={floor.id} isSelected={activeFloorId === floor.id} />
+                          </Tooltip.Content>
+                        </Tooltip>
+                      ))}
+                    </Tabs.List>
+                  </Reorder.Group>
+                </Tabs.ListContainer>
+              </Tabs>
+            </ScrollShadow>
+
+            <Tooltip>
+              <Button
+                isIconOnly
+                variant="tertiary"
+                onPress={addFloor}
+                className="shrink-0"
+              >
+                <Plus />
+              </Button>
+              <Tooltip.Content showArrow offset={12}>
+                <Tooltip.Arrow />
+                <span>Agregar piso</span>
+              </Tooltip.Content>
+            </Tooltip>
+          </div>
+
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <ToggleButton
+              isSelected={tool === "select"}
+              onChange={() => setTool("select")}
+              isIconOnly
+              variant="default"
+            >
+              <MousePointer2 />
+            </ToggleButton>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Seleccionar
+                <Kbd>
+                  <Kbd.Content>S</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <ToggleButton
+              isSelected={tool === "pan"}
+              onChange={() => setTool("pan")}
+              isIconOnly
+              variant="default"
+            >
+              <Hand />
+            </ToggleButton>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Mover lienzo
+                <Kbd>
+                  <Kbd.Content>H</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={() => fitToBounds(computeVenueBounds(venue))}
+            >
+              <LocateFixed />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Ajustar a la vista
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>0</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+
+
+          {(() => {
+            if (selectedIds.size !== 1) return null;
+            const id = Array.from(selectedIds)[0];
+            const selectedSection = venue.sections.find((s) => s.id === id);
+            const selectedElement = venue.canvasElements.find((e) => e.id === id);
+            const item = selectedSection || selectedElement;
+            if (!item) return null;
+
+            return (
+              <>
+                <Select
+                  className="w-36"
+                  variant="secondary"
+                  aria-label="Forma"
+                  value={item.isEllipse ? "ELLIPSE" : "RECTANGLE"}
+                  onChange={(v) => {
+                    const wantEllipse = v === "ELLIPSE";
+                    if (wantEllipse !== item.isEllipse) {
+                      toggleEllipse(item.id, !!selectedSection);
+                    }
+                  }}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="RECTANGLE" textValue="Rectangular">
+                        <div className="flex items-center gap-2">
+                          <Square />
+                          <span>Rectangular</span>
+                        </div>
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+
+                      <ListBox.Item id="ELLIPSE" textValue="Circular">
+                        <div className="flex items-center gap-2">
+                          <Circle />
+                          <span>Circular</span>
+                        </div>
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+
+                <Tooltip>
+                  <div>
+                    <ColorField
+                      value={item.color || (selectedSection ? "#2563eb" : "#475569")}
+                      onCommit={(v) => {
+                        if (selectedSection) patchSection(selectedSection.id, { color: v });
+                        else if (selectedElement) patchElement(selectedElement.id, { color: v });
+                      }}
+                    /></div>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Color</span>
+                  </Tooltip.Content>
+                </Tooltip>
+
+                <Tooltip>
+                  <ToggleButton
+                    isIconOnly
+                    variant="default"
+                    isSelected={!!item.locked}
+                    onChange={(val) => {
+                      if (selectedSection) patchSection(selectedSection.id, { locked: val });
+                      else if (selectedElement) patchElement(selectedElement.id, { locked: val });
+                    }}
+                  >
+                    {(props: any) => props.isSelected ? <LockKeyhole /> : <LockKeyholeOpen />}
+                  </ToggleButton>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Bloquear posición</span>
+                  </Tooltip.Content>
+                </Tooltip>
+
+                <Tooltip>
+                  <ToggleButton
+                    isIconOnly
+                    variant="default"
+                    isSelected={!!item.lockAspect}
+                    onChange={(val) => {
+                      if (selectedSection) patchSection(selectedSection.id, { lockAspect: val });
+                      else if (selectedElement) patchElement(selectedElement.id, { lockAspect: val });
+                    }}
+                  >
+                    {(props: any) => props.isSelected ? <Link /> : <Unlink />}
+                  </ToggleButton>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Bloquear proporción</span>
+                  </Tooltip.Content>
+                </Tooltip>
+
+                <Tooltip>
+                  <ToggleButton
+                    isIconOnly
+                    variant="default"
+                    isDisabled={selectedVertexIdx < 0 || !!item.isEllipse}
+                    isSelected={(() => {
+                      if (selectedVertexIdx < 0 || item.isEllipse || !item.points) return false;
+                      const pt = item.points.find(p => p.pointIndex === selectedVertexIdx);
+                      return pt ? (pt.controlX !== null && pt.controlY !== null) : false;
+                    })()}
+                    onChange={() => {
+                      if (selectedVertexIdx >= 0) toggleCurveOnEdge(item.id, selectedVertexIdx);
+                    }}
+                  >
+                    <Spline />
+                  </ToggleButton>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Curvar | Enderezar</span>
+                  </Tooltip.Content>
+                </Tooltip>
+
+                <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+              </>
+            );
+          })()}
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={copySelection}
+              isDisabled={selectedIds.size === 0}
+            >
+              <Copy />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Copiar
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>C</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={pasteClipboard}
+              isDisabled={!hasClipboard}
+            >
+              <ClipboardPaste />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Pegar
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>V</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={duplicateSelection}
+              isDisabled={selectedIds.size === 0}
+            >
+              <ClipboardPlus />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Duplicar
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>D</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={deleteSelected}
+              isDisabled={selectedIds.size === 0}
+              className="text-destructive"
+            >
+              <Trash2 className="text-danger" />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Eliminar
+                <Kbd>
+                  <Kbd.Content>Del</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={undo}
+              isDisabled={!canUndo}
+            >
+              <Undo2 />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Deshacer
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>Z</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={redo}
+              isDisabled={!canRedo}
+            >
+              <Redo2 />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Rehacer
+                <Kbd>
+                  <Kbd.Abbr keyValue="ctrl" />
+                  <Kbd.Content>Y</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={() => zoomBy(1.2)}
+            >
+              <ZoomIn />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Acercar
+                <Kbd>
+                  <Kbd.Content>+</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <NumberField
+            variant="secondary"
+            minValue={20}
+            maxValue={1000}
+            step={1}
+            value={Math.round(zoom * 100)}
+            onChange={(v) => {
+              if (v > 0 && zoom > 0) {
+                zoomBy((v / 100) / zoom);
+              }
+            }}
+          >
+            <NumberField.Group className="grid-cols-[1fr_auto]">
+              <NumberField.Input className="text-center w-15 text-sm" />
+              <p className="flex text-field-placeholder text-sm pr-3 items-center">
+                %
+              </p>
+            </NumberField.Group>
+          </NumberField>
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              onPress={() => zoomBy(0.8)}
+            >
+              <ZoomOut />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">
+                Alejar
+                <Kbd>
+                  <Kbd.Content>-</Kbd.Content>
+                </Kbd>
+              </span>
+            </Tooltip.Content>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <NumberField
+            variant="secondary"
+            minValue={1}
+            maxValue={100}
+            step={1}
+            value={snap}
+            onChange={(v) => setSnap(Math.max(1, v))}
+          >
+            <NumberField.Group className="grid-cols-[auto_1fr_auto]">
+              <p className="flex text-field-placeholder pl-3 items-center">
+                <SquareSquare /> </p>
+              <NumberField.Input className="text-center w-12 text-sm" />
+              <p className="flex text-field-placeholder text-sm pr-3 items-center">
+                px              </p>
+            </NumberField.Group>
+          </NumberField>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+
+          <Tooltip>
+            <Button
+              isIconOnly
+              variant="tertiary"
+              className="shrink-0"
+              onPress={() => setRightOpen(!rightOpen)}
+            >
+              {rightOpen ? <PanelLeftOpen /> : <PanelRightOpen />}
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span>{rightOpen ? 'Ocultar panel derecho' : 'Mostrar panel derecho'}</span>
+            </Tooltip.Content>
+          </Tooltip>
+        </div>
+
+        {/* Contenedor Base Relativo (Actúa como borde/padding de 4px con p-1) */}
+        <main className="relative flex-1 overflow-hidden w-full h-full flex flex-row">
 
           {/* Instancia de tu Panel Izquierdo (Respeta espacio en este flex) */}
-          <SmartPanel
+          <Panel
             isOpen={leftOpen}
             onOpenChange={setLeftOpen}
-            isDesktop={isDesktop}
+            isDrawer={!isDesktop}
             placement="left"
+            className="pointer-events-auto"
           >
-            <div>
-              <div className="px-3 py-4 flex flex-col gap-3">
-                <div className="flex justify-between items-start gap-2">
-                  <h5 className="line-clamp-3">
-                    {venue.venue.name} {importedFileName && <Description className="ml-1 inline-flex">{importedFileName}</Description>}
-                  </h5>
-                  <CloseButton onPress={() => setLeftOpen(false)} />
-                </div>
+            {(() => {
+              const activeFloor = venue.floors.find(f => f.id === activeFloorId);
+              if (!activeFloor) return null;
 
-                <ScrollShadow className="flex gap-1 justify-between" orientation="horizontal" hideScrollBar>
-                  <Chip size="sm" variant="soft" className="shrink-0">{venue.floors.length} {venue.floors.length === 1 ? 'piso' : 'pisos'}</Chip>
-                  <Chip size="sm" variant="soft" className="shrink-0">{venue.sections.length} {venue.sections.length === 1 ? 'sección' : 'secciones'}</Chip>
-                  <Chip size="sm" variant="soft" className="shrink-0">{venue.canvasElements.length} {venue.canvasElements.length === 1 ? 'elemento' : 'elementos'}</Chip>
-                  <Chip size="sm" variant="soft" className="shrink-0">{venue.seats.length} {venue.seats.length === 1 ? 'asiento' : 'asientos'}</Chip>
-                </ScrollShadow>
-              </div>
+              const floorSections = venue.sections.filter(s => s.floorId === activeFloorId);
+              const floorElements = venue.canvasElements.filter(e => e.floorId === activeFloorId);
 
-              <Accordion
-                allowsMultipleExpanded
-                className="w-full border-border border-t"
-                defaultExpandedKeys={["info", "secciones"]}
-              >
-                <Accordion.Item id="info">
-                  <Accordion.Heading>
-                    <Accordion.Trigger>
-                      Información general
-                      <Accordion.Indicator />
-                    </Accordion.Trigger>
-                  </Accordion.Heading>
-                  <Accordion.Panel>
-                    <Accordion.Body className="flex flex-col gap-3">
-                      <TextField
-                        value={venue.venue.name}
-                        onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, name: v } }))}
-                      >
-                        <Label>Nombre</Label>
-                        <Input />
-                      </TextField>
+              return (
+                <div className="flex flex-col h-full">
+                  <div className="px-2 py-2 flex flex-col gap-3 min-h-0 flex-1">
+                    <div className="flex gap-1">
+                      <SearchField name="search-custom" variant="secondary" className="flex-1">
+                        <SearchField.Group>
+                          <SearchField.SearchIcon>
+                            <Search />
+                          </SearchField.SearchIcon>
+                          <SearchField.Input placeholder="Buscar secciones | elementos..." />
+                          <SearchField.ClearButton>
+                            <X />
+                          </SearchField.ClearButton>
+                        </SearchField.Group>
+                      </SearchField>
 
-                      <TextField
-                        value={venue.venue.address}
-                        onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, address: v } }))}
-                      >
-                        <Label>Dirección</Label>
-                        <Input />
-                      </TextField>
+                      <Dropdown>
+                        <Tooltip>
+                          <Dropdown.Trigger>
+                            <Button isIconOnly variant="tertiary" className="shrink-0">
+                              <Plus />
+                            </Button>
+                          </Dropdown.Trigger>
+                          <Tooltip.Content showArrow offset={12}>
+                            <Tooltip.Arrow />
+                            <span>Agregar sección | elemento</span>
+                          </Tooltip.Content>
+                        </Tooltip>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <TextField
-                          value={venue.venue.city}
-                          onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, city: v } }))}
-                        >
-                          <Label>Ciudad</Label>
-                          <Input />
-                        </TextField>
+                        <Dropdown.Popover placement="bottom start">
+                          <Dropdown.Menu>
+                            <Dropdown.Item key="section" textValue="Agregar sección" onAction={() => addSection()}>
+                              Agregar sección
+                            </Dropdown.Item>
 
-                        <TextField
-                          value={venue.venue.addressState || ""}
-                          onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, addressState: v || null } }))}
-                        >
-                          <Label>Estado</Label>
-                          <Input />
-                        </TextField>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-
-                        <TextField
-                          value={venue.venue.country}
-                          onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, country: v } }))}
-                          isReadOnly
-                        >
-                          <Label>País</Label>
-                          <Input />
-                        </TextField>
-
-                        <NumberField
-                          value={totalCapacity}
-                          isReadOnly
-                        >
-                          <Label>Capacidad total</Label>
-                          <NumberField.Group className="grid-cols-[1fr]">
-                            <NumberField.Input />
-                          </NumberField.Group>
-                        </NumberField>
-                      </div>
-
-
-                      <ConfirmSelect
-                        placeholder="Estatus"
-                        value={venue.venue.status}
-                        onChange={(v) => setVenue((p) => ({ ...p, venue: { ...p.venue, status: v as any } }))}
-                        confirmWhen="always"
-                        title={(val) => `Cambiar estatus a ${val === "DRAFT" ? "Borrador" : val === "ACTIVE" ? "Activo" : val === "INACTIVE" ? "Inactivo" : val === "UNDER_MAINTENANCE" ? "Mantenimiento" : "Removido"}`}
-                        description="¿Estás seguro de que deseas cambiar el estatus del recinto?"
-                        confirmText="Cambiar estatus"
-                      >
-                        <Label>Estatus</Label>
-                        <Select.Trigger>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox>
-                            <ListBox.Item id="DRAFT" textValue="Borrador">
-                              <div className="flex flex-col">
-                                <div className="flex gap-1 items-center">
-                                  <Pencil className="shrink-0 size-3!" />
-                                  <Label>Borrador</Label>
-                                </div>
-                                <Description>Recinto en construcción, no visible para el público.</Description>
-                              </div>
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                            <ListBox.Item id="ACTIVE" textValue="Activo">
-                              <div className="flex flex-col">
-                                <div className="flex gap-1 items-center">
-                                  <CheckCircle2 className="text-success shrink-0 size-3!" />
-                                  <Label className="text-success">Activo</Label>
-                                </div>
-                                <Description>Recinto visible y disponible para eventos.</Description>
-                              </div>
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                            <ListBox.Item id="INACTIVE" textValue="Inactivo">
-                              <div className="flex flex-col">
-                                <div className="flex gap-1 items-center">
-                                  <Ban className="text-danger shrink-0 size-3!" />
-                                  <Label className="text-danger">Inactivo</Label>
-                                </div>
-                                <Description>Recinto oculto o no disponible temporalmente.</Description>
-                              </div>
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                            <ListBox.Item id="UNDER_MAINTENANCE" textValue="Mantenimiento">
-                              <div className="flex flex-col">
-                                <div className="flex gap-1 items-center">
-                                  <Construction className="text-warning shrink-0 size-3!" />
-                                  <Label className="text-warning">Mantenimiento</Label>
-                                </div>
-                                <Description>El recinto se encuentra en reparaciones.</Description>
-                              </div>
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          </ListBox>
-                        </Select.Popover>
-                      </ConfirmSelect>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="venueDescription">Descripción:</Label>
-                        <TextArea
-                          id="venueDescription"
-                          rows={3}
-                          value={venue.venue.description || ""}
-                          onChange={(e) => setVenue((p) => ({ ...p, venue: { ...p.venue, description: e.target.value || null } }))}
-                        />
-                      </div>
-                    </Accordion.Body>
-                  </Accordion.Panel>
-                </Accordion.Item>
-
-                <Accordion.Item id="pisos">
-                  <Accordion.Heading>
-                    <Accordion.Trigger>
-                      Pisos
-                      <Accordion.Indicator />
-                    </Accordion.Trigger>
-                  </Accordion.Heading>
-                  <Accordion.Panel>
-                    <Accordion.Body className="flex flex-col gap-3">
-                      <div className="flex gap-2 items-end">
-                        <Select
-                          className="flex-1"
-                          placeholder="Selecciona un piso"
-                          value={activeFloorId}
-                          onChange={(v) => handleFloorChange(v as Id)}
-                        >
-                          <Label>Piso actual</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {venue.floors.map((f) => (
-                                <ListBox.Item key={f.id} id={f.id} textValue={f.name}>
-                                  {f.name} <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                        <Button variant="secondary" onPress={addFloor}>
-                          <Plus className="w-4 h-4 mr-1" /> Piso
-                        </Button>
-                      </div>
-
-                      <ScrollShadow className="max-h-[50vh] -m-2 p-2" hideScrollBar>
-                        <Accordion allowsMultipleExpanded defaultExpandedKeys={[activeFloorId]} className="flex flex-col gap-2">
-                          {venue.floors.map((f) => {
-                            const floorSections = venue.sections.filter(s => s.floorId === f.id);
-                            const floorElements = venue.canvasElements.filter(e => e.floorId === f.id);
-
-                            return (
-                              <Accordion.Item key={f.id} id={f.id} className={`bg-secondary/50 rounded-xl overflow-hidden border-1 transition-colors ${f.id === activeFloorId ? 'border-primary' : 'border-transparent'}`}>
-                                <Accordion.Heading>
-                                  <Accordion.Trigger className="px-3 py-2">
-                                    <div className="flex gap-2 items-center flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-                                      <TextField
-                                        className="flex-1 min-w-0"
-                                        value={f.name}
-                                        onChange={(v) => renameFloor(f.id, v)}
+                            <Dropdown.SubmenuTrigger>
+                              <Dropdown.Item key="element" textValue="Agregar elemento">
+                                Agregar elemento
+                                <Dropdown.SubmenuIndicator>
+                                  <ChevronRight />
+                                </Dropdown.SubmenuIndicator>
+                              </Dropdown.Item>
+                              <Dropdown.Popover >
+                                <Dropdown.Menu>
+                                  {(Object.keys(ELEMENT_TYPE_LABEL) as CanvasElementType[]).map((t) => {
+                                    const Icon = ELEMENT_ICONS[t];
+                                    return (
+                                      <Dropdown.Item
+                                        key={t}
+                                        id={t}
+                                        textValue={ELEMENT_TYPE_LABEL[t]}
+                                        onAction={() => addCanvasElement(t)}
                                       >
-                                        <Input />
-                                      </TextField>
-                                      <Button
-                                        isIconOnly
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-danger shrink-0"
-                                        isDisabled={venue.floors.length <= 1}
-                                        onPress={() => removeFloor(f.id)}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </div>
-                                    <Accordion.Indicator />
-                                  </Accordion.Trigger>
-                                </Accordion.Heading>
-                                <Accordion.Panel>
-                                  <Accordion.Body className="p-3 pt-0 flex flex-col gap-4">
-                                    <div className="flex flex-col gap-2">
-                                      <div className="flex items-center justify-between">
-                                        <Label className="font-semibold text-xs text-muted-foreground uppercase">Secciones</Label>
-                                        {activeFloorId === f.id && (
-                                          <div className="size-6 shrink-0 bg-secondary rounded-md flex items-center justify-center cursor-pointer hover:bg-secondary/80 transition-colors" onClick={() => addSection()}>
-                                            <Plus className="w-4 h-4" />
-                                          </div>
-                                        )}
-                                      </div>
-                                      {floorSections.length === 0 && <Description className="text-xs">Sin secciones</Description>}
-                                      {floorSections.map((z) => {
-                                        const seatCount = venue.seats.filter(s => s.sectionId === z.id).length;
-                                        const hasCloneOnCurrentFloor = venue.sections.some(sx => sx.floorId === activeFloorId && sx.baseId === (z.baseId || z.id));
-                                        return (
-                                          <div
-                                            key={z.id}
-                                            className={`w-full h-10 md:h-9 flex items-center gap-2 px-2 cursor-pointer group transition-colors rounded-2xl min-w-0 shrink-0 ${selectedIds.has(z.id)
-                                              ? "bg-default/60 shadow-surface"
-                                              : "hover:bg-default/60"
-                                              }`}
-                                            onClick={() => selectOnly(z.id)}
-                                          >
-                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-                                              <Checkbox variant="secondary" isSelected={selectedIds.has(z.id)} onChange={() => {
-                                                const next = new Set(selectedIds);
-                                                if (next.has(z.id)) {
-                                                  next.delete(z.id);
-                                                } else {
-                                                  next.add(z.id);
-                                                }
-                                                selectMany(next);
-                                              }}>
-                                                <Checkbox.Content>
-                                                  <Checkbox.Control>
-                                                    <Checkbox.Indicator />
-                                                  </Checkbox.Control>
-                                                </Checkbox.Content>
-                                              </Checkbox>
-                                            </div>
-
-                                            <Label className="flex-1 min-w-0 truncate">
-                                              {z.name}
-                                            </Label>
-
-                                            {z.prefix && (
-                                              <Chip variant="soft" size="sm" className="shrink-0">{z.prefix}</Chip>
-                                            )}
-
-                                            <Chip variant="soft" size="sm" className="shrink-0 gap-1">{seatCount > 0 ? (
-                                              <>
-                                                <span>{seatCount}</span>
-                                                <Armchair className="size-3!" aria-label="lugares" />
-                                              </>
-                                            ) : (
-                                              <>
-                                                <span>{z.capacity}</span>
-                                                <Users className="size-3!" aria-label="lugares" />
-                                              </>
-                                            )}</Chip>
-
-                                            <Tooltip delay={0}>
-                                              <Button size="sm" className="size-6 text-muted-foreground" variant="ghost" isIconOnly isDisabled={hasCloneOnCurrentFloor} onPress={() => replicateSectionToActiveFloor(z.id)}>
-                                                <CopyPlus />
-                                              </Button>
-                                              <Tooltip.Content placement="top" showArrow offset={12}>
-                                                <Tooltip.Arrow />
-                                                <Label>Copiar a este piso</Label>
-                                              </Tooltip.Content>
-                                            </Tooltip>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-
-                                    <Separator />
-
-                                    <div className="flex flex-col gap-2">
-                                      <div className="flex items-center justify-between">
-                                        <Label className="font-semibold text-xs text-muted-foreground uppercase">Elementos</Label>
-                                        {activeFloorId === f.id && (
-                                          <Select
-                                            className="w-24 h-6 min-h-0"
-                                            placeholder="Agregar"
-                                            onChange={(v) => addCanvasElement(v as CanvasElementType)}
-                                          >
-                                            <Select.Trigger className="h-6 min-h-0 text-xs px-2 rounded-md">
-                                              <Select.Value />
-                                              <Select.Indicator className="size-3" />
-                                            </Select.Trigger>
-                                            <Select.Popover>
-                                              <ListBox>
-                                                {(Object.keys(ELEMENT_TYPE_LABEL) as CanvasElementType[]).map((t) => {
-                                                  const Icon = ELEMENT_ICONS[t];
-                                                  return (
-                                                    <ListBox.Item key={t} id={t} textValue={ELEMENT_TYPE_LABEL[t]}>
-                                                      <div className="flex items-center gap-2">
-                                                        <Icon />
-                                                        {ELEMENT_TYPE_LABEL[t]}
-                                                      </div>
-                                                    </ListBox.Item>
-                                                  )
-                                                })}
-                                              </ListBox>
-                                            </Select.Popover>
-                                          </Select>
-                                        )}
-                                      </div>
-                                      {floorElements.length === 0 && <Description className="text-xs">Sin elementos</Description>}
-                                      {floorElements.map((s) => {
-                                        const hasCloneOnCurrentFloor = venue.canvasElements.some(sx => sx.floorId === activeFloorId && sx.baseId === (s.baseId || s.id));
-                                        const Icon = ELEMENT_ICONS[s.elementType];
-                                        return (
-                                          <div
-                                            key={s.id}
-                                            className={`w-full h-10 md:h-9 flex items-center gap-2 px-2 cursor-pointer group transition-colors rounded-2xl min-w-0 shrink-0 ${selectedIds.has(s.id)
-                                              ? "bg-default/60 shadow-surface"
-                                              : "hover:bg-default/60"
-                                              }`}
-                                            onClick={() => selectOnly(s.id)}
-                                          >
-                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-                                              <Checkbox variant="secondary" isSelected={selectedIds.has(s.id)} onChange={() => {
-                                                const next = new Set(selectedIds);
-                                                if (next.has(s.id)) {
-                                                  next.delete(s.id);
-                                                } else {
-                                                  next.add(s.id);
-                                                }
-                                                selectMany(next);
-                                              }}>
-                                                <Checkbox.Content>
-                                                  <Checkbox.Control>
-                                                    <Checkbox.Indicator />
-                                                  </Checkbox.Control>
-                                                </Checkbox.Content>
-                                              </Checkbox>
-                                            </div>
-                                            <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                                            <Label className="flex-1 min-w-0 truncate">
-                                              {s.name}
-                                            </Label>
-
-                                            <Tooltip delay={0}>
-                                              <Button size="sm" className="size-6 text-muted-foreground" variant="ghost" isIconOnly isDisabled={hasCloneOnCurrentFloor} onPress={() => replicateElementToActiveFloor(s.id)}>
-                                                <CopyPlus />
-                                              </Button>
-                                              <Tooltip.Content placement="top" showArrow offset={12}>
-                                                <Tooltip.Arrow />
-                                                <Label>Copiar a este piso</Label>
-                                              </Tooltip.Content>
-                                            </Tooltip>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </Accordion.Body>
-                                </Accordion.Panel>
-                              </Accordion.Item>
-                            );
-                          })}
-                        </Accordion>
-                      </ScrollShadow>
-                    </Accordion.Body>
-                  </Accordion.Panel>
-                </Accordion.Item>
-
-                <Accordion.Item id="config">
-                  <Accordion.Heading>
-                    <Accordion.Trigger>
-                      Configuración
-                      <Accordion.Indicator />
-                    </Accordion.Trigger>
-                  </Accordion.Heading>
-                  <Accordion.Panel>
-                    <Accordion.Body className="flex flex-col gap-4">
-
-                      <NumberField
-                        className="w-full"
-                        minValue={1}
-                        maxValue={100}
-                        step={1}
-                        value={snap}
-                        onChange={(v) => setSnap(Math.max(1, v))}
-                      >
-                        <NumberField.Group className="grid-cols-[auto_1fr_auto]">
-                          <p className="flex text-field-placeholder text-sm pl-3 items-center">
-                            Ajuste de cuadrícula
-                          </p>
-                          <NumberField.Input />
-                          <p className="flex text-field-placeholder text-sm pr-3 items-center">
-                            px
-                          </p>
-                        </NumberField.Group>
-                      </NumberField>
-                    </Accordion.Body>
-                  </Accordion.Panel>
-                </Accordion.Item>
-              </Accordion>
-            </div>
-          </SmartPanel>
-
-          {/* COLUMNA CENTRAL (Se adapta y centra dinámicamente al espacio sobrante entre paneles) */}
-          <section className="flex-1 flex flex-col justify-between min-w-0 z-0 h-full">
-
-            {/* Contenedor Superior (Botones Toggle + Toolbar Superior) */}
-            {/* El contenedor padre tiene pointer-events-none para dejar pasar clicks, y solo los hijos interactivos tienen pointer-events-auto */}
-            <div className="flex items-center gap-2 w-full mx-auto pointer-events-none shrink-0">
-              <div className="bg-surface p-2 rounded-[10px] z-10 shadow-surface pointer-events-auto shrink-0">
-                <Button size="sm" isIconOnly variant="ghost" onPress={() => setLeftOpen(!leftOpen)}>
-                  {leftOpen ? <PanelRightOpen /> : <PanelLeftOpen />}
-                </Button>
-              </div>
-
-              <div className="flex-1 flex items-center justify-center min-w-0">
-                <ScrollShadow orientation="horizontal" className="max-w-full pointer-events-none p-5 -m-5" hideScrollBar>
-                  <div className="flex items-center gap-2 pointer-events-none w-max">
-                    <Toolbar className="gap-1 bg-surface p-2 rounded-[10px] z-10 shadow-surface pointer-events-auto shrink-0">
-                      <ToggleButtonGroup
-                        selectionMode="single"
-                        selectedKeys={[tool]}
-                        onSelectionChange={(keys) => {
-                          const t = Array.from(keys)[0] as "select" | "pan";
-                          if (t) setTool(t);
-                        }}
-                      >
-                        <Tooltip delay={0}>
-                          <ToggleButton id="select" size="sm" isIconOnly variant="ghost">
-                            <MousePointer2 />
-                          </ToggleButton>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Seleccionar
-                              <Kbd>
-                                <Kbd.Content>S</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <ToggleButton id="pan" size="sm" isIconOnly variant="ghost">
-                            <Hand />
-                          </ToggleButton>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Mover lienzo
-                              <Kbd>
-                                <Kbd.Content>H</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-                      </ToggleButtonGroup>
-                    </Toolbar>
-                    <Toolbar className="gap-1 bg-surface p-2 rounded-[10px] z-10 shadow-surface pointer-events-auto">
-
-                      <Tooltip delay={0}>
-                        <Button size="sm" isIconOnly variant="ghost" onPress={() => fitToBounds(computeVenueBounds(venue))}>
-                          <LocateFixed />
-                        </Button>
-                        <Tooltip.Content placement="bottom" showArrow offset={12}>
-                          <Tooltip.Arrow />
-                          <Label className="flex items-center gap-2">
-                            Ajustar a la vista
-                            <Kbd>
-                              <Kbd.Abbr keyValue="ctrl" />
-                              <Kbd.Content>0</Kbd.Content>
-                            </Kbd>
-                          </Label>
-                        </Tooltip.Content>
-                      </Tooltip>
-                      <Separator />
-
-                      <ButtonGroup variant="ghost">
-
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            className="shrink-0"
-                            onPress={() => zoomBy(1.2)}
-                          >
-                            <ZoomIn />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Acercar
-                              <Kbd>
-                                <Kbd.Content>+</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            className="shrink-0"
-                            onPress={() => zoomBy(0.8)}
-                          >
-                            <ZoomOut />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Alejar
-                              <Kbd>
-                                <Kbd.Content>-</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-                      </ButtonGroup>
-                      <Separator />
-
-                      <ButtonGroup variant="ghost">
-
-                        <Tooltip delay={0}>
-                          <Button size="sm" isIconOnly variant="ghost" onPress={undo} isDisabled={!canUndo}>
-                            <Undo2 />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Deshacer
-                              <Kbd>
-                                <Kbd.Abbr keyValue="ctrl" />
-                                <Kbd.Content>Z</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <Button size="sm" isIconOnly variant="ghost" onPress={redo} isDisabled={!canRedo}>
-                            <Redo2 />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Rehacer
-                              <Kbd>
-                                <Kbd.Abbr keyValue="ctrl" />
-                                <Kbd.Content>Y</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-                      </ButtonGroup>
-
-                      <Separator />
-                      <ButtonGroup variant="ghost">
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            onPress={copySelection}
-                            isDisabled={selectedIds.size === 0}
-                          >
-                            <Copy />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Copiar
-                              <Kbd>
-                                <Kbd.Abbr keyValue="ctrl" />
-                                <Kbd.Content>C</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            onPress={pasteClipboard}
-                            isDisabled={!hasClipboard}
-                          >
-                            <ClipboardPaste />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Pegar
-                              <Kbd>
-                                <Kbd.Abbr keyValue="ctrl" />
-                                <Kbd.Content>V</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            onPress={duplicateSelection}
-                            isDisabled={selectedIds.size === 0}
-                          >
-                            <ClipboardPlus />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Duplicar
-                              <Kbd>
-                                <Kbd.Abbr keyValue="ctrl" />
-                                <Kbd.Content>D</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-
-                        <Tooltip delay={0}>
-                          <Button
-                            size="sm"
-                            isIconOnly
-                            variant="ghost"
-                            onPress={deleteSelected}
-                            isDisabled={selectedIds.size === 0}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="text-danger" />
-                          </Button>
-                          <Tooltip.Content placement="bottom" showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <Label className="flex items-center gap-2">
-                              Eliminar
-                              <Kbd>
-                                <Kbd.Content>Del</Kbd.Content>
-                              </Kbd>
-                            </Label>
-                          </Tooltip.Content>
-                        </Tooltip>
-                      </ButtonGroup>
-                    </Toolbar>
-                  </div>
-                </ScrollShadow>
-              </div>
-              <div className=" bg-surface p-2 rounded-[10px] z-10 shadow-surface pointer-events-auto shrink-0">
-                <Button size="sm" isIconOnly variant="ghost" onPress={() => setRightOpen(!rightOpen)}>
-                  {rightOpen ? <PanelLeftOpen /> : <PanelRightOpen />}
-                </Button>
-              </div>
-            </div>
-
-            {/* ESPACIO VACÍO CENTRAL: Crucial para que los clics toquen el canvas directamente */}
-            <div className="flex-1 w-full pointer-events-none"></div>
-
-
-            {/* Toolbar Inferior */}
-            <div className="pointer-events-auto min-w-0 max-w-full shrink-0 self-center">
-              <ScrollShadow orientation="horizontal" className="flex gap-2 p-5 -m-5" hideScrollBar>
-                <FloorsToolbarReorderList
-                  venue={venue}
-                  activeFloorId={activeFloorId}
-                  handleFloorChange={handleFloorChange}
-                  removeFloor={removeFloor}
-                  setVenue={setVenue}
-                />
-                <div
-                  className="p-1 rounded-[10px] z-10 shadow-surface shrink-0 h-24 aspect-video flex flex-col gap-1 cursor-pointer transition-transform overflow-hidden bg-surface"
-                  onClick={addFloor}
-                  title="Agregar piso"
-                >
-                  <div className="flex-1 min-h-0 relative flex items-center justify-center text-muted">
-                    <div className="flex items-center justify-center size-11 bg-default-soft rounded-[10px] shadow-surface mb-2 text-muted">
-
-                      <Plus />
+                                        <div className="flex items-center gap-2">
+                                          <Icon />
+                                          {ELEMENT_TYPE_LABEL[t]}
+                                        </div>
+                                      </Dropdown.Item>
+                                    );
+                                  })}
+                                </Dropdown.Menu>
+                              </Dropdown.Popover>
+                            </Dropdown.SubmenuTrigger>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
                     </div>
-                  </div>
-                  <Description className="text-center truncate px-3 text-muted">Agregar piso</Description>
-                </div>
-              </ScrollShadow>
-            </div>
 
-          </section>
+
+
+                    {floorSections.length === 0 && floorElements.length === 0 && <div className="flex flex-1 flex-col items-center justify-center p-4 text-center gap-1">
+                      <Label>No hay nada aún</Label>
+                      <Description>Agrega una sección o elemento presionando el botón de más</Description>
+                    </div>}
+
+                    <ScrollShadow className="flex flex-col gap-3 -mx-2 overflow-y-auto overflow-x-hidden px-2 pb-2">
+                      {floorSections.map((z) => {
+                        const sectionSeats = venue.seats.filter(s => s.sectionId === z.id);
+                        const seatCount = sectionSeats.length;
+                        const standard = sectionSeats.filter(s => s.type === "STANDARD").length;
+                        const vip = sectionSeats.filter(s => s.type === "VIP").length;
+                        const premium = sectionSeats.filter(s => s.type === "PREMIUM").length;
+                        const accessible = sectionSeats.filter(s => s.type === "ACCESSIBLE").length;
+                        const available = sectionSeats.filter(s => s.status === "AVAILABLE").length;
+
+                        return (
+                          <button
+                            key={z.id}
+                            type="button"
+                            onClick={() => selectOnly(z.id)}
+                            className={` text-left w-full rounded-[10px] cursor-pointer flex flex-col transition-all duration-300 group active:outline-none ${selectedIds.has(z.id) ? "bg-default" : "bg-default-soft"}`}
+                          >
+                            {/* Image Section */}
+                            <div className="w-full h-28 rounded-[10px] relative shrink-0 overflow-hidden flex flex-col items-center justify-center">
+                              {seatCount > 0 ? (
+                                <StaticSectionPreview section={z} seats={sectionSeats} />
+                              ) : (
+                                <div className="flex items-center justify-center text-muted">
+                                  <Layers className="size-8 opacity-20" />
+                                </div>
+                              )}
+
+                              <div onClick={(e) => e.stopPropagation()} className="absolute top-2 left-2 z-10 flex items-center shrink-0">
+                                <Checkbox variant="secondary" isSelected={selectedIds.has(z.id)} onChange={() => {
+                                  const next = new Set(selectedIds);
+                                  if (next.has(z.id)) next.delete(z.id);
+                                  else next.add(z.id);
+                                  selectMany(next);
+                                }}>
+                                  <Checkbox.Content>
+                                    <Checkbox.Control>
+                                      <Checkbox.Indicator />
+                                    </Checkbox.Control>
+                                  </Checkbox.Content>
+                                </Checkbox>
+                              </div>
+
+                              <Chip size="sm" variant="primary" className="absolute top-2 right-2 z-10">{seatCount > 0 ? (
+                                <>
+                                  {seatCount}
+                                  <Armchair />
+                                </>
+                              ) : (
+                                <>
+                                  {z.capacity}
+                                  <Users />
+                                </>
+                              )}</Chip>
+                            </div>
+
+                            {/* Content Section */}
+                            <div className="p-2 flex flex-col justify-between flex-1 w-full">
+                              <div className="flex gap-2 justify-between items-end pb-2">
+                                <Label className="flex-1 min-w-0 line-clamp-1">
+                                  {z.name}
+                                  {z.prefix && (
+                                    <Description className="ml-1 inline-flex">{z.prefix}</Description>
+                                  )}
+                                </Label>
+                                <Chip
+                                  size="sm"
+                                  variant="soft"
+                                  color={z.status === "ACTIVE" ? "success" : z.status === "REMOVED" ? "danger" : "default"}
+                                  className="shrink-0"
+                                >
+                                  {z.status === "ACTIVE" ? "Activa" : z.status === "REMOVED" ? "Removida" : "Inactiva"}
+                                </Chip>
+                              </div>
+
+                              {seatCount > 0 && (
+                                <ScrollShadow className="flex gap-1 pr-0" orientation="horizontal" hideScrollBar>
+                                  <Chip size="sm" variant="primary">{standard} Estándar</Chip>
+                                  <Chip size="sm" variant="primary">{premium} Premium</Chip>
+                                  <Chip size="sm" variant="primary">{accessible} Accesible</Chip>
+                                  <Chip size="sm" variant="primary">{vip} VIP</Chip>
+                                </ScrollShadow>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+
+                      {floorElements.map((s) => {
+                        const Icon = ELEMENT_ICONS[s.elementType];
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => selectOnly(s.id)}
+                            className={` text-left w-full rounded-[10px] cursor-pointer flex flex-col transition-all duration-300 group active:outline-none ${selectedIds.has(s.id) ? "bg-default" : "bg-default-soft"}`}
+                          >
+                            {/* Image Section */}
+                            <div className="w-full h-28 rounded-[10px] relative shrink-0 overflow-hidden flex flex-col items-center justify-center">
+                              <div className="flex items-center justify-center text-muted">
+                                <Icon className="size-12 opacity-50" style={{ color: s.color || undefined }} />
+                              </div>
+
+                              <div onClick={(e) => e.stopPropagation()} className="absolute top-2 left-2 z-10 flex items-center shrink-0">
+                                <Checkbox variant="secondary" isSelected={selectedIds.has(s.id)} onChange={() => {
+                                  const next = new Set(selectedIds);
+                                  if (next.has(s.id)) next.delete(s.id);
+                                  else next.add(s.id);
+                                  selectMany(next);
+                                }}>
+                                  <Checkbox.Content>
+                                    <Checkbox.Control>
+                                      <Checkbox.Indicator />
+                                    </Checkbox.Control>
+                                  </Checkbox.Content>
+                                </Checkbox>
+                              </div>
+
+                              <Chip size="sm" variant="primary" className="absolute top-2 right-2 z-10">
+                                {ELEMENT_TYPE_LABEL[s.elementType]}
+                              </Chip>
+                            </div>
+
+                            {/* Content Section */}
+                            <div className="p-2 flex flex-col justify-between flex-1 w-full">
+                              <div className="flex gap-2 justify-between items-center">
+                                <Label className="flex-1 min-w-0 line-clamp-1">
+                                  {s.name}
+                                </Label>
+                                <Chip
+                                  size="sm"
+                                  variant="soft"
+                                  color={s.status ? "success" : "default"}
+                                  className="shrink-0"
+                                >
+                                  {s.status ? "Activo" : "Inactivo"}
+                                </Chip>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </ScrollShadow>
+                  </div>
+
+                </div>
+              );
+            })()}
+          </Panel>
+
+          {/* Wrapper interno del canvas para respetar el padding y bordes redondeados */}
+          <div className="relative flex-1 rounded-[10px] overflow-hidden bg-surface shadow-surface">
+
+            {/* ======================================================== */}
+            {/* CAPA 1: EL CANVAS (Fondo completo e imperturbable)         */}
+            {/* ======================================================== */}
+            <div
+              className="absolute inset-0 z-0 bg-surface"
+              ref={containerRef}
+            ></div>
+
+            {/* Capa de carga bloqueante (Solo cubre el fondo si no está listo) */}
+            {!ready && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto">
+                <Spinner />
+              </div>
+            )}
+          </div>
 
           {/* Instancia de tu Panel Derecho (Respeta espacio en este flex) */}
-          <SmartPanel
+          <Panel
             isOpen={rightOpen}
             onOpenChange={setRightOpen}
-            isDesktop={isDesktop}
+            isDrawer={!isDesktop}
             placement="right"
+            className="pointer-events-auto"
           >
             {selectedIds.size === 0 &&
-              <div className="flex flex-col items-center justify-center h-full w-full p-4 text-center gap-2">
-                <div className="flex items-center justify-center size-11 bg-default-soft rounded-[10px] shadow-surface mb-2 text-muted">
-                  <SquareDashedMousePointer />
-                </div>
-                <h6>
-                  Nada seleccionado aún
-                </h6>
-                <p className="text-muted">Selecciona un objeto para ver sus propiedades</p>
+              <div className="flex flex-1 flex-col items-center justify-center p-4 text-center gap-1">
+                <Label>
+                  Sin selección
+                </Label>
+                <Description>Selecciona cualquier cosa dentro del canvas para editar sus propiedades</Description>
               </div>}
             {selectedIds.size > 1 && (() => {
               const selectedSectionsList = venue.sections.filter(s => selectedIds.has(s.id));
@@ -1697,22 +1828,12 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
               return (
                 <div>
-                  <div className="px-3 py-4 flex flex-col gap-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <h5 className="line-clamp-3">
-                        {selectedIds.size} Objetos seleccionados
-                      </h5>
-                    </div>
-                    <ScrollShadow className="flex gap-1 justify-between" orientation="horizontal" hideScrollBar>
-                      <Chip size="sm" variant="soft" className="shrink-0">{selectedIds.size} objetos</Chip>
-                      {selectedSectionsList.length > 0 && <Chip size="sm" variant="soft" className="shrink-0">{selectedSectionsList.length} {selectedSectionsList.length === 1 ? "sección" : "secciones"}</Chip>}
-                      {selectedElementsList.length > 0 && <Chip size="sm" variant="soft" className="shrink-0">{selectedElementsList.length} {selectedElementsList.length === 1 ? "elemento" : "elementos"}</Chip>}
-                      {selectedSeatsList.length > 0 && <Chip size="sm" variant="soft" className="shrink-0">{selectedSeatsList.length} {selectedSeatsList.length === 1 ? "asiento" : "asientos"}</Chip>}
-                    </ScrollShadow>
+                  <div className="px-3 py-3 flex flex-col gap-3">
+                    <h4 className="line-clamp-3">{selectedIds.size} <Description className="ml-1 inline-flex">Objetos seleccionados</Description></h4>
                   </div>
                   <Accordion
                     allowsMultipleExpanded
-                    className="w-full border-border border-t"
+                    className="w-full border-t border-border"
                     defaultExpandedKeys={["resumen"]}
                   >
                     <Accordion.Item id="resumen">
@@ -1791,25 +1912,12 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
             })()}
             {selectedSection && (
               <div >
-                <div className="px-3 py-4 flex flex-col gap-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <h5 className="line-clamp-3">
-                      {selectedSection.name} <Description className="ml-1 inline-flex">{selectedSection.prefix || "-"}</Description>
-                    </h5>
-                    <div className="flex gap-1 items-center"></div>
-                  </div>
-
-                  <ScrollShadow className="flex gap-1 justify-between" orientation="horizontal" hideScrollBar>
-                    <Chip size="sm" variant="soft" className="shrink-0">Admisión {isNumbered ? "numerada" : "general"}</Chip>
-                    {isNumbered && (<Chip size="sm" variant="soft" className="shrink-0">{selectedSection.rowSeatCounts.length} {selectedSection.rowSeatCounts.length === 1 ? 'fila' : 'filas'}</Chip>)}
-                    <Chip size="sm" variant="soft" className="shrink-0">{isNumbered ? venue.seats.filter(s => s.sectionId === selectedSection.id).length : selectedSection.capacity || 0} lugares</Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">Coordenada {selectedSection.coordinateX ?? 0},{selectedSection.coordinateY ?? 0}</Chip>
-                  </ScrollShadow>
-
+                <div className="px-3 py-3 flex flex-col gap-3">
+                  <h4 className="line-clamp-3">{selectedSection.name} <Description className="ml-1 inline-flex">{selectedSection.prefix || "-"}</Description></h4>
                 </div>
                 <Accordion
                   allowsMultipleExpanded
-                  className="w-full border-border border-t"
+                  className="w-full border-t border-border"
                   defaultExpandedKeys={[
                     "info",
                     "distribucion",
@@ -1827,30 +1935,33 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                     <Accordion.Panel>
                       <Accordion.Body className="flex flex-col gap-3">
                         <TextField
+                          variant="secondary"
                           value={selectedSection.name}
                           onChange={(v) => patchSection(selectedSection.id, { name: v })}
                         >
-                          <Label>Nombre</Label>
+                          <Label className="px-2">Nombre</Label>
                           <Input />
                         </TextField>
                         <div className="grid grid-cols-2 gap-2">
 
                           <TextField
+                            variant="secondary"
                             value={selectedSection.prefix || ""}
                             onChange={(v) => patchSection(selectedSection.id, { prefix: v.toUpperCase() })
                             }
                           >
-                            <Label>Prefijo</Label>
+                            <Label className="px-2">Prefijo</Label>
                             <Input maxLength={6} />
                           </TextField>
 
                           <Select
+                            variant="secondary"
                             placeholder="Tipo"
                             value={isNumbered ? "NUMBERED" : "GENERAL"}
                             onChange={(v) => setSectionAdmission(selectedSection.id, v === "NUMBERED")
                             }
                           >
-                            <Label>Admisión</Label>
+                            <Label className="px-2">Admisión</Label>
                             <Select.Trigger>
                               <Select.Value />
                               <Select.Indicator />
@@ -1883,7 +1994,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           description="¿Estás seguro de que deseas cambiar el estatus de la sección?"
                           confirmText="Cambiar estatus"
                         >
-                          <Label>Estatus</Label>
+                          <Label className="px-2">Estatus</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -1897,8 +2008,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           </Select.Popover>
                         </ConfirmSelect>
                         <div className="flex flex-col gap-1">
-                          <Label htmlFor="description">Descripción:</Label>
+                          <Label className="px-2" htmlFor="description">Descripción:</Label>
                           <TextArea
+                            variant="secondary"
                             id="description"
                             rows={3}
                             value={selectedSection.description || ""}
@@ -1921,12 +2033,13 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                       <Accordion.Body className="flex flex-col gap-3">
                         {!isNumbered &&
                           <NumberField
+                            variant="secondary"
                             value={selectedSection.capacity}
                             minValue={0}
                             step={10}
                             onChange={(v) => patchSection(selectedSection.id, { capacity: v })}
                           >
-                            <Label>Capacidad</Label>
+                            <Label className="px-2">Capacidad</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -1941,11 +2054,12 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                               <div className="flex flex-col gap-6">
                                 <div className="grid grid-cols-[1fr_1fr_auto] w-full gap-x-2 gap-y-3 items-end">
                                   <TextField
+                                    variant="secondary"
                                     value={newRowName}
                                     onChange={setNewRowName}
                                     className="min-w-0"
                                   >
-                                    <Label>Fila</Label>
+                                    <Label className="px-2">Fila</Label>
                                     <InputGroup>
                                       <InputGroup.Prefix>
                                         {selectedSection.rowSeatCounts.length + 1}
@@ -1958,13 +2072,14 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                   </TextField>
 
                                   <NumberField
+                                    variant="secondary"
                                     value={newRowSeats}
                                     minValue={1}
                                     step={1}
                                     onChange={setNewRowSeats}
                                   >
 
-                                    <Label>Lugares</Label>
+                                    <Label className="px-2">Lugares</Label>
                                     <NumberField.Group className="grid-cols-[1fr_auto]">
                                       <NumberField.Input />
                                       <p className="flex text-field-placeholder text-sm pr-3 items-center">
@@ -1973,23 +2088,29 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                     </NumberField.Group>
                                   </NumberField>
                                   <div className="shrink-0 flex items-center justify-start">
-                                    <Button
-                                      isIconOnly
-                                      variant="ghost"
-                                      className="shrink-0"
-                                      size="sm"
-                                      onPress={() => {
-                                        const finalName = newRowName.trim() || generateRowName(selectedSection.rowSeatCounts.length);
-                                        setSectionRowConfig(
-                                          selectedSection.id,
-                                          [...selectedSection.rowSeatCounts, newRowSeats],
-                                          [...selectedSection.rowNames, finalName]
-                                        );
-                                        setNewRowName("");
-                                      }}
-                                    >
-                                      <Plus />
-                                    </Button>
+                                    <Tooltip>
+                                      <Button
+                                        isIconOnly
+                                        variant="ghost"
+                                        className="shrink-0"
+                                        size="sm"
+                                        onPress={() => {
+                                          const finalName = newRowName.trim() || generateRowName(selectedSection.rowSeatCounts.length);
+                                          setSectionRowConfig(
+                                            selectedSection.id,
+                                            [...selectedSection.rowSeatCounts, newRowSeats],
+                                            [...selectedSection.rowNames, finalName]
+                                          );
+                                          setNewRowName("");
+                                        }}
+                                      >
+                                        <Plus />
+                                      </Button>
+                                      <Tooltip.Content showArrow offset={12}>
+                                        <Tooltip.Arrow />
+                                        <span>Agregar fila</span>
+                                      </Tooltip.Content>
+                                    </Tooltip>
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-[1fr_1fr_auto] w-full gap-x-2 gap-y-3 items-center">
@@ -1998,6 +2119,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
                                       <TextField
                                         className="min-w-0"
+                                        variant="secondary"
                                         value={selectedSection.rowNames[i] || generateRowName(i)}
                                         onChange={(v) => { const names = [...selectedSection.rowNames]; names[i] = v; setSectionRowConfig(selectedSection.id, selectedSection.rowSeatCounts, names); }}
                                       >
@@ -2014,6 +2136,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
                                       <NumberField
                                         value={count}
+                                        variant="secondary"
+                                        className="px-2"
                                         minValue={1}
                                         step={1}
                                         onChange={(v) => { const counts = [...selectedSection.rowSeatCounts]; counts[i] = Math.max(1, v); setSectionRowConfig(selectedSection.id, counts, selectedSection.rowNames); }}
@@ -2026,16 +2150,22 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                         </NumberField.Group>
                                       </NumberField>
                                       <div className="shrink-0 flex items-center justify-start">
-                                        <Button
-                                          isIconOnly
-                                          variant="ghost"
-                                          className="shrink-0 text-danger"
-                                          size="sm"
-                                          isDisabled={selectedSection.rowSeatCounts.length <= 1}
-                                          onPress={() => removeRow(selectedSection.id, i)}
-                                        >
-                                          <Trash2 />
-                                        </Button>
+                                        <Tooltip>
+                                          <Button
+                                            isIconOnly
+                                            variant="ghost"
+                                            className="shrink-0 text-danger"
+                                            size="sm"
+                                            isDisabled={selectedSection.rowSeatCounts.length <= 1}
+                                            onPress={() => removeRow(selectedSection.id, i)}
+                                          >
+                                            <Trash2 />
+                                          </Button>
+                                          <Tooltip.Content showArrow offset={12}>
+                                            <Tooltip.Arrow />
+                                            <span>Eliminar fila</span>
+                                          </Tooltip.Content>
+                                        </Tooltip>
                                       </div>
                                     </>
                                   )
@@ -2049,65 +2179,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                     </Accordion.Panel>
                   </Accordion.Item>
 
-                  <Accordion.Item id="estilo">
-                    <Accordion.Heading>
-                      <Accordion.Trigger>
-                        Estilo
-                        <Accordion.Indicator />
-                      </Accordion.Trigger>
-                    </Accordion.Heading>
-                    <Accordion.Panel>
-                      <Accordion.Body className="flex flex-col gap-3">
 
-                        <div className="grid grid-cols-[1fr_auto] w-full gap-x-2 items-end">
-                          <Select
-                            placeholder="Forma"
-                            value={selectedSection.isEllipse ? "ELLIPSE" : "RECTANGLE"}
-                            onChange={(v) => {
-                              const wantEllipse = v === "ELLIPSE";
-                              if (wantEllipse !== selectedSection.isEllipse) {
-                                toggleEllipse(selectedSection.id, true);
-                              }
-                            }}
-                          >
-                            <Label>Forma</Label>
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                <ListBox.Item
-                                  id="RECTANGLE"
-                                  textValue="Rectangular"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Square />
-                                    <span>Rectangular</span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-
-                                <ListBox.Item
-                                  id="ELLIPSE"
-                                  textValue="Circular"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Circle />
-                                    <span>Circular</span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                          <ColorField value={selectedSection.color || "#2563eb"} onCommit={(v) => patchSection(selectedSection.id, { color: v })} />
-
-                        </div>
-
-                      </Accordion.Body>
-                    </Accordion.Panel>
-                  </Accordion.Item>
                   <Accordion.Item id="disposicion">
                     <Accordion.Heading>
                       <Accordion.Trigger>
@@ -2117,13 +2189,14 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body className="flex flex-col gap-3">
-                        <div className="grid grid-cols-[1fr_1fr_auto] w-full gap-x-2 gap-y-3 items-end">
+                        <div className="grid grid-cols-[1fr_1fr] w-full gap-x-2 gap-y-2 items-end">
                           <NumberField
                             value={selectedSection.coordinateX || 0}
+                            variant="secondary"
                             step={10}
                             onChange={(v) => patchSectionValidated(selectedSection.id, { coordinateX: v })}
                           >
-                            <Label>X</Label>
+                            <Label className="px-2">X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2131,118 +2204,52 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
                           <NumberField
                             value={selectedSection.coordinateY || 0}
+                            variant="secondary"
                             step={10}
                             onChange={(v) => patchSectionValidated(selectedSection.id, { coordinateY: v })}
                           >
-                            <Label>Y</Label>
+                            <Label className="px-2">Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
 
-
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isSelected={!!(selectedSection?.locked || selectedElement?.locked)}
-                              onChange={(val) => {
-                                if (selectedSection) patchSection(selectedSection.id, { locked: val });
-                                else if (selectedElement) patchElement(selectedElement.id, { locked: val });
-                              }}
-                            >
-                              {(props: any) => props.isSelected ? <LockKeyhole /> : <LockKeyholeOpen />}
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Bloquear posición</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
-
                           <NumberField
                             value={selectedSection.width || 0}
                             minValue={20}
+                            variant="secondary"
                             step={10}
                             onChange={(v) => resizeSectionDimension(selectedSection.id, "width", v)}
                           >
-                            <Label>Ancho</Label>
+                            <Label className="px-2">Ancho</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
                           <NumberField
                             value={selectedSection.height || 0}
+                            variant="secondary"
                             minValue={20}
                             step={10}
                             onChange={(v) => resizeSectionDimension(selectedSection.id, "height", v)}
                           >
-                            <Label>Alto</Label>
+                            <Label className="px-2">Alto</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
-
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isSelected={!!(selectedSection?.lockAspect || selectedElement?.lockAspect)}
-                              onChange={(val) => {
-                                if (selectedSection) patchSection(selectedSection.id, { lockAspect: val });
-                                else if (selectedElement) patchElement(selectedElement.id, { lockAspect: val });
-                              }}
-                            >
-                              {(props: any) => props.isSelected ? <Link /> : <Unlink />}
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Bloquear proporción</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
 
                           <NumberField
                             value={selectedSection.rotationDegrees}
                             step={5}
+                            variant="secondary"
                             onChange={(v) => patchSectionValidated(selectedSection.id, { rotationDegrees: v })}
                           >
-                            <Label>Rotación</Label>
+                            <Label className="px-2">Rotación</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
-
-
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isDisabled={selectedVertexIdx < 0 || !!(selectedSection?.isEllipse || selectedElement?.isEllipse)}
-                              isSelected={(() => {
-                                const item = selectedSection || selectedElement;
-                                if (!item || selectedVertexIdx < 0 || item.isEllipse || !item.points) return false;
-                                const pt = item.points.find(p => p.pointIndex === selectedVertexIdx);
-                                return pt ? (pt.controlX !== null && pt.controlY !== null) : false;
-                              })()}
-                              onChange={() => {
-                                const item = selectedSection || selectedElement;
-                                if (item && selectedVertexIdx >= 0) {
-                                  toggleCurveOnEdge(item.id, selectedVertexIdx);
-                                }
-                              }}
-                            >
-                              <Spline />
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Curvar/Enderezar</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
 
                           {selectedVertexIdx >= 0 && (() => {
                             const item = selectedSection || selectedElement;
@@ -2251,13 +2258,14 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             return (
                               <NumberField
                                 value={pt.borderRadius ?? 0}
+                                variant="secondary"
                                 minValue={0}
                                 step={1}
                                 onChange={(v) => {
                                   if (item) patchVertexBorderRadius(item.id, selectedVertexIdx, v);
                                 }}
                               >
-                                <Label>Radio de esquina</Label>
+                                <Label className="px-2">Radio de esquina</Label>
                                 <NumberField.Group className="grid-cols-[1fr]">
                                   <NumberField.Input />
                                 </NumberField.Group>
@@ -2292,34 +2300,12 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
             )}
             {selectedElement && (
               <div >
-                <div className="px-3 py-4 flex flex-col gap-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <h5 className="line-clamp-3">
-                      {selectedElement.name}
-                    </h5>
-                    <div className="flex gap-1 items-center">
-                      <ConfirmSwitch
-                        isSelected={selectedElement.status}
-                        onChange={(val) => patchElement(selectedElement.id, { status: val })}
-                        confirmWhen="always"
-                        title={(val) => val ? "¿Activar elemento?" : "¿Desactivar elemento?"}
-                        description={(val) => val ? "Al activar este elemento volverá a estar visible. ¿Deseas continuar?" : "Al desactivar este elemento dejará de estar visible. ¿Deseas continuar?"}
-                        confirmText={(val) => val ? "Activar" : "Desactivar"}
-                        cancelText="Cancelar"
-                        status={(val) => val ? "success" : "danger"}
-                      />
-                    </div>
-                  </div>
-                  <ScrollShadow className="flex gap-1 justify-between" orientation="horizontal" hideScrollBar>
-                    <Chip size="sm" variant="soft" className="shrink-0">{ELEMENT_TYPE_LABEL[selectedElement.elementType]}</Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">{selectedElement.isEllipse ? "Circular" : "Rectangular"}</Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">{selectedElement.width ?? 0}x{selectedElement.height ?? 0} px</Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">Coordenada {selectedElement.coordinateX ?? 0},{selectedElement.coordinateY ?? 0}</Chip>
-                  </ScrollShadow>
+                <div className="px-3 py-3 flex flex-col gap-3">
+                  <h4 className="line-clamp-3">{selectedElement.name} <Description className="ml-1 inline-flex">{ELEMENT_TYPE_LABEL[selectedElement.elementType] || "-"}</Description></h4>
                 </div>
                 <Accordion
                   allowsMultipleExpanded
-                  className="w-full border-border border-t"
+                  className="w-full border-t border-border"
                   defaultExpandedKeys={[
                     "info",
                     "estilo",
@@ -2336,18 +2322,20 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                     <Accordion.Panel>
                       <Accordion.Body className="flex flex-col gap-3">
                         <TextField
+                          variant="secondary"
                           value={selectedElement.name}
                           onChange={(v) => patchElement(selectedElement.id, { name: v })}
                         >
-                          <Label>Nombre</Label>
+                          <Label className="px-2">Nombre</Label>
                           <Input />
                         </TextField>
                         <Select
+                          variant="secondary"
                           placeholder="Tipo"
                           value={selectedElement.elementType}
                           onChange={(v) => patchElement(selectedElement.id, { elementType: v as any })}
                         >
-                          <Label>Tipo</Label>
+                          <Label className="px-2">Tipo</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2369,204 +2357,104 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             </ListBox>
                           </Select.Popover>
                         </Select>
+
+                        <ConfirmSelect
+                          placeholder="Estatus"
+                          value={selectedElement.status ? "ACTIVE" : "INACTIVE"}
+                          onChange={(v) => patchElement(selectedElement.id, { status: v === "ACTIVE" })}
+                          confirmWhen="always"
+                          title={(val) => `Cambiar estatus a ${val === "ACTIVE" ? "Activo" : "Inactivo"}`}
+                          description="¿Estás seguro de que deseas cambiar el estatus del elemento?"
+                          confirmText="Cambiar estatus"
+                        >
+                          <Label className="px-2">Estatus</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="ACTIVE" textValue="Activo">Activo <ListBox.ItemIndicator /></ListBox.Item>
+                              <ListBox.Item id="INACTIVE" textValue="Inactivo">Inactivo <ListBox.ItemIndicator /></ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </ConfirmSelect>
                       </Accordion.Body>
                     </Accordion.Panel>
                   </Accordion.Item>
 
-                  <Accordion.Item id="estilo">
-                    <Accordion.Heading>
-                      <Accordion.Trigger>
-                        Estilo
-                        <Accordion.Indicator />
-                      </Accordion.Trigger>
-                    </Accordion.Heading>
-                    <Accordion.Panel>
-                      <Accordion.Body className="flex flex-col gap-3">
-                        <div className="grid grid-cols-[1fr_auto] w-full gap-x-2 items-end">
-                          <Select
-                            placeholder="Forma"
-                            value={selectedElement.isEllipse ? "ELLIPSE" : "RECTANGLE"}
-                            onChange={(v) => {
-                              const wantEllipse = v === "ELLIPSE";
-                              if (wantEllipse !== selectedElement.isEllipse) {
-                                toggleEllipse(selectedElement.id, false);
-                              }
-                            }}
-                          >
-                            <Label>Forma</Label>
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                <ListBox.Item
-                                  id="RECTANGLE"
-                                  textValue="Recta"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Square />
-                                    <span>Rectangular</span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
 
-                                <ListBox.Item
-                                  id="ELLIPSE"
-                                  textValue="Curva"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Circle />
-                                    <span>Circular</span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                          <ColorField value={selectedElement.color || "#475569"} onCommit={(v) => patchElement(selectedElement.id, { color: v })} />
-                        </div>
-                      </Accordion.Body>
-                    </Accordion.Panel>
-                  </Accordion.Item>
 
                   <Accordion.Item id="disposicion">
                     <Accordion.Heading>
                       <Accordion.Trigger>
-                        Posición y dimensión
+                        Posición y tamaño
                         <Accordion.Indicator />
                       </Accordion.Trigger>
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body className="flex flex-col gap-3">
-                        <div className="grid grid-cols-[1fr_1fr_auto] w-full gap-x-2 gap-y-3 items-end">
+                        <div className="grid grid-cols-[1fr_1fr] w-full gap-x-2 gap-y-2 items-end">
                           <NumberField
                             value={selectedElement.coordinateX || 0}
+                            variant="secondary"
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { coordinateX: v })}
                           >
-                            <Label>X</Label>
+                            <Label className="px-2">X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
 
                           <NumberField
+                            variant="secondary"
                             value={selectedElement.coordinateY || 0}
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { coordinateY: v })}
                           >
-                            <Label>Y</Label>
+                            <Label className="px-2">Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
 
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isSelected={!!(selectedSection?.locked || selectedElement?.locked)}
-                              onChange={(val) => {
-                                if (selectedSection) patchSection(selectedSection.id, { locked: val });
-                                else if (selectedElement) patchElement(selectedElement.id, { locked: val });
-                              }}
-                            >
-                              {(props: any) => props.isSelected ? <LockKeyhole /> : <LockKeyholeOpen />}
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Bloquear posición</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
-
                           <NumberField
+                            variant="secondary"
                             value={selectedElement.width || 0}
                             minValue={20}
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { width: v })}
                           >
-                            <Label>Ancho</Label>
+                            <Label className="px-2">Ancho</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
                           <NumberField
                             value={selectedElement.height || 0}
+                            variant="secondary"
                             minValue={20}
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { height: v })}
                           >
-                            <Label>Alto</Label>
+                            <Label className="px-2">Alto</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
 
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isSelected={!!(selectedSection?.lockAspect || selectedElement?.lockAspect)}
-                              onChange={(val) => {
-                                if (selectedSection) patchSection(selectedSection.id, { lockAspect: val });
-                                else if (selectedElement) patchElement(selectedElement.id, { lockAspect: val });
-                              }}
-                            >
-                              {(props: any) => props.isSelected ? <Link /> : <Unlink />}
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Bloquear proporción</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
-
                           <NumberField
+                            variant="secondary"
                             value={selectedElement.rotationDegrees}
                             step={5}
                             onChange={(v) => patchElementValidated(selectedElement.id, { rotationDegrees: v })}
                           >
-                            <Label>Rotación</Label>
+                            <Label className="px-2">Rotación</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
-
-                          {/**
-                           * Border radius global eliminado — ahora es por vértice.
-                           */}
-
-                          <Tooltip delay={0}>
-                            <ToggleButton
-                              size="sm"
-                              isIconOnly
-                              variant="ghost"
-                              className="text-muted-foreground"
-                              isDisabled={selectedVertexIdx < 0 || !!(selectedSection?.isEllipse || selectedElement?.isEllipse)}
-                              isSelected={(() => {
-                                const item = selectedSection || selectedElement;
-                                if (!item || selectedVertexIdx < 0 || item.isEllipse || !item.points) return false;
-                                const pt = item.points.find(p => p.pointIndex === selectedVertexIdx);
-                                return pt ? (pt.controlX !== null && pt.controlY !== null) : false;
-                              })()}
-                              onChange={() => {
-                                const item = selectedSection || selectedElement;
-                                if (item && selectedVertexIdx >= 0) {
-                                  toggleCurveOnEdge(item.id, selectedVertexIdx);
-                                }
-                              }}
-                            >
-                              <Spline />
-                            </ToggleButton>
-                            <Tooltip.Content placement="top" showArrow offset={12}>
-                              <Tooltip.Arrow />
-                              <Label className="flex items-center gap-2">Curvar/Enderezar</Label>
-                            </Tooltip.Content>
-                          </Tooltip>
 
                           {selectedVertexIdx >= 0 && (() => {
                             const item = selectedSection || selectedElement;
@@ -2574,6 +2462,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             if (!pt || item?.isEllipse) return null;
                             return (
                               <NumberField
+                                variant="secondary"
                                 value={pt.borderRadius ?? 0}
                                 minValue={0}
                                 step={1}
@@ -2581,7 +2470,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                   if (item) patchVertexBorderRadius(item.id, selectedVertexIdx, v);
                                 }}
                               >
-                                <Label>Radio de esquina</Label>
+                                <Label className="px-2">Radio de esquina</Label>
                                 <NumberField.Group className="grid-cols-[1fr]">
                                   <NumberField.Input />
                                 </NumberField.Group>
@@ -2598,35 +2487,12 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
             )}
             {selectedSeat && (
               <div >
-                <div className="px-3 py-4 flex flex-col gap-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <h5 className="line-clamp-3">
-                      Lugar {selectedSeat.row}{selectedSeat.number}
-                    </h5>
-                    <div className="flex gap-1 items-center">
-                      <ConfirmSwitch
-                        isSelected={selectedSeat.status === "AVAILABLE"}
-                        onChange={(val) => patchSeat(selectedSeat.id, { status: val ? "AVAILABLE" : "UNAVAILABLE" })}
-                        confirmWhen="always"
-                        title={(val) => val ? "¿Habilitar asiento?" : "¿Deshabilitar asiento?"}
-                        description={(val) => val ? "Al habilitar este asiento, volverá a estar disponible. ¿Deseas continuar?" : "Al deshabilitar este asiento, no estará disponible. ¿Deseas continuar?"}
-                        confirmText={(val) => val ? "Habilitar" : "Deshabilitar"}
-                        cancelText="Cancelar"
-                        status={(val) => val ? "success" : "danger"}
-                      />
-                    </div>
-                  </div>
-                  <ScrollShadow className="flex gap-1 justify-between" orientation="horizontal" hideScrollBar>
-                    <Chip size="sm" variant="soft" className="shrink-0">{venue.sections.find((z) => z.id === selectedSeat.sectionId)?.name || "Sección desconocida"}</Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">
-                      {selectedSeat.type === "VIP" ? "VIP" : selectedSeat.type === "PREMIUM" ? "Premium" : selectedSeat.type === "ACCESSIBLE" ? "Accesible" : "Estándar"}
-                    </Chip>
-                    <Chip size="sm" variant="soft" className="shrink-0">Coordenada {selectedSeat.coordinateX ?? 0},{selectedSeat.coordinateY ?? 0}</Chip>
-                  </ScrollShadow>
+                <div className="px-3 py-3 flex flex-col gap-3">
+                  <h4 className="line-clamp-3">Lugar {selectedSeat.row}{selectedSeat.number} <Description className="ml-1 inline-flex">{venue.sections.find((z) => z.id === selectedSeat.sectionId)?.name || "-"}</Description></h4>
                 </div>
                 <Accordion
                   allowsMultipleExpanded
-                  className="w-full border-border border-t"
+                  className="w-full border-t border-border"
                   defaultExpandedKeys={[
                     "info",
                     "disposicion",
@@ -2643,28 +2509,31 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                       <Accordion.Body className="flex flex-col gap-3">
                         <div className="grid grid-cols-2 gap-2">
                           <TextField
+                            variant="secondary"
                             isReadOnly
                             value={selectedSeat.row}
                             onChange={(v) => patchSeat(selectedSeat.id, { row: v })}
                           >
-                            <Label>Fila</Label>
+                            <Label className="px-2">Fila</Label>
                             <Input />
                           </TextField>
                           <TextField
+                            variant="secondary"
                             isReadOnly
                             value={selectedSeat.number}
                             onChange={(v) => patchSeat(selectedSeat.id, { number: v })}
                           >
-                            <Label>Número</Label>
+                            <Label className="px-2">Número</Label>
                             <Input />
                           </TextField>
                         </div>
                         <Select
+                          variant="secondary"
                           placeholder="Tipo"
                           value={selectedSeat.type}
                           onChange={(v) => patchSeat(selectedSeat.id, { type: v as any })}
                         >
-                          <Label>Tipo</Label>
+                          <Label className="px-2">Tipo</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2708,11 +2577,11 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           value={selectedSeat.status}
                           onChange={(v) => patchSeat(selectedSeat.id, { status: v as any })}
                           confirmWhen="always"
-                          title={(val) => `Cambiar estatus del asiento`}
+                          title={(val) => `Cambiar estatus a ${val === "AVAILABLE" ? "Disponible" : val === "UNAVAILABLE" ? "No disponible" : val === "OUT_OF_SERVICE" ? "Fuera de servicio" : "Removido"}`}
                           description="¿Estás seguro de que deseas cambiar el estatus de este asiento?"
                           confirmText="Cambiar estatus"
                         >
-                          <Label>Estatus</Label>
+                          <Label className="px-2">Estatus</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2733,32 +2602,34 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                   <Accordion.Item id="disposicion">
                     <Accordion.Heading>
                       <Accordion.Trigger>
-                        Posición y dimensión
+                        Posición y tamaño
                         <Accordion.Indicator />
                       </Accordion.Trigger>
                     </Accordion.Heading>
                     <Accordion.Panel>
                       <Accordion.Body className="flex flex-col gap-3">
-                        <div className="grid grid-cols-[1fr_1fr] w-full gap-x-2 gap-y-3 items-end">
+                        <div className="grid grid-cols-[1fr_1fr] w-full gap-x-2 gap-y-2 items-end">
                           <NumberField
+                            variant="secondary"
                             isReadOnly
                             value={selectedSeat.coordinateX || 0}
                             step={1}
                             onChange={(v) => patchSeat(selectedSeat.id, { coordinateX: v })}
                           >
-                            <Label>X</Label>
+                            <Label className="px-2">X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
                           </NumberField>
 
                           <NumberField
+                            variant="secondary"
                             isReadOnly
                             value={selectedSeat.coordinateY || 0}
                             step={1}
                             onChange={(v) => patchSeat(selectedSeat.id, { coordinateY: v })}
                           >
-                            <Label>Y</Label>
+                            <Label className="px-2">Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2772,10 +2643,10 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 </div>
               </div>
             )}
-          </SmartPanel>
+          </Panel>
 
-        </div>
-      </main >
+        </main >
+      </div>
     </div >
   );
 

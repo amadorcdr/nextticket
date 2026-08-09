@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
-    { to: "/", icon: Icon.LayoutDashboard, label: "Inicio" },
+    { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Inicio" },
     { to: "/venues", icon: Icon.Home, label: "Recintos", count: 18 },
     { to: "/events", icon: Icon.Calendar, label: "Eventos", count: 5 },
     { to: "/tickets", icon: Icon.Ticket, label: "Tickets", count: 4 },
@@ -45,7 +45,7 @@ export function App() {
     const location = Router.useLocation();
     const navigate = Router.useNavigate();
 
-    const activeNavKey = NAV_LINKS.find(link => link.to !== "/" && location.pathname.startsWith(link.to))?.to || (location.pathname === "/" ? "/" : "none");
+    const activeNavKey = NAV_LINKS.find(link => location.pathname.startsWith(link.to))?.to || "none";
     const activeVenueKey = VENUES.find(v => location.pathname.startsWith(v.to))?.to || "none";
 
     const navContent = (
@@ -147,14 +147,15 @@ export function App() {
                 onOpenChange={setSidebarVisible}
                 isDrawer={!isDesktop}
                 placement="left"
+                margin={16}
             >
                 <div className="flex-1 flex flex-col justify-between overflow-hidden">
                     {navContent}
                 </div>
             </Panel>
 
-            <div className="flex flex-col flex-1 min-w-0 gap-4 md:p-2 shadow-surface rounded-[10px]">
-                <div className="flex items-center justify-between gap-4 shrink-0">
+            <div className="flex flex-col flex-1 min-w-0 gap-4 rounded-[10px]">
+                <div className="flex items-center justify-between gap-4 shrink-0 md:p-2">
                     <div className="flex-1 flex items-center md:gap-2 gap-1 min-w-0">
                         <Tooltip>
                             <Tooltip.Trigger>
@@ -232,7 +233,7 @@ export function App() {
                     </div>
                 </div>
 
-                <ScrollShadow className="flex-1 overflow-auto relative pb-[88px] md:pb-2 px-2">
+                <ScrollShadow className="flex-1 overflow-auto relative">
                     <Router.Outlet />
                 </ScrollShadow>
             </div>
