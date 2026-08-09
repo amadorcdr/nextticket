@@ -38,22 +38,22 @@ void main() {
   vec2 rayRefDir1 = normalize(vec2(cos(0.785398 + halfSpread), sin(0.785398 + halfSpread)));
   vec2 rayRefDir2 = normalize(vec2(cos(0.785398 - halfSpread), sin(0.785398 - halfSpread)));
 
-  vec3 iRayColor1 = vec3(0.9176, 0.7020, 0.0314);
-  vec3 iRayColor2 = vec3(0.5882, 0.7843, 1.0000);
-  
+  vec3 iRayColor1 = vec3(1.0000, 0.5490, 0.0392);
+  vec3 iRayColor2 = vec3(0.2000, 0.8510, 1.0000);
+
   float speed = 2.5;
 
   vec4 rays1 = vec4(iRayColor1, 1.0) * rayStrength(rayPos, rayRefDir1, tiltedCoord, 36.2214, 21.11349, speed);
   vec4 rays2 = vec4(iRayColor2, 1.0) * rayStrength(rayPos, rayRefDir2, tiltedCoord, 22.3991, 18.0234, speed * 0.2);
 
-  vec4 color = rays1 * 0.225 + rays2 * 0.675;
+  vec4 color = rays1 * 0.45 + rays2 * 0.65;
 
   float distanceToLight = length(fragCoord.xy - vec2(rayPos.x, iResolution.y - rayPos.y)) / iResolution.y;
-  float brightness = 2.9 * 0.4 / pow(max(distanceToLight, 0.001), 1.6);
+  float brightness = 3.6 * 0.55 / pow(max(distanceToLight, 0.001), 1.35);
   color.rgb *= brightness;
 
   float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-  color.rgb = mix(vec3(gray), color.rgb, 1.5);
+  color.rgb = mix(vec3(gray), color.rgb, 2.0);
 
   color.a = max(color.r, max(color.g, color.b));
   gl_FragColor = color;
