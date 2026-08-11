@@ -223,6 +223,84 @@
             0 0 1px 0 rgba(0, 0, 0, 0.30);
         /* Transparent shadow to allow ring utilities to work */
     }
+
+    /* Nextticket Brand Theme (see DESIGN.md) */
+    .nextticket,
+    [data-theme="nextticket"] {
+        color-scheme: dark;
+        /* == Nextticket Theme Variables == */
+
+        /* Base Colors */
+        --background: #101415;
+        --foreground: #e0e3e5;
+
+        /* Surface: Used for non-overlay components (cards, accordions, disclosure groups) */
+        --surface: #1d2022;
+        --surface-foreground: #e0e3e5;
+        --surface-secondary: #272a2c;
+        --surface-secondary-foreground: #e0e3e5;
+        --surface-tertiary: #323537;
+        --surface-tertiary-foreground: #e0e3e5;
+
+        /* Overlay: Used for floating/overlay components (tooltips, popovers, modals, menus) */
+        --overlay: #191c1e;
+        --overlay-foreground: #e0e3e5;
+
+        --muted: #ccc3d8;
+        --scrollbar: #363a3b;
+
+        --default: #272a2c;
+        --default-foreground: #e0e3e5;
+
+        --accent: #d2bbff;
+        --accent-foreground: #3f008e;
+        --accent-soft-foreground: #d2bbff;
+
+        /* Form Field Defaults - Colors */
+        --field-background: #191c1e;
+        --field-foreground: #e0e3e5;
+        --field-placeholder: #958da1;
+        --field-border: transparent;
+
+        /* Status Colors */
+        --success: oklch(0.6514 0.1321 156.22);
+        --success-foreground: oklch(15% 0.0396 156.22);
+
+        --warning: oklch(0.8803 0.1348 86.06);
+        --warning-foreground: oklch(15% 0.0404 86.06);
+
+        --danger: #ffb4ab;
+        --danger-foreground: #690005;
+
+        /* Component Colors */
+        --segment: #272a2c;
+        --segment-foreground: #e0e3e5;
+
+        /* Misc Colors */
+        --border: #4a4455;
+        --separator: #272a2c;
+        --focus: #d2bbff;
+        --link: var(--foreground);
+
+        /* Backdrop */
+        --backdrop: rgba(0, 0, 0, 0.6);
+
+        /* Shadows */
+        --surface-shadow:
+            0 2px 4px 0 rgba(0, 0, 0, 0.20),
+            0 1px 2px 0 rgba(0, 0, 0, 0.30),
+            0 0 1px 0 rgba(0, 0, 0, 0.30);
+
+        /* Overlay shadow */
+        --overlay-shadow:
+            0 4px 16px 0 rgba(0, 0, 0, 0.40),
+            0 8px 24px 0 rgba(0, 0, 0, 0.45);
+
+        --field-shadow:
+            0 2px 4px 0 rgba(0, 0, 0, 0.20),
+            0 1px 2px 0 rgba(0, 0, 0, 0.30),
+            0 0 1px 0 rgba(0, 0, 0, 0.30);
+    }
 }
 
 @layer components {
