@@ -13,18 +13,38 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('describes the gateway and its proxied routes', () => {
-      expect(appController.root()).toEqual(
-        expect.objectContaining({
-          service: 'api-gateway',
-          routes: expect.any(Object),
-        }),
+    it('should identify itself as the gateway', () => {
+      expect(appController.root().service).toBe('api-gateway');
+    });
+
+    it('should publish one route per proxied prefix', () => {
+      const routes = Object.keys(appController.root().routes);
+      expect(routes).toEqual(
+        expect.arrayContaining([
+          '/users',
+          '/venues',
+          '/events',
+          '/event-categories',
+          '/purchases',
+          '/tickets',
+          '/health',
+        ]),
       );
+    });
+
+    it('should point every route to its own microservice', () => {
+      const routes = appController.root().routes;
+      expect(routes['/users']).toContain('auth-service');
+      expect(routes['/venues']).toContain('venues-events-service');
+      expect(routes['/events']).toContain('venues-events-service');
+      expect(routes['/event-categories']).toContain('venues-events-service');
+      expect(routes['/purchases']).toContain('purchases-service');
+      expect(routes['/tickets']).toContain('tickets-service');
     });
   });
 
   describe('health', () => {
-    it('reports ok status', () => {
+    it('should report the gateway as ok', () => {
       expect(appController.health()).toEqual({
         status: 'ok',
         service: 'api-gateway',

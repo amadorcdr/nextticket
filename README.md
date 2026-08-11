@@ -184,9 +184,34 @@ nextticket/
 │           ├── 📁 prisma/
 │           └── 📄 package.json
 │
+├── 📁 docker/                         # Scripts de arranque de la infraestructura
+│   └── 📄 init-databases.sql          # Crea las 4 bases la primera vez
 ├── 📁 docs/                           # Documentación general
+│   └── 📄 doc.md                      # Mapa de endpoints y permisos
+├── 📄 docker-compose.yml              # Postgres 16 + Redis 7 (levantar desde aquí)
 └── 📄 nextticket.sql                  # Respaldo / Base de datos inicial
 ```
+
+### Estructura interna de un microservicio
+
+```
+src/
+├── 📁 <módulo>/           # Un módulo por dominio: users/, events/, venues/…
+│   ├── 📄 *.controller.ts
+│   ├── 📄 *.service.ts
+│   ├── 📄 *.module.ts
+│   └── 📁 dto/            # TODOS los DTOs del módulo viven aquí
+├── 📁 auth/               # Guard de JWT, roles y decoradores (igual en los 4)
+├── 📁 common/             # Paginación compartida (igual en los 4)
+├── 📁 health/             # HealthController
+├── 📁 prisma/             # PrismaService
+├── 📁 redis/              # RedisService
+├── 📄 app.module.ts
+└── 📄 main.ts
+```
+
+> Los DTOs van **siempre** en la carpeta `dto/` del módulo que los usa. No crear
+> carpetas de DTOs sueltas en la raíz de `src/`.
 
 ---
 
@@ -214,6 +239,83 @@ Para garantizar consistencia, escalabilidad y facilidad de mantenimiento, todo e
    - `@ApiParam` o `@ApiQuery` cuando sea necesario.
 5. **Acceso a Datos:** Toda interacción con la base de datos se realiza **única y exclusivamente** mediante `PrismaService` inyectado en la capa de `Service` (nunca en el Controller).
 6. **Caché:** Usar `RedisService` inyectado para aplicar el patrón *cache-aside* en lecturas frecuentes.
+7. **Paginación:** Todo endpoint que devuelve una colección **debe estar paginado** siguiendo el contrato de la sección [Paginación de listados](#paginación-de-listados).
+
+### 📄 Paginación de listados
+
+Cada microservicio tiene su propia copia de los mismos tres archivos (los servicios son paquetes independientes, igual que `prisma/` y `redis/`):
+
+| Archivo | Responsabilidad |
+|---------|-----------------|
+| `src/common/dto/pagination-query.dto.ts` | `PaginationQueryDto`: valida `page` y `limit` |
+| `src/common/dto/paginated-response.dto.ts` | `PaginatedResponseDto<T>` y `PaginationMetaDto`: forma de la respuesta |
+| `src/common/pagination.helper.ts` | `toPrismaPagination`, `buildPaginatedResponse`, `isCacheablePage` |
+
+**Query params** (ambos opcionales):
+
+| Param | Default | Reglas |
+|-------|---------|--------|
+| `page` | `1` | entero ≥ 1 |
+| `limit` | `20` | entero entre 1 y 100 |
+
+Un valor inválido responde `400` con el mensaje de `class-validator` (ej. `limit must not be greater than 100`).
+
+**Forma de la respuesta** — todos los listados devuelven este envoltorio, nunca un arreglo suelto:
+
+```json
+{
+  "data": [ /* registros de la página */ ],
+  "meta": {
+    "total": 137,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 7,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
+
+**Cómo se usa en un módulo nuevo:**
+
+```ts
+// controller
+@Get()
+@ApiOperation({ summary: 'Listar recursos (paginado)' })
+findAll(@Query() pagination: PaginationQueryDto) {
+  return this.resources.findAll(pagination);
+}
+
+// service
+async findAll(pagination: PaginationQueryDto) {
+  const { skip, take } = toPrismaPagination(pagination);
+
+  const [rows, total] = await this.prisma.$transaction([
+    this.prisma.resource.findMany({ skip, take, where, orderBy: { createdAt: 'desc' } }),
+    this.prisma.resource.count({ where }),
+  ]);
+
+  return buildPaginatedResponse(rows, total, pagination);
+}
+```
+
+Reglas al implementarlo:
+
+1. **Siempre un `orderBy` estable**, si no las páginas se traslapan o pierden registros.
+2. **El `count` usa el mismo `where` que el `findMany`**, para que `total` respete los filtros aplicados.
+3. **Caché:** la llave de lista guarda una sola entrada, así que solo se cachea la página por defecto (`isCacheablePage`). Las demás páginas y las consultas filtradas van directo a PostgreSQL; así las invalidaciones que ya existen (`redis.del`) siguen siendo correctas.
+
+**Endpoints paginados actualmente:**
+
+| Servicio | Endpoint |
+|----------|----------|
+| auth | `GET /users` |
+| venues-events | `GET /venues` |
+| venues-events | `GET /events` (respeta `organizerId`, `status`, `categoryId`, `category`) |
+| venues-events | `GET /event-categories` |
+| venues-events | `GET /events/:eventId/seats` (respeta `eventZoneId`, `sectionId`, `status`) |
+| purchases | `GET /purchases` |
+| tickets | `GET /tickets` |
 
 ### 🎨 Convenciones de Frontend (Vite + React)
 
@@ -760,9 +862,25 @@ npm run dev -w @nextticket-frontend/tickets
 Cada microservicio tiene su propia base de datos PostgreSQL y comparte Redis. Antes de levantar los servicios, asegúrate de tener Docker corriendo:
 
 ```bash
-# 1. Levantar infraestructura (Postgres + Redis)
+# 1. Levantar infraestructura (Postgres + Redis), desde la raíz del repo
 docker compose up -d
 ```
+
+El `docker-compose.yml` de la raíz levanta un solo Postgres con las cuatro
+bases (`auth_db`, `venues_events_db`, `purchases_db`, `tickets_db`), que crea
+`docker/init-databases.sql` la primera vez.
+
+```bash
+# 2. Crear el .env de cada servicio a partir de su ejemplo
+for s in api-gateway auth-service venues-events-service purchases-service tickets-service; do
+  cp apps/backend/$s/.env.example apps/backend/$s/.env
+done
+```
+
+> ⚠️ `JWT_SECRET` debe tener **el mismo valor en los cuatro microservicios**: si
+> no, los tokens que emite auth-service no se validan en los demás. Las
+> credenciales de Google van solo en `auth-service/.env` y **nunca** se suben al
+> repositorio.
 
 Cada microservicio se levanta de forma independiente en su propia terminal:
 
@@ -814,6 +932,8 @@ Todo el tráfico de los clientes (frontend/mobile) pasa por el Gateway en `http:
 | `GET /health` | Estado del gateway |
 | `/users/**` | → auth-service |
 | `/venues/**` | → venues-events-service |
+| `/events/**` | → venues-events-service (incluye `/events/:id/zones`, `/sections` y `/seats`) |
+| `/event-categories/**` | → venues-events-service |
 | `/purchases/**` | → purchases-service |
 | `/tickets/**` | → tickets-service |
 | `/docs/{servicio}` | Documentación Scalar del servicio |

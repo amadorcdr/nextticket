@@ -7,12 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CreateEventSectionDto } from './dto/create-event-section.dto';
 import { UpdateEventSectionDto } from './dto/update-event-section.dto';
 import { EventSectionsService } from './event-sections.service';
@@ -25,6 +31,9 @@ export class EventSectionsController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Asignar secciones a una zona comercial del evento',
   })
@@ -62,6 +71,9 @@ export class EventSectionsController {
   }
 
   @Patch(':sectionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Reasignar una sección a otra zona comercial',
   })
@@ -77,6 +89,9 @@ export class EventSectionsController {
   }
 
   @Delete(':sectionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Retirar una sección del evento',
   })

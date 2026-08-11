@@ -16,6 +16,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+const MAX_MONEY_AMOUNT = 999999999.99;
+
 export enum SimulatedPaymentMethod {
   CASH = 'CASH',
   CREDIT_CARD = 'CREDIT_CARD',
@@ -26,39 +28,42 @@ export enum SimulatedPaymentMethod {
 
 export class PurchaseDetailDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440001' })
-  @IsUUID()
+  @IsUUID('4')
   eventZoneId!: string;
 
   @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440002' })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   eventSeatId?: string;
 
   @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440003' })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   priceTierId?: string;
 
   @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440004' })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   promoCodeUsageId?: string;
 
   @ApiProperty({ example: 850 })
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(MAX_MONEY_AMOUNT)
   unitPrice!: number;
 
   @ApiPropertyOptional({ example: 100, default: 0 })
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(MAX_MONEY_AMOUNT)
   discountAmount?: number;
 
   @ApiPropertyOptional({ example: 120, default: 0 })
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(MAX_MONEY_AMOUNT)
   taxAmount?: number;
 }
 
@@ -107,16 +112,12 @@ export class SimulatedPaymentDto {
 }
 
 export class CreatePurchaseDto {
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
-  @IsUUID()
-  userId!: string;
-
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440010' })
-  @IsUUID()
+  @IsUUID('4')
   eventId!: string;
 
   @ApiPropertyOptional({
-    description: 'Bloqueos temporales activos que se convertirán en compra.',
+    description: 'Bloqueos temporales activos que se convertiran en compra.',
     example: ['550e8400-e29b-41d4-a716-446655440020'],
   })
   @IsOptional()

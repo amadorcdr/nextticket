@@ -7,19 +7,26 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { VenuesService } from './venues.service';
-import { CreateVenueDto } from '../dto/venues/create-venue.dto';
-import { UpdateVenueDto } from '../dto/venues/update-venue.dto';
-import { CreateFloorDto } from '../dto/floors/create-floor.dto';
-import { UpdateFloorDto } from '../dto/floors/update-floor.dto';
-import { CreateSectionDto } from '../dto/sections/create-section.dto';
-import { UpdateSectionDto } from '../dto/sections/update-section.dto';
-import { CreateSeatDto } from '../dto/seats/create-seat.dto';
-import { UpdateSeatDto } from '../dto/seats/update-seat.dto';
-import { CreateCanvasElementDto } from '../dto/canvas-elements/create-canvas-element.dto';
-import { UpdateCanvasElementDto } from '../dto/canvas-elements/update-canvas-element.dto';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { CreateVenueDto } from './dto/create-venue.dto';
+import { UpdateVenueDto } from './dto/update-venue.dto';
+import { CreateFloorDto } from './dto/create-floor.dto';
+import { UpdateFloorDto } from './dto/update-floor.dto';
+import { CreateSectionDto } from './dto/create-section.dto';
+import { UpdateSectionDto } from './dto/update-section.dto';
+import { CreateSeatDto } from './dto/create-seat.dto';
+import { UpdateSeatDto } from './dto/update-seat.dto';
+import { CreateCanvasElementDto } from './dto/create-canvas-element.dto';
+import { UpdateCanvasElementDto } from './dto/update-canvas-element.dto';
 
 @ApiTags('venues')
 @Controller('venues')
@@ -31,15 +38,22 @@ export class VenuesController {
   // ═══════════════════════════════════════════════════════════
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear recinto' })
   createVenue(@Body() dto: CreateVenueDto) {
     return this.venues.createVenue(dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todos los recintos (con árbol completo)' })
-  findAllVenues() {
-    return this.venues.findAllVenues();
+  @ApiOperation({
+    summary:
+      'Listar recintos paginados, con el conteo de pisos y secciones. ' +
+      'Para el árbol completo usa GET /venues/:venueId',
+  })
+  findAllVenues(@Query() pagination: PaginationQueryDto) {
+    return this.venues.findAllVenues(pagination);
   }
 
   @Get(':venueId')
@@ -52,6 +66,9 @@ export class VenuesController {
   }
 
   @Patch(':venueId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar recinto' })
   @ApiParam({ name: 'venueId', description: 'UUID del recinto' })
   updateVenue(
@@ -62,6 +79,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary:
       'Eliminar recinto (cascada: floors, sections, seats, canvas elements)',
@@ -78,6 +98,9 @@ export class VenuesController {
   // ═══════════════════════════════════════════════════════════
 
   @Post(':venueId/floors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear piso en un recinto' })
   @ApiParam({ name: 'venueId', description: 'UUID del recinto' })
   createFloor(
@@ -108,6 +131,9 @@ export class VenuesController {
   }
 
   @Patch(':venueId/floors/:floorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar piso' })
   @ApiParam({ name: 'venueId', description: 'UUID del recinto' })
   @ApiParam({ name: 'floorId', description: 'UUID del piso' })
@@ -120,6 +146,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId/floors/:floorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Eliminar piso (cascada: sections, seats, canvas elements)',
   })
@@ -137,6 +166,9 @@ export class VenuesController {
   // ═══════════════════════════════════════════════════════════
 
   @Post(':venueId/floors/:floorId/sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear sección en un piso' })
   createSection(
     @Param('venueId', new ParseUUIDPipe()) venueId: string,
@@ -166,6 +198,9 @@ export class VenuesController {
   }
 
   @Patch(':venueId/floors/:floorId/sections/:sectionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar sección' })
   updateSection(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,
@@ -177,6 +212,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId/floors/:floorId/sections/:sectionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Eliminar sección (cascada: seats)' })
   removeSection(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,
@@ -191,6 +229,9 @@ export class VenuesController {
   // ═══════════════════════════════════════════════════════════
 
   @Post(':venueId/floors/:floorId/sections/:sectionId/seats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear asiento en una sección' })
   createSeat(
     @Param('venueId', new ParseUUIDPipe()) venueId: string,
@@ -232,6 +273,9 @@ export class VenuesController {
   }
 
   @Patch(':venueId/floors/:floorId/sections/:sectionId/seats/:seatId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar asiento' })
   updateSeat(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,
@@ -244,6 +288,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId/floors/:floorId/sections/:sectionId/seats/:seatId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Eliminar asiento' })
   removeSeat(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,
@@ -259,6 +306,9 @@ export class VenuesController {
   // ═══════════════════════════════════════════════════════════
 
   @Post(':venueId/floors/:floorId/canvas-elements')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Crear elemento de canvas en un piso' })
   createCanvasElement(
     @Param('venueId', new ParseUUIDPipe()) venueId: string,
@@ -295,6 +345,9 @@ export class VenuesController {
   }
 
   @Patch(':venueId/floors/:floorId/canvas-elements/:elementId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Actualizar elemento de canvas' })
   updateCanvasElement(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,
@@ -309,6 +362,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId/floors/:floorId/canvas-elements/:elementId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Eliminar elemento de canvas' })
   removeCanvasElement(
     @Param('venueId', new ParseUUIDPipe()) _venueId: string,

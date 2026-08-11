@@ -145,6 +145,9 @@ dist
 # NestJS build output
 dist/
 
+# pnpm local store (se crea al instalar con --store-dir)
+.pnpm-store/
+
 # pnpm workspace config / lock
 # If you want to commit your lock files, do NOT ignore pnpm-lock.yaml or package-lock.json
 # Normally we commit lock files, so they are NOT listed here.

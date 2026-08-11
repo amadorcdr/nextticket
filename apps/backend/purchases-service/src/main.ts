@@ -16,12 +16,22 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT ?? 3004;
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  // transform: los query params llegan como string y los DTO de paginación
+  // dependen de @Type(() => Number) y de sus valores por defecto.
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const config = new DocumentBuilder()
     .setTitle('Purchases Service')
     .setDescription('API de compras con PostgreSQL + Redis')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'bearer',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

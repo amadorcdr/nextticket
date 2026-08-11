@@ -483,6 +483,51 @@ CREATE INDEX        idx_event_seats_section       ON nextticket.event_seats (sec
 CREATE INDEX        idx_event_seats_status        ON nextticket.event_seats (status);
 CREATE INDEX        idx_event_seats_locked_until  ON nextticket.event_seats (locked_until);
 
+-- -----------------------------------------------------
+-- Table `nextticket`.`event_categories`
+-- Catálogo reutilizable de categorías comerciales.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `nextticket`.`event_categories` (
+  `id`          BINARY(16)    NOT NULL,
+  `created_at`  DATETIME(6)   NOT NULL,
+  `updated_at`  DATETIME(6)   NULL DEFAULT NULL,
+  `name`        VARCHAR(100)  NOT NULL,
+  `slug`        VARCHAR(120)  NOT NULL,
+  `description` VARCHAR(255)  NULL DEFAULT NULL,
+  `status`      ENUM('ACTIVE', 'INACTIVE', 'REMOVED')
+                NOT NULL DEFAULT 'ACTIVE',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_event_categories_name` (`name` ASC) VISIBLE,
+  UNIQUE INDEX `uk_event_categories_slug` (`slug` ASC) VISIBLE,
+  INDEX `idx_event_categories_status` (`status` ASC) VISIBLE
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci;
+
+
+-- -----------------------------------------------------
+-- Table `nextticket`.`event_category_assignments`
+-- Relación muchos a muchos entre eventos y categorías.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `nextticket`.`event_category_assignments` (
+  `id`          BINARY(16) NOT NULL,
+  `event_id`    BINARY(16) NOT NULL,
+  `category_id` BINARY(16) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_event_category_assignment`
+    (`event_id` ASC, `category_id` ASC) VISIBLE,
+  INDEX `idx_eca_event` (`event_id` ASC) VISIBLE,
+  INDEX `idx_eca_category` (`category_id` ASC) VISIBLE,
+  CONSTRAINT `fk_eca_event`
+    FOREIGN KEY (`event_id`)
+    REFERENCES `nextticket`.`events` (`id`),
+  CONSTRAINT `fk_eca_category`
+    FOREIGN KEY (`category_id`)
+    REFERENCES `nextticket`.`event_categories` (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci;
+
 
 -- ═══════════════════════════════════════════════════════════
 -- MODULE: PROMOTIONS  (sin cambios vs v11)
