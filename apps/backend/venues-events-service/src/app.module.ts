@@ -8,6 +8,7 @@ import { EventsModule } from './events/events.module';
 import { EventZonesModule } from './event-zones/event-zones.module';
 import { EventSectionsModule } from './event-sections/event-sections.module';
 import { EventSeatModule } from './event-seat/event-seat.module';
+import { EventCategoriesModule } from './event-categories/event-categories.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { EventSeatModule } from './event-seat/event-seat.module';
     EventZonesModule,
     EventSectionsModule,
     EventSeatModule,
+    EventCategoriesModule,
   ],
   controllers: [HealthController],
 })

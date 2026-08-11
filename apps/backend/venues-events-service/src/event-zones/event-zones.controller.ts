@@ -7,12 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { AssignSectionsDto } from './dto/assign-sections.dto';
 import { CreateEventZoneDto } from './dto/create-event-zone.dto';
 import { CreatePriceTierDto } from './dto/create-price-tier.dto';
@@ -28,6 +34,9 @@ export class EventZonesController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary:
       'Crear zona comercial, asignar secciones y generar asientos',
@@ -65,6 +74,9 @@ export class EventZonesController {
   }
 
   @Patch(':zoneId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Actualizar zona comercial',
   })
@@ -83,6 +95,9 @@ export class EventZonesController {
   }
 
   @Post(':zoneId/sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Agregar secciones a la zona comercial',
   })
@@ -101,6 +116,9 @@ export class EventZonesController {
   }
 
   @Delete(':zoneId/sections/:sectionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Retirar sección de la zona comercial',
   })
@@ -120,6 +138,9 @@ export class EventZonesController {
   }
 
   @Post(':zoneId/price-tiers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Crear nivel de precio',
   })
@@ -138,6 +159,9 @@ export class EventZonesController {
   }
 
   @Patch(':zoneId/price-tiers/:tierId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Actualizar nivel de precio',
   })
@@ -159,6 +183,9 @@ export class EventZonesController {
   }
 
   @Delete(':zoneId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({
     summary: 'Eliminar zona comercial',
   })

@@ -1,0 +1,260 @@
+================================================================================
+NEXTTICKET — TAREAS: ASTRID
+Bloque: Reglas de negocio y bugs en venues-events-service
+Fecha: 29 de julio de 2026
+================================================================================
+
+OBJETIVO
+--------
+Cerrar las reglas de negocio que hoy están a medias en venues-events-service.
+El servicio ya corre y tiene todos los CRUDs, pero permite dejar la base en
+estados inválidos (por ejemplo, publicar un evento sin asientos). Tu bloque es
+que eso deje de ser posible, y que quede cubierto con tests.
+
+RAMA
+----
+Sal desde develop actualizado:
+
+    git checkout develop
+    git pull
+    git checkout -b feat/venues-events-business-rules
+
+Nunca mergees local: todo entra a develop por Pull Request (README, sección 8).
+
+
+================================================================================
+1. ALCANCE — QUÉ ES TUYO Y QUÉ NO TOCAR
+================================================================================
+
+TUYO (solo dentro de apps/backend/venues-events-service/src/):
+  - events/            (reglas de publicación y de estado)
+  - event-zones/       (consistencia de zonas)
+  - event-sections/    (consistencia de secciones y capacidad)
+  - event-seat/        (consistencia de asientos del evento)
+  - venues/            (SOLO las validaciones que se listan abajo)
+  - Tests nuevos (*.spec.ts) de esos módulos
+
+NO TOCAR (lo trabaja alguien más al mismo tiempo, provoca conflictos):
+  - src/common/**            -> paginación, es de Angel
+  - src/dto/** y la movida de carpetas de DTOs -> Angel está unificándolos
+  - src/app.controller.ts, src/app.service.ts  -> Angel los va a borrar
+  - Cualquier archivo de auth-service, tickets-service, purchases-service
+  - api-gateway
+  - Guards, JWT, roles -> los hace Aidee
+
+IMPORTANTE SOBRE EL ORDEN:
+Angel va a mover los DTOs de src/dto/** a la carpeta dto/ de cada módulo, y eso
+toca muchos archivos. Espera a que ese PR esté mergeado en develop y haz
+"git pull" antes de empezar. Si empiezas antes, el merge va a ser doloroso.
+
+
+================================================================================
+2. CONVENCIONES OBLIGATORIAS (para que todos escribamos igual)
+================================================================================
+
+Vienen del README, secciones 4 y 7. Resumen de lo que aplica a tu bloque:
+
+IDIOMA
+  - Código en inglés: clases, métodos, variables, nombres de archivo.
+    Ej: validateEventCanBePublished(), CreateEventZoneDto
+  - Mensajes de error de cara al usuario: en español, como ya están hoy.
+    Ej: "No se puede publicar un evento sin zonas configuradas"
+  - Documentación (README, descripción del PR): en español.
+
+ARCHIVOS Y CLASES
+  - Archivos en kebab-case + tipo: event-zones.service.ts, create-event-zone.dto.ts
+  - Clases en PascalCase: EventZonesService, CreateEventZoneDto
+  - Cada módulo tiene su controller, su service, su module y su subcarpeta dto/
+  - Las validaciones de entrada SIEMPRE en dto/ con class-validator.
+    No valides el shape del body a mano dentro del service.
+
+CAPAS
+  - Prisma SOLO en el service. Nunca inyectes PrismaService en un controller.
+  - Redis (cache-aside) con RedisService inyectado.
+  - Si tocas datos que están cacheados, invalida la llave correspondiente.
+    En events ya existe invalidateEventCache(); úsala, no dupliques lógica.
+
+SWAGGER (es obligatorio, no opcional)
+  - @ApiTags('recurso') en el controller
+  - @ApiOperation({ summary: '...' }) en CADA método
+  - @ApiParam / @ApiQuery cuando aplique
+
+PAGINACIÓN (ya está hecha, solo respétala)
+  - Si creas un endpoint que devuelve una lista, tiene que estar paginado.
+  - Se usa así:
+
+        // controller
+        @Get()
+        @ApiOperation({ summary: 'Listar recursos (paginado)' })
+        findAll(@Query() pagination: PaginationQueryDto) {
+          return this.resources.findAll(pagination);
+        }
+
+        // service
+        async findAll(pagination: PaginationQueryDto) {
+          const { skip, take } = toPrismaPagination(pagination);
+          const [rows, total] = await this.prisma.$transaction([
+            this.prisma.resource.findMany({ skip, take, where, orderBy: {...} }),
+            this.prisma.resource.count({ where }),
+          ]);
+          return buildPaginatedResponse(rows, total, pagination);
+        }
+
+  - Reglas: siempre un orderBy estable, y el count usa el MISMO where que el
+    findMany (si no, el total miente cuando hay filtros).
+  - Está documentado completo en el README, sección "Paginación de listados".
+
+
+================================================================================
+3. TAREAS
+================================================================================
+
+--------------------------------------------------------------------------------
+TAREA 1 — Completar la validación de publicación de eventos  [LA MÁS IMPORTANTE]
+--------------------------------------------------------------------------------
+Archivo: src/events/events.service.ts, método validateEventCanBePublished
+         (aprox. línea 460, lo llama updateStatus en la línea 309)
+
+QUÉ PASA HOY:
+El método tiene un comentario TODO explícito y solo revisa que las fechas sean
+coherentes. O sea que HOY se puede publicar un evento sin zonas, sin precios y
+sin asientos, y queda visible para el público así.
+
+QUÉ DEBE VALIDAR (está escrito en el propio TODO del código):
+  1. El evento tiene al menos una zona (EventZone).
+  2. Cada zona tiene al menos una sección asignada (EventZoneSection).
+  3. Cada zona tiene precio configurado (eventPrice y al menos un price tier
+     activo).
+  4. Los EventSeat del evento ya están generados para las zonas de asientos
+     numerados (admissionType RESERVED).
+
+CÓMO:
+  - Lanza ConflictException con un mensaje claro en español por cada regla que
+    falle. Sigue el estilo de los mensajes que ya existen en el archivo.
+  - Borra el comentario TODO cuando termines.
+  - Ojo: la validación solo aplica al pasar a PUBLISHED. No rompas las demás
+    transiciones de validateStatusTransition.
+
+--------------------------------------------------------------------------------
+TAREA 2 — Asiento agregado después de configurar la zona
+--------------------------------------------------------------------------------
+Archivo: src/venues/venues.service.ts, método createSeat (aprox. línea 407)
+
+QUÉ PASA HOY:
+Si agregas un asiento físico a una sección que YA está asignada a la zona de un
+evento, no se crea su EventSeat correspondiente. Resultado: el asiento existe en
+el recinto pero es invisible en el mapa del evento, y el availableCapacity de la
+zona se queda corto. Nadie avisa nada.
+
+Nota: las validaciones al BORRAR ya existen y funcionan (removeSection y
+removeSeat bloquean si hay zonas o event seats). El hueco es al CREAR.
+
+QUÉ HACER (decide con el equipo cuál de las dos, y déjalo escrito en el PR):
+  Opción A (simple): bloquear con ConflictException si la sección ya está
+           asignada a una zona de evento. Mensaje tipo "No se pueden agregar
+           asientos a una sección ya configurada en un evento".
+  Opción B (completa): crear el EventSeat en cada zona que use esa sección e
+           incrementar availableCapacity de la zona y del price tier, todo en
+           la misma transacción.
+
+Si eliges B, fíjate cómo lo hace ya src/event-sections/event-sections.service.ts
+(líneas ~73 y ~88): ahí está el patrón de increment de availableCapacity. Reúsalo,
+no inventes uno nuevo.
+
+--------------------------------------------------------------------------------
+TAREA 3 — Tests
+--------------------------------------------------------------------------------
+Hoy venues-events-service tiene UN solo test y es el scaffold por defecto
+(src/app.controller.spec.ts). Tu bloque necesita pruebas propias.
+
+CREA: src/events/events.service.spec.ts
+  - No publica un evento sin zonas -> espera ConflictException
+  - No publica un evento con zona sin secciones -> ConflictException
+  - No publica un evento con zona sin precio -> ConflictException
+  - Sí publica cuando todo está completo
+  - No permite una transición inválida (ej. CANCELED -> PUBLISHED)
+
+CÓMO ESCRIBIRLOS:
+Usa mocks de PrismaService y RedisService, no la base real. Ya hay un ejemplo
+bueno y funcionando en el repo, cópiale la estructura:
+
+    apps/backend/purchases-service/src/purchases/purchases.service.spec.ts
+
+Correr los tests:
+
+    cd apps/backend/venues-events-service
+    pnpm test
+
+Tienen que quedar en verde ANTES de abrir el PR.
+
+
+================================================================================
+4. CÓMO PROBAR A MANO
+================================================================================
+
+Levanta la infraestructura y el servicio:
+
+    cd apps/backend/purchases-service && docker compose up -d
+    cd apps/backend/venues-events-service && pnpm start:dev
+
+(Docker Desktop tiene que estar abierto antes.)
+
+Docs interactivas para lanzar peticiones desde el navegador:
+    http://localhost:3003/docs/venues
+    o por el gateway: http://localhost:3001/docs/venues
+
+Prueba clave de la tarea 1 — crea un evento vacío e intenta publicarlo:
+
+    curl -s -X PATCH http://localhost:3003/events/<ID_DEL_EVENTO>/status \
+      -H "Content-Type: application/json" \
+      -d '{"status":"PUBLISHED"}'
+
+    HOY: responde 200 y lo publica (mal)
+    DESPUÉS DE TU CAMBIO: debe responder 409 con el mensaje de qué le falta
+
+Antes de subir, revisa que compile:
+
+    pnpm exec tsc --noEmit -p tsconfig.json
+
+
+================================================================================
+5. COMMITS Y PULL REQUEST
+================================================================================
+
+Formato de commit (README sección 7): [TIPO]: descripción en inglés, imperativo,
+máximo 72 caracteres. Un cambio lógico por commit.
+
+Ejemplos para tu bloque:
+
+    git commit -m "[FEAT]: require zones and pricing before publishing an event"
+    git commit -m "[FIX]: keep event seats in sync when adding a venue seat"
+    git commit -m "[TEST]: add event publication rules specs"
+
+NO uses: "update", "cambios", "WIP", ni español en la descripción.
+
+Pull Request:
+    Base: develop     Compare: feat/venues-events-business-rules
+    Descripción en español, di qué reglas agregaste y, si hiciste la tarea 2,
+    cuál de las dos opciones elegiste y por qué.
+
+
+================================================================================
+6. DUDAS FRECUENTES
+================================================================================
+
+¿Puedo cambiar el schema.prisma?
+    Solo si de verdad lo necesitas, y avisa al grupo ANTES. Una migración nueva
+    obliga a todos a correr "pnpm exec prisma migrate dev". Si la creas, commitea
+    la carpeta completa de la migración, incluido el migration.sql.
+
+¿Y si mi cambio rompe un endpoint que ya usa alguien?
+    Avisa en el grupo antes de mergear. Aidee está metiendo guards y Angel está
+    moviendo archivos: si los tres cambiamos lo mismo sin avisar, el merge a
+    develop se vuelve un problema.
+
+¿Dónde veo el contrato de las respuestas?
+    README, sección "Paginación de listados". Todos los listados devuelven
+    { data: [...], meta: { total, page, limit, totalPages, hasNextPage,
+    hasPreviousPage } }, nunca un arreglo suelto.
+
+================================================================================

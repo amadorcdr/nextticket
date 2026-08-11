@@ -6,16 +6,23 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CreateVenueDto } from '../dto/venues/create-venue.dto';
-import { UpdateVenueDto } from '../dto/venues/update-venue.dto';
-import { CreateFloorDto } from '../dto/floors/create-floor.dto';
-import { UpdateFloorDto } from '../dto/floors/update-floor.dto';
-import { CreateSectionDto } from '../dto/sections/create-section.dto';
-import { UpdateSectionDto } from '../dto/sections/update-section.dto';
-import { CreateSeatDto } from '../dto/seats/create-seat.dto';
-import { UpdateSeatDto } from '../dto/seats/update-seat.dto';
-import { CreateCanvasElementDto } from '../dto/canvas-elements/create-canvas-element.dto';
-import { UpdateCanvasElementDto } from '../dto/canvas-elements/update-canvas-element.dto';
+import { CreateVenueDto } from './dto/create-venue.dto';
+import { UpdateVenueDto } from './dto/update-venue.dto';
+import { CreateFloorDto } from './dto/create-floor.dto';
+import { UpdateFloorDto } from './dto/update-floor.dto';
+import { CreateSectionDto } from './dto/create-section.dto';
+import { UpdateSectionDto } from './dto/update-section.dto';
+import { CreateSeatDto } from './dto/create-seat.dto';
+import { UpdateSeatDto } from './dto/update-seat.dto';
+import { CreateCanvasElementDto } from './dto/create-canvas-element.dto';
+import { UpdateCanvasElementDto } from './dto/update-canvas-element.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 // ─── Cache keys ──────────────────────────────────────────────
 const VENUES_LIST_KEY = 'venues:list';
@@ -31,6 +38,17 @@ const VENUE_FULL_INCLUDE = {
       },
       canvasElements: true,
     },
+  },
+};
+
+/*
+ * El listado NO trae el árbol completo: con un recinto tipo Azteca serían
+ * decenas de miles de asientos por fila de la lista. Devuelve solo cuántos
+ * hay; el árbol se obtiene en GET /venues/:venueId.
+ */
+const VENUE_SUMMARY_INCLUDE = {
+  _count: {
+    select: { floors: true, sections: true },
   },
 };
 
@@ -77,16 +95,32 @@ export class VenuesService {
     }
   }
 
-  async findAllVenues() {
-    const cached = await this.redis.get<unknown[]>(VENUES_LIST_KEY);
-    if (cached) return cached;
+  async findAllVenues(pagination: PaginationQueryDto) {
+    // Solo la página por defecto se cachea: es la única que cabe en la llave
+    // única que ya invalidan las escrituras de recintos.
+    const useCache = isCacheablePage(pagination);
 
-    const venues = await this.prisma.venue.findMany({
-      include: VENUE_FULL_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    await this.redis.set(VENUES_LIST_KEY, venues, 30);
-    return venues;
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(VENUES_LIST_KEY);
+      if (cached) return cached;
+    }
+
+    const { skip, take } = toPrismaPagination(pagination);
+    const [venues, total] = await this.prisma.$transaction([
+      this.prisma.venue.findMany({
+        skip,
+        take,
+        include: VENUE_SUMMARY_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.venue.count(),
+    ]);
+
+    const response = buildPaginatedResponse(venues, total, pagination);
+
+    if (useCache) await this.redis.set(VENUES_LIST_KEY, response, 30);
+    return response;
   }
 
   async findOneVenue(id: string) {
@@ -295,7 +329,7 @@ export class VenuesService {
   // ═══════════════════════════════════════════════════════════
 
   async createSection(venueId: string, floorId: string, dto: CreateSectionDto) {
-    const floor = await this.ensureFloorBelongsToVenue(floorId, venueId);
+    await this.ensureFloorBelongsToVenue(floorId, venueId);
     try {
       const section = await this.prisma.section.create({
         data: { ...dto, venueId, floorId },
@@ -383,6 +417,19 @@ export class VenuesService {
 
   async createSeat(venueId: string, floorId: string, sectionId: string, dto: CreateSeatDto) {
     await this.ensureSectionBelongsToChain(sectionId, floorId, venueId);
+
+    const assignedZonesCount = await this.prisma.eventZoneSection.count({
+      where: {
+        sectionId,
+      },
+    });
+
+    if (assignedZonesCount > 0) {
+      throw new ConflictException(
+        'No se pueden agregar asientos a una sección ya configurada en un evento',
+      );
+    }
+
     try {
       const seat = await this.prisma.seat.create({
         data: { ...dto, sectionId },

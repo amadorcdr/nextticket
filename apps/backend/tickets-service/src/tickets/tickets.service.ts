@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,9 +10,32 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import {
+  buildPaginatedResponse,
+  isCacheablePage,
+  toPrismaPagination,
+} from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'tickets:list';
 const FOLIO_PREFIX = 'TK';
+const SHA_256_HASH_REGEX = /^[a-fA-F0-9]{64}$/;
+
+/**
+ * El qrCode es la credencial de entrada al evento: quien lo tiene, entra.
+ * Por eso nunca sale en listados ni cuando lo pide alguien que no es el
+ * dueño del boleto.
+ */
+const HIDE_QR_CODE = { qrCode: true } as const;
+
+function canSeeQrCode(ticketHolderId: string, requester: AuthenticatedUser) {
+  return (
+    requester.sub === ticketHolderId || requester.role === AUTH_ROLES.ADMIN
+  );
+}
 
 @Injectable()
 export class TicketsService {
@@ -28,7 +52,7 @@ export class TicketsService {
 
   // ── Issue a new ticket ────────────────────────────────────
 
-  async create(dto: CreateTicketDto) {
+  async create(dto: CreateTicketDto, currentHolderId: string) {
     if (dto.originType === 'PURCHASE' && !dto.purchaseDetailId) {
       throw new BadRequestException(
         'purchaseDetailId is required when originType is PURCHASE',
@@ -45,7 +69,7 @@ export class TicketsService {
         purchaseDetailId: dto.purchaseDetailId,
         eventSeatId: dto.eventSeatId,
         eventZoneId: dto.eventZoneId,
-        currentHolderId: dto.currentHolderId,
+        currentHolderId,
         originType: dto.originType,
         folio,
         qrCode,
@@ -60,21 +84,41 @@ export class TicketsService {
 
   // ── List all tickets (cached) ─────────────────────────────
 
-  async findAll() {
-    const cached = await this.redis.get<unknown[]>(LIST_CACHE_KEY);
-    if (cached) return cached;
+  async findAll(pagination: PaginationQueryDto) {
+    // Only the default page is cached: it is the single entry that the
+    // existing write invalidations already clear.
+    const useCache = isCacheablePage(pagination);
 
-    const tickets = await this.prisma.ticket.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    if (useCache) {
+      const cached =
+        await this.redis.get<PaginatedResponseDto<unknown>>(LIST_CACHE_KEY);
+      if (cached) return cached;
+    }
 
-    await this.redis.set(LIST_CACHE_KEY, tickets, 30);
-    return tickets;
+    const { skip, take } = toPrismaPagination(pagination);
+    const [tickets, total] = await this.prisma.$transaction([
+      this.prisma.ticket.findMany({
+        skip,
+        take,
+        omit: HIDE_QR_CODE,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.ticket.count(),
+    ]);
+
+    const response = buildPaginatedResponse(tickets, total, pagination);
+
+    if (useCache) await this.redis.set(LIST_CACHE_KEY, response, 30);
+    return response;
   }
 
   // ── Get ticket by ID ─────────────────────────────────────
 
-  async findOne(id: string) {
+  /**
+   * Uso interno entre servicios: siempre trae el qrCode.
+   * NO devolver su resultado directamente en un endpoint.
+   */
+  async findOneOrFail(id: string) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
       include: { validations: true },
@@ -83,9 +127,26 @@ export class TicketsService {
     return ticket;
   }
 
+  async findOne(id: string, requester: AuthenticatedUser) {
+    const ticket = await this.findOneOrFail(id);
+
+    if (canSeeQrCode(ticket.currentHolderId, requester)) {
+      return ticket;
+    }
+
+    const { qrCode: _qrCode, ...withoutQrCode } = ticket;
+    return withoutQrCode;
+  }
+
   // ── Look up ticket by QR hash (for validation scan) ──────
 
   async findByQrHash(hash: string) {
+    if (!SHA_256_HASH_REGEX.test(hash)) {
+      throw new BadRequestException(
+        'hash must be a valid SHA-256 hexadecimal hash',
+      );
+    }
+
     const ticket = await this.prisma.ticket.findUnique({
       where: { qrCode: hash },
       include: { validations: true },
@@ -101,6 +162,7 @@ export class TicketsService {
   async findByUser(userId: string) {
     return this.prisma.ticket.findMany({
       where: { currentHolderId: userId },
+      omit: HIDE_QR_CODE,
       orderBy: { issuedAt: 'desc' },
     });
   }
@@ -110,6 +172,7 @@ export class TicketsService {
   async findByEventZone(eventZoneId: string) {
     return this.prisma.ticket.findMany({
       where: { eventZoneId },
+      omit: HIDE_QR_CODE,
       orderBy: { issuedAt: 'desc' },
     });
   }
@@ -117,7 +180,7 @@ export class TicketsService {
   // ── Update ticket status ──────────────────────────────────
 
   async updateStatus(id: string, dto: UpdateTicketStatusDto) {
-    await this.findOne(id);
+    await this.findOneOrFail(id);
     const ticket = await this.prisma.ticket.update({
       where: { id },
       data: { status: dto.status },
@@ -130,8 +193,16 @@ export class TicketsService {
   // Uses the `qrcode` library to produce a PNG buffer.
   // The hash is stored in the DB; the image is never persisted.
 
-  async generateQrImage(id: string): Promise<Buffer> {
-    const ticket = await this.findOne(id);
+  async generateQrImage(
+    id: string,
+    requester: AuthenticatedUser,
+  ): Promise<Buffer> {
+    const ticket = await this.findOneOrFail(id);
+
+    // La imagen ES el QR: solo la ve el dueño del boleto.
+    if (!canSeeQrCode(ticket.currentHolderId, requester)) {
+      throw new ForbiddenException('Solo el titular puede ver el QR del boleto');
+    }
 
     // Dynamic import to avoid issues when qrcode is not installed
     const QRCode = await import('qrcode');

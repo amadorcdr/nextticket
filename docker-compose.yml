@@ -1,0 +1,43 @@
+# Infraestructura local de NextTicket: PostgreSQL 16 + Redis 7.
+# Uso: docker compose up -d   (desde la raíz del repositorio)
+#
+# Postgres hospeda una base por microservicio: auth_db, venues_events_db,
+# purchases_db y tickets_db. Las crea docker/init-databases.sql la primera
+# vez que se levanta el volumen.
+name: nextticket
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: nextticket-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: nextticket-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+    # Nombre heredado del compose anterior, que vivía dentro de
+    # purchases-service. Se conserva tal cual para no perder las bases
+    # locales de quienes ya venían trabajando.
+    name: purchases-service_purchases_db_data
