@@ -19,7 +19,6 @@ describe('AppController', () => {
 
     it('should publish one route per proxied prefix', () => {
       const routes = Object.keys(appController.root().routes);
-
       expect(routes).toEqual(
         expect.arrayContaining([
           '/users',
@@ -35,7 +34,6 @@ describe('AppController', () => {
 
     it('should point every route to its own microservice', () => {
       const routes = appController.root().routes;
-
       expect(routes['/users']).toContain('auth-service');
       expect(routes['/venues']).toContain('venues-events-service');
       expect(routes['/events']).toContain('venues-events-service');

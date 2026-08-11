@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SimulatedPaymentMethod } from './dto/create-purchase.dto';
+import { PurchasesGateway } from './purchases.gateway';
 import { PurchasesService } from './purchases.service';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -37,15 +38,23 @@ describe('PurchasesService', () => {
     ttl: jest.fn(),
     del: jest.fn(),
   };
+  const gateway = {
+    emitBlockLocked: jest.fn(),
+    emitBlockReleased: jest.fn(),
+    emitBlockExpired: jest.fn(),
+    emitBlockConverted: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prisma.temporaryBlock.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
         { provide: RedisService, useValue: redis },
+        { provide: PurchasesGateway, useValue: gateway },
       ],
     }).compile();
 
