@@ -2,11 +2,10 @@ import { useState, useCallback } from "react";
 import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
-    { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Inicio" },
+    { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
     { to: "/venues", icon: Icon.Home, label: "Recintos", count: 18 },
     { to: "/events", icon: Icon.Calendar, label: "Eventos", count: 5 },
     { to: "/tickets", icon: Icon.Ticket, label: "Tickets", count: 4 },
-    { to: "/purchases", icon: Icon.Wallet, label: "Compras", count: 1 },
     { to: "/users", icon: Icon.Users, label: "Usuarios", count: 128 },
 ];
 
