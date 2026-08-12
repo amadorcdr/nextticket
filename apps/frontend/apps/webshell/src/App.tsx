@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
+import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
     { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Inicio" },
@@ -37,6 +37,7 @@ export function App() {
     const isDesktop = useBreakpoint(1024);
 
     const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const toggleSidebar = useCallback(() => {
         setSidebarVisible((v) => !v);
@@ -223,7 +224,7 @@ export function App() {
                                     size="sm"
                                     variant="ghost"
                                     isIconOnly
-                                    onPress={() => navigate("/users/profile")}
+                                    onPress={() => setProfileOpen(true)}
                                 >
                                     <Icon.User />
                                 </Button>
@@ -237,6 +238,8 @@ export function App() {
                     <Router.Outlet />
                 </ScrollShadow>
             </div>
+
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 
 
             {/* Mobile Bottom Navigation */}

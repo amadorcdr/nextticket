@@ -1,5 +1,4 @@
 import { Button, Router } from "@nextticket-frontend/commons";
-import { Profile } from "./components/Profile";
 
 function UsersHome() {
   return (
@@ -14,7 +13,6 @@ export function UsersModule() {
   return (
     <Router.Routes>
       <Router.Route index element={<UsersHome />} />
-      <Router.Route path="profile" element={<Profile />} />
     </Router.Routes>
   );
 }

@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button, Icon, Logo, Panel, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint } from "@nextticket-frontend/commons";
-import { ModalProfile } from "./components/ModalProfile";
+import { Button, Icon, Logo, Panel, ProfileModal, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
   { to: "/organizer/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
@@ -129,7 +128,7 @@ export function OrganizerLayout() {
         </ScrollShadow>
       </div>
 
-      <ModalProfile open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
     Icon,
     Logo,
     Panel,
+    ProfileModal,
     Router,
     ScrollShadow,
     Tabs,
@@ -73,12 +74,12 @@ function ValidatorNav() {
 export function ValidatorLayout({ children }: { children: ReactNode }) {
     const isDesktop = useBreakpoint(1024);
     const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const location = Router.useLocation();
     const navigate = Router.useNavigate();
 
     const isValidationRoute = location.pathname.includes("/validate");
-    const isProfileRoute = location.pathname.includes("/profile");
 
     return (
         <div className="flex h-full w-full relative p-2">
@@ -122,7 +123,7 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 <Breadcrumbs.Item>Validador</Breadcrumbs.Item>
                                 <Breadcrumbs.Item
                                     onPress={
-                                        isValidationRoute || isProfileRoute
+                                        isValidationRoute
                                             ? () => navigate("/validator")
                                             : undefined
                                     }
@@ -132,7 +133,6 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 {isValidationRoute ? (
                                     <Breadcrumbs.Item>Validación</Breadcrumbs.Item>
                                 ) : null}
-                                {isProfileRoute ? <Breadcrumbs.Item>Perfil</Breadcrumbs.Item> : null}
                             </Breadcrumbs>
                         </ScrollShadow>
                     </div>
@@ -143,7 +143,7 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 size="sm"
                                 variant="ghost"
                                 isIconOnly
-                                onPress={() => navigate("/validator/profile")}
+                                onPress={() => setProfileOpen(true)}
                             >
                                 <Icon.User />
                             </Button>
@@ -156,6 +156,8 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                     {children}
                 </ScrollShadow>
             </div>
+
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
         </div>
     );
 }
