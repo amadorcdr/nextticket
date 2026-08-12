@@ -124,19 +124,29 @@ export function App() {
                     </ScrollShadow>
                 </div>
             </div>
-            <div className="flex items-center gap-2 p-4"><Calendar aria-label="Event date">
-                <Calendar.Header>
-                    <Calendar.Heading />
-                    <Calendar.NavButton slot="previous" />
-                    <Calendar.NavButton slot="next" />
-                </Calendar.Header>
-                <Calendar.Grid>
-                    <Calendar.GridHeader>
-                        {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-                    </Calendar.GridHeader>
-                    <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-                </Calendar.Grid>
-            </Calendar>
+            <div className="flex flex-col gap-2 p-4 shrink-0">
+                <div className="flex items-center gap-2"><Calendar aria-label="Event date">
+                    <Calendar.Header>
+                        <Calendar.Heading />
+                        <Calendar.NavButton slot="previous" />
+                        <Calendar.NavButton slot="next" />
+                    </Calendar.Header>
+                    <Calendar.Grid>
+                        <Calendar.GridHeader>
+                            {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                        </Calendar.GridHeader>
+                        <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+                    </Calendar.Grid>
+                </Calendar>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
+                >
+                    <Icon.LogOut className="size-4" />
+                    Cerrar sesión
+                </button>
             </div>
         </>
     );
