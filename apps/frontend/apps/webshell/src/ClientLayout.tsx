@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     Button,
     Chip,
@@ -5,6 +6,7 @@ import {
     getInitials,
     Icon,
     Logo,
+    ProfileModal,
     Router,
     ScrollShadow,
     Tabs,
@@ -28,6 +30,7 @@ export function ClientLayout() {
     const navigate = Router.useNavigate();
     const { user, isAuthenticated, signOut } = useSession();
     const { seats } = useCart();
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const activeKey =
         CLIENT_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ??
@@ -119,7 +122,7 @@ export function ClientLayout() {
                                     <Dropdown.Item
                                         id="perfil"
                                         textValue="Mi perfil"
-                                        onAction={() => navigate("/users/profile")}
+                                        onAction={() => setProfileOpen(true)}
                                     >
                                         <Icon.User className="size-4" />
                                         Mi perfil
@@ -194,6 +197,8 @@ export function ClientLayout() {
                     </Tabs>
                 </ScrollShadow>
             </div>
+
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
         </div>
     );
 }

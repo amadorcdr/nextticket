@@ -3,6 +3,7 @@ export * as Icon from "lucide-react";
 export * as Router from "react-router-dom";
 export * from "./hooks/useBreakpoint";
 export * from "./components/organisms/Panel";
+export * from "./components/organisms/ProfileModal";
 export * from "./components/molecules/ThemeSwitcher";
 export * from "./providers/ThemeProvider";
 export * from "./providers/CartProvider";

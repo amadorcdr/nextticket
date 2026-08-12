@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
+import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
     { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
@@ -36,6 +36,7 @@ export function App() {
     const isDesktop = useBreakpoint(1024);
 
     const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const toggleSidebar = useCallback(() => {
         setSidebarVisible((v) => !v);
@@ -122,19 +123,29 @@ export function App() {
                     </ScrollShadow>
                 </div>
             </div>
-            <div className="flex items-center gap-2 p-4"><Calendar aria-label="Event date">
-                <Calendar.Header>
-                    <Calendar.Heading />
-                    <Calendar.NavButton slot="previous" />
-                    <Calendar.NavButton slot="next" />
-                </Calendar.Header>
-                <Calendar.Grid>
-                    <Calendar.GridHeader>
-                        {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-                    </Calendar.GridHeader>
-                    <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-                </Calendar.Grid>
-            </Calendar>
+            <div className="flex flex-col gap-2 p-4 shrink-0">
+                <div className="flex items-center gap-2"><Calendar aria-label="Event date">
+                    <Calendar.Header>
+                        <Calendar.Heading />
+                        <Calendar.NavButton slot="previous" />
+                        <Calendar.NavButton slot="next" />
+                    </Calendar.Header>
+                    <Calendar.Grid>
+                        <Calendar.GridHeader>
+                            {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                        </Calendar.GridHeader>
+                        <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+                    </Calendar.Grid>
+                </Calendar>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
+                >
+                    <Icon.LogOut className="size-4" />
+                    Cerrar sesión
+                </button>
             </div>
         </>
     );
@@ -222,7 +233,7 @@ export function App() {
                                     size="sm"
                                     variant="ghost"
                                     isIconOnly
-                                    onPress={() => navigate("/users/profile")}
+                                    onPress={() => setProfileOpen(true)}
                                 >
                                     <Icon.User />
                                 </Button>
@@ -236,6 +247,8 @@ export function App() {
                     <Router.Outlet />
                 </ScrollShadow>
             </div>
+
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 
 
             {/* Mobile Bottom Navigation */}

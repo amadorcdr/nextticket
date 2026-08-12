@@ -7,6 +7,7 @@ import {
     Icon,
     Logo,
     Panel,
+    ProfileModal,
     Router,
     ScrollShadow,
     Tabs,
@@ -17,6 +18,8 @@ import { VALIDATOR_EVENTS } from "../mocks/validatorEvents";
 
 /** Navegación exclusiva del rol Validador: únicamente "Eventos". */
 function ValidatorNav() {
+    const navigate = Router.useNavigate();
+
     return (
         <>
             <div className="py-4 flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
@@ -58,13 +61,21 @@ function ValidatorNav() {
                 </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-4 flex flex-col gap-2">
                 <div className="rounded-[10px] bg-surface-secondary p-3 flex gap-3">
                     <Icon.Info className="size-4 shrink-0 mt-0.5 text-muted" />
                     <p className="text-xs text-muted">
                         Modo demostración: los eventos y boletos son datos simulados.
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
+                >
+                    <Icon.LogOut className="size-4" />
+                    Cerrar sesión
+                </button>
             </div>
         </>
     );
@@ -73,12 +84,12 @@ function ValidatorNav() {
 export function ValidatorLayout({ children }: { children: ReactNode }) {
     const isDesktop = useBreakpoint(1024);
     const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const location = Router.useLocation();
     const navigate = Router.useNavigate();
 
     const isValidationRoute = location.pathname.includes("/validate");
-    const isProfileRoute = location.pathname.includes("/profile");
 
     return (
         <div className="flex h-full w-full relative p-2">
@@ -122,7 +133,7 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 <Breadcrumbs.Item>Validador</Breadcrumbs.Item>
                                 <Breadcrumbs.Item
                                     onPress={
-                                        isValidationRoute || isProfileRoute
+                                        isValidationRoute
                                             ? () => navigate("/validator")
                                             : undefined
                                     }
@@ -132,7 +143,6 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 {isValidationRoute ? (
                                     <Breadcrumbs.Item>Validación</Breadcrumbs.Item>
                                 ) : null}
-                                {isProfileRoute ? <Breadcrumbs.Item>Perfil</Breadcrumbs.Item> : null}
                             </Breadcrumbs>
                         </ScrollShadow>
                     </div>
@@ -143,7 +153,7 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                                 size="sm"
                                 variant="ghost"
                                 isIconOnly
-                                onPress={() => navigate("/validator/profile")}
+                                onPress={() => setProfileOpen(true)}
                             >
                                 <Icon.User />
                             </Button>
@@ -156,6 +166,8 @@ export function ValidatorLayout({ children }: { children: ReactNode }) {
                     {children}
                 </ScrollShadow>
             </div>
+
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
         </div>
     );
 }
