@@ -14,6 +14,8 @@ export interface SessionUser {
     name: string;
     email: string;
     role: SessionRole;
+    /** JWT emitido por auth-service. Ausente para sesiones que aún no se conectan al backend. */
+    token?: string;
 }
 
 interface SessionContextValue {
@@ -45,8 +47,8 @@ function readStoredSession(): SessionUser | null {
 }
 
 /**
- * Sesión simulada: no hay tokens ni backend todavía. Guarda quién entró y
- * con qué rol para que cada layout sepa a quién le está hablando.
+ * Guarda quién entró (y su JWT, si el login vino del backend) para que cada
+ * layout sepa a quién le está hablando.
  *
  * Se persiste en localStorage a propósito: al recargar sigues dentro, que es
  * lo que se espera de una sesión de verdad.

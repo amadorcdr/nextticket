@@ -1,137 +1,149 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, Icon, Input, Label, TextField } from "@nextticket-frontend/commons";
-import { ROLE_LABELS, type AdminUser, type AdminUserRole, type AdminUserStatus } from "../types/user";
+import { Button, Icon, Input, InputGroup, Label, TextField, Tooltip } from "@nextticket-frontend/commons";
+import { ROLE_LABELS, type AdminUser, type AdminUserRole } from "../types/user";
 
-export type UserFormMode = "view" | "edit" | "create";
+export type UserFormMode = "edit" | "create";
+
+export interface UserFormValues {
+    name: string;
+    email: string;
+    role: AdminUserRole;
+    /** Solo se envía si se llenó: en editar es opcional, en crear es obligatorio. */
+    password: string;
+}
 
 interface UserFormModalProps {
     open: boolean;
     mode: UserFormMode;
     user: AdminUser | null;
+    saving: boolean;
     onClose: () => void;
-    onSave: (data: Omit<AdminUser, "id" | "createdAt">) => void;
+    onSave: (data: UserFormValues) => void;
 }
 
-const EMPTY: Omit<AdminUser, "id" | "createdAt"> = {
-    firstName: "",
-    lastName: "",
-    email: "",
-    role: "usuario",
-    status: "active",
-};
+const EMPTY: UserFormValues = { name: "", email: "", role: "usuario", password: "" };
 
 const ROLE_OPTIONS: AdminUserRole[] = ["usuario", "organizador", "admin", "validador"];
 
-export function UserFormModal({ open, mode, user, onClose, onSave }: UserFormModalProps) {
-    const [draft, setDraft] = useState<Omit<AdminUser, "id" | "createdAt">>(EMPTY);
+export function UserFormModal({ open, mode, user, saving, onClose, onSave }: UserFormModalProps) {
+    const [draft, setDraft] = useState<UserFormValues>(EMPTY);
+    const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
         if (!open) return;
-        setDraft(
-            user
-                ? { firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, status: user.status }
-                : EMPTY
-        );
+        setDraft(user ? { name: user.name, email: user.email, role: user.role, password: "" } : EMPTY);
+        setShowPassword(false);
     }, [open, user]);
 
     if (!open) return null;
 
-    const isReadOnly = mode === "view";
-    const title = mode === "create" ? "Crear usuario" : mode === "edit" ? "Editar usuario" : "Detalle de usuario";
-    const initials = `${draft.firstName.charAt(0)}${draft.lastName.charAt(0)}`.toUpperCase() || "?";
+    const isCreate = mode === "create";
+    const title = isCreate ? "Crear Usuario" : "Editar Usuario";
+    const subtitle = isCreate ? "Da de alta una nueva cuenta en la plataforma." : "Modifica los datos de la cuenta.";
 
-    const set = (k: keyof typeof draft) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    const set = (k: "name" | "email" | "password") => (e: React.ChangeEvent<HTMLInputElement>) =>
         setDraft((p) => ({ ...p, [k]: e.target.value }));
 
+    const canSave = draft.name.trim() && draft.email.trim() && (!isCreate || draft.password.trim().length >= 8);
+
     const handleSave = () => {
+        if (!canSave) return;
         onSave(draft);
-        onClose();
     };
 
     return createPortal(
         <>
+            {/* Backdrop */}
             <div onClick={onClose} className="fixed inset-0 z-90 backdrop-blur-md" style={{ background: "var(--backdrop)" }} />
 
-            <div className="fixed inset-0 z-91 flex items-center justify-center p-5 pointer-events-none">
-                <div className="w-full max-w-130 max-h-[90vh] overflow-y-auto rounded-[20px] bg-surface border border-border shadow-overlay pointer-events-auto">
-                    <div className="px-7 pt-6 border-b border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center text-accent-foreground text-xl font-black select-none shrink-0">
-                                    {initials}
-                                </div>
-                                <div>
-                                    <p className="text-foreground font-bold text-lg">{title}</p>
-                                    {user && <p className="text-muted text-xs mt-0.5">ID: {user.id}</p>}
-                                </div>
-                            </div>
-                            <Button size="sm" variant="ghost" isIconOnly onPress={onClose}>
-                                <Icon.X />
-                            </Button>
+            {/* Panel — slides in from right, altura completa */}
+            <aside className="fixed top-0 right-0 h-full w-full max-w-100 z-91 flex flex-col bg-surface border-l border-border rounded-l-2xl shadow-overlay">
+                {/* Header */}
+                <div className="flex justify-between items-start px-5 py-4 border-b border-border shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent shrink-0">
+                            {isCreate ? <Icon.UserPlus className="size-5" /> : <Icon.UserCog className="size-5" />}
+                        </div>
+                        <div>
+                            <h4 className="text-foreground font-bold">{title}</h4>
+                            <p className="text-muted text-xs mt-0.5">{subtitle}</p>
                         </div>
                     </div>
-
-                    <div className="px-7 py-5 flex flex-col gap-3.5">
-                        <p className="text-foreground font-bold text-sm">Datos personales</p>
-
-                        <div className="grid grid-cols-2 gap-3.5">
-                            <TextField isDisabled={isReadOnly}>
-                                <Label>Nombre</Label>
-                                <Input value={draft.firstName} onChange={set("firstName")} />
-                            </TextField>
-                            <TextField isDisabled={isReadOnly}>
-                                <Label>Apellidos</Label>
-                                <Input value={draft.lastName} onChange={set("lastName")} />
-                            </TextField>
-                            <TextField isDisabled={isReadOnly} className="col-span-2">
-                                <Label>Correo electrónico</Label>
-                                <Input type="email" value={draft.email} onChange={set("email")} />
-                            </TextField>
-
-                            <div>
-                                <Label>Rol</Label>
-                                <select
-                                    disabled={isReadOnly}
-                                    value={draft.role}
-                                    onChange={(e) => setDraft((p) => ({ ...p, role: e.target.value as AdminUserRole }))}
-                                    className="mt-1 w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none disabled:opacity-60 cursor-pointer"
-                                >
-                                    {ROLE_OPTIONS.map((r) => (
-                                        <option key={r} value={r}>
-                                            {ROLE_LABELS[r]}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <Label>Estado</Label>
-                                <select
-                                    disabled={isReadOnly}
-                                    value={draft.status}
-                                    onChange={(e) => setDraft((p) => ({ ...p, status: e.target.value as AdminUserStatus }))}
-                                    className="mt-1 w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none disabled:opacity-60 cursor-pointer"
-                                >
-                                    <option value="active">Activo</option>
-                                    <option value="inactive">Inactivo</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {!isReadOnly && (
-                        <div className="flex gap-2 px-7 pb-6">
-                            <Button size="sm" variant="secondary" fullWidth onPress={onClose}>
-                                Cancelar
-                            </Button>
-                            <Button size="sm" fullWidth onPress={handleSave}>
-                                {mode === "create" ? "Crear usuario" : "Guardar cambios"}
-                            </Button>
-                        </div>
-                    )}
+                    <Button variant="ghost" size="sm" isIconOnly onPress={onClose}>
+                        <Icon.X />
+                    </Button>
                 </div>
-            </div>
+
+                {/* Form body — centrado verticalmente para no dejar un hueco muerto al fondo */}
+                <div className="relative flex-1 overflow-y-auto">
+                    <div className="relative z-10 px-6 py-4 flex flex-col justify-center gap-5 min-h-full">
+                        <TextField isRequired name="nombre">
+                            <Label>Nombre completo</Label>
+                            <Input placeholder="Ej: Juan Pérez" value={draft.name} onChange={set("name")} />
+                        </TextField>
+
+                        <TextField isRequired name="email" type="email">
+                            <Label>Correo electrónico</Label>
+                            <Input placeholder="nombre@ejemplo.com" value={draft.email} onChange={set("email")} />
+                        </TextField>
+
+                        <TextField name="password">
+                            <div className="flex items-center gap-1">
+                                <Label>{isCreate ? "Contraseña" : "Nueva contraseña (opcional)"}</Label>
+                                <Tooltip>
+                                    <Tooltip.Trigger>
+                                        <Icon.Info className="size-3.5 text-muted" />
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content>Mínimo 8 caracteres</Tooltip.Content>
+                                </Tooltip>
+                            </div>
+                            <InputGroup>
+                                <InputGroup.Input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="••••••••"
+                                    value={draft.password}
+                                    onChange={set("password")}
+                                />
+                                <InputGroup.Suffix>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword((v) => !v)}
+                                        className="text-muted hover:text-foreground transition-colors"
+                                    >
+                                        {showPassword ? <Icon.EyeOff className="size-4" /> : <Icon.Eye className="size-4" />}
+                                    </button>
+                                </InputGroup.Suffix>
+                            </InputGroup>
+                        </TextField>
+
+                        <div>
+                            <Label>Rol</Label>
+                            <select
+                                value={draft.role}
+                                onChange={(e) => setDraft((p) => ({ ...p, role: e.target.value as AdminUserRole }))}
+                                className="mt-1 w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none cursor-pointer"
+                            >
+                                {ROLE_OPTIONS.map((r) => (
+                                    <option key={r} value={r}>
+                                        {ROLE_LABELS[r]}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-2 px-5 py-3 border-t border-border shrink-0">
+                    <Button size="sm" variant="secondary" fullWidth onPress={onClose} isDisabled={saving}>
+                        Cancelar
+                    </Button>
+                    <Button size="sm" fullWidth onPress={handleSave} isDisabled={!canSave || saving}>
+                        {saving ? "Guardando..." : isCreate ? "Crear Usuario" : "Guardar Cambios"}
+                    </Button>
+                </div>
+            </aside>
         </>,
         document.body
     );

@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 export type VenueStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "UNDER_MAINTENANCE" | "REMOVED";
 
 export interface Venue {
@@ -12,8 +10,14 @@ export interface Venue {
     createdAt?: string;
     status: VenueStatus;
     description?: string;
-    images: ReactNode[];
+    floorsCount: number;
+    sectionsCount: number;
 }
+
+export type VenueFormValues = Pick<
+    Venue,
+    "name" | "address" | "city" | "state" | "total_capacity" | "status" | "description"
+>;
 
 type ChipColor = "default" | "success" | "warning" | "danger" | "accent";
 

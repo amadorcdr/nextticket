@@ -13,12 +13,21 @@ import {
     Tabs,
     Tooltip,
     useBreakpoint,
+    useSession,
 } from "@nextticket-frontend/commons";
 import { VALIDATOR_EVENTS } from "../mocks/validatorEvents";
 
 /** Navegación exclusiva del rol Validador: únicamente "Eventos". */
 function ValidatorNav() {
     const navigate = Router.useNavigate();
+    const { signOut } = useSession();
+
+    const handleSignOut = () => {
+        // Navega primero a una ruta pública y limpia la sesión después: así el
+        // guard de esta ruta no alcanza a redirigir a /sign-in antes de salir.
+        navigate("/", { replace: true });
+        setTimeout(signOut, 0);
+    };
 
     return (
         <>
@@ -70,7 +79,7 @@ function ValidatorNav() {
                 </div>
                 <button
                     type="button"
-                    onClick={() => navigate("/")}
+                    onClick={handleSignOut}
                     className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
                 >
                     <Icon.LogOut className="size-4" />

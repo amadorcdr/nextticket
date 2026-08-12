@@ -1,12 +1,33 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Key } from "@nextticket-frontend/commons";
-import { Button, Icon, Select, ListBox, SearchField, Popover, ScrollShadow, Router } from "@nextticket-frontend/commons";
+import { ApiError, Button, Icon, Select, ListBox, SearchField, Popover, ScrollShadow, Router, toast, useApi } from "@nextticket-frontend/commons";
 import { Label, Slider, Modal, Chip } from "@heroui/react";
 import { VenuesTable } from "./VenuesTable";
+import { toVenue, type ApiVenueListItem } from "./api";
+import type { Venue, VenueStatus } from "./types/venue";
+
+// El backend no soporta filtro/busqueda en la query de GET /venues todavia
+// (solo page/limit): se trae una sola pagina grande y se filtra en el cliente,
+// mismo patron que UsersView.
+const FETCH_LIMIT = 100;
 
 export function VenuesModule() {
   const navigate = Router.useNavigate();
+  const api = useApi();
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<Key[]>(["DRAFT", "ACTIVE", "INACTIVE", "UNDER_MAINTENANCE", "REMOVED"]);
+
+  const loadVenues = () => {
+    setLoading(true);
+    api
+      .get<{ data: ApiVenueListItem[] }>(`/venues?page=1&limit=${FETCH_LIMIT}`)
+      .then((res) => setVenues(res.data.map(toVenue)))
+      .catch((err) => toast.danger(err instanceof ApiError ? err.message : "No se pudieron cargar los recintos"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadVenues, []);
 
   const MEXICAN_STATES = [
     "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas", "Chihuahua",
@@ -30,14 +51,23 @@ export function VenuesModule() {
     { id: "createdAt", name: "Fecha de creación" },
   ];
 
+  const countByStatus = useMemo(() => {
+    const counts: Record<VenueStatus, number> = { DRAFT: 0, INACTIVE: 0, ACTIVE: 0, UNDER_MAINTENANCE: 0, REMOVED: 0 };
+    for (const v of venues) counts[v.status] += 1;
+    return counts;
+  }, [venues]);
+
   const statuses = [
-    { id: "DRAFT", label: "Borradores", count: 3, className: "bg-accent/10 text-foreground", icon: <Icon.Pen /> },
-    { id: "INACTIVE", label: "Inactivos", count: 1, className: "bg-muted/10 text-muted", icon: <Icon.Minus /> },
-    { id: "ACTIVE", label: "Activos", count: 12, className: "bg-success/10 text-success", icon: <Icon.Check /> },
-    { id: "UNDER_MAINTENANCE", label: "Mantenimiento", count: 2, className: "bg-warning/10 text-warning", icon: <Icon.Wrench /> },
-    { id: "REMOVED", label: "Eliminados", count: 0, className: "bg-danger/10 text-danger", icon: <Icon.X /> },
+    { id: "DRAFT", label: "Borradores", count: countByStatus.DRAFT, className: "bg-accent/10 text-foreground", icon: <Icon.Pen /> },
+    { id: "INACTIVE", label: "Inactivos", count: countByStatus.INACTIVE, className: "bg-muted/10 text-muted", icon: <Icon.Minus /> },
+    { id: "ACTIVE", label: "Activos", count: countByStatus.ACTIVE, className: "bg-success/10 text-success", icon: <Icon.Check /> },
+    { id: "UNDER_MAINTENANCE", label: "Mantenimiento", count: countByStatus.UNDER_MAINTENANCE, className: "bg-warning/10 text-warning", icon: <Icon.Wrench /> },
+    { id: "REMOVED", label: "Eliminados", count: countByStatus.REMOVED, className: "bg-danger/10 text-danger", icon: <Icon.X /> },
   ];
-  const totalVenues = statuses.reduce((acc, curr) => acc + curr.count, 0);
+
+  // El filtro solo maneja activo/inactivo — los demás estatus (borrador,
+  // mantenimiento, eliminado) no tienen una acción propia en la UI todavía.
+  const availableStatuses = statuses.filter((s) => s.id === "ACTIVE" || s.id === "INACTIVE");
 
   return (
     <div className="flex flex-col md:gap-4 gap-2 h-full" >
@@ -47,7 +77,7 @@ export function VenuesModule() {
             <div>
               <h2>Recintos</h2>
               <p className="text-muted md:text-sm text-xs flex flex-wrap gap-x-2 gap-y-1">
-                {["DRAFT", "ACTIVE", "INACTIVE", "UNDER_MAINTENANCE", "REMOVED"].map((id) => {
+                {["ACTIVE", "INACTIVE"].map((id) => {
                   const status = statuses.find((s) => s.id === id);
                   return status ? (
                     <span key={id}>
@@ -184,7 +214,7 @@ export function VenuesModule() {
                   <Select.Value>
                     {({ state }) => {
                       const count = state.selectedItems.length;
-                      if (count === statuses.length || count === 0) {
+                      if (count === availableStatuses.length || count === 0) {
                         return (
                           <>
                             <span className="max-[1400px]:hidden">Todos los estatus</span>
@@ -207,7 +237,7 @@ export function VenuesModule() {
               </Select.Trigger>
               <Select.Popover>
                 <ListBox>
-                  {statuses.map((s) => (
+                  {availableStatuses.map((s) => (
                     <ListBox.Item key={s.id} id={s.id} textValue={s.label}>
                       {s.label.charAt(0).toUpperCase() + s.label.slice(1)}
                       <ListBox.ItemIndicator />
@@ -268,6 +298,9 @@ export function VenuesModule() {
 
       <div className="flex-1 min-h-72">
         <VenuesTable
+          venues={venues}
+          loading={loading}
+          onRefetch={loadVenues}
           statusFilter={statusFilter}
           stateFilter={stateFilter}
           capacityFilter={capacityFilter}

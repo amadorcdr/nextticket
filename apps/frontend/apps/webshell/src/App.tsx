@@ -1,12 +1,11 @@
-import { useState, useCallback } from "react";
-import { Button, Icon, Router, Breadcrumbs, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Calendar, Label, ThemeSwitcher, TextField, Input, Logo } from "@nextticket-frontend/commons";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Button, Icon, Router, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Label, ThemeSwitcher, TextField, Input, Logo, useApi, useSession } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
     { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
-    { to: "/venues", icon: Icon.Home, label: "Recintos", count: 18 },
+    { to: "/venues", icon: Icon.Home, label: "Recintos", count: undefined as number | undefined },
     { to: "/events", icon: Icon.Calendar, label: "Eventos", count: 5 },
-    { to: "/tickets", icon: Icon.Ticket, label: "Tickets", count: 4 },
-    { to: "/users", icon: Icon.Users, label: "Usuarios", count: 128 },
+    { to: "/users", icon: Icon.Users, label: "Usuarios", count: undefined as number | undefined },
 ];
 
 const VENUES = [
@@ -44,8 +43,48 @@ export function App() {
 
     const location = Router.useLocation();
     const navigate = Router.useNavigate();
+    const { signOut } = useSession();
+    const api = useApi();
 
-    const activeNavKey = NAV_LINKS.find(link => location.pathname.startsWith(link.to))?.to || "none";
+    const handleSignOut = () => {
+        // Navega primero a una ruta pública y limpia la sesión después: si se
+        // hace al revés, el guard de esta misma ruta puede alcanzar a
+        // reaccionar al cambio de sesión antes de que el navigate surta
+        // efecto, y termina mandando a /sign-in en vez de a la landing.
+        navigate("/", { replace: true });
+        setTimeout(signOut, 0);
+    };
+
+    const [usersCount, setUsersCount] = useState<number | undefined>(undefined);
+    const [venuesCount, setVenuesCount] = useState<number | undefined>(undefined);
+
+    useEffect(() => {
+        api
+            .get<{ meta: { total: number } }>("/users?page=1&limit=1")
+            .then((res) => setUsersCount(res.meta.total))
+            .catch(() => {
+                // Si falla, el chip de Usuarios simplemente no se muestra.
+            });
+        api
+            .get<{ meta: { total: number } }>("/venues?page=1&limit=1")
+            .then((res) => setVenuesCount(res.meta.total))
+            .catch(() => {
+                // Si falla, el chip de Recintos simplemente no se muestra.
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const navLinks = useMemo(
+        () =>
+            NAV_LINKS.map((link) => {
+                if (link.to === "/users") return { ...link, count: usersCount };
+                if (link.to === "/venues") return { ...link, count: venuesCount };
+                return link;
+            }),
+        [usersCount, venuesCount],
+    );
+
+    const activeNavKey = navLinks.find(link => location.pathname.startsWith(link.to))?.to || "none";
     const activeVenueKey = VENUES.find(v => location.pathname.startsWith(v.to))?.to || "none";
 
     const navContent = (
@@ -65,7 +104,7 @@ export function App() {
                     >
                         <Tabs.ListContainer className="border-none w-full">
                             <Tabs.List className="w-full">
-                                {NAV_LINKS.map(({ to, icon: NavIcon, label, count }) => (
+                                {navLinks.map(({ to, icon: NavIcon, label, count }) => (
                                     <Tabs.Tab
                                         key={to}
                                         id={to}
@@ -124,23 +163,9 @@ export function App() {
                 </div>
             </div>
             <div className="flex flex-col gap-2 p-4 shrink-0">
-                <div className="flex items-center gap-2"><Calendar aria-label="Event date">
-                    <Calendar.Header>
-                        <Calendar.Heading />
-                        <Calendar.NavButton slot="previous" />
-                        <Calendar.NavButton slot="next" />
-                    </Calendar.Header>
-                    <Calendar.Grid>
-                        <Calendar.GridHeader>
-                            {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-                        </Calendar.GridHeader>
-                        <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-                    </Calendar.Grid>
-                </Calendar>
-                </div>
                 <button
                     type="button"
-                    onClick={() => navigate("/")}
+                    onClick={handleSignOut}
                     className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
                 >
                     <Icon.LogOut className="size-4" />
@@ -183,25 +208,7 @@ export function App() {
                             </Tooltip.Trigger>
                             <Tooltip.Content>{sidebarVisible ? "Ocultar sidebar" : "Mostrar sidebar"}</Tooltip.Content>
                         </Tooltip>
-                        <ScrollShadow className="flex-1 min-w-0" orientation="horizontal" hideScrollBar size={16}>
-                            <Breadcrumbs>
-                                <Breadcrumbs.Item>
-                                    Inicio
-                                </Breadcrumbs.Item>
-                                <Breadcrumbs.Item>
-                                    Recintos
-                                </Breadcrumbs.Item>
-                                <Breadcrumbs.Item>
-                                    Auditorio Nacional
-                                </Breadcrumbs.Item>
-                                <Breadcrumbs.Item>
-                                    Piso 1
-                                </Breadcrumbs.Item>
-                                <Breadcrumbs.Item>
-                                    Balcón
-                                </Breadcrumbs.Item>
-                            </Breadcrumbs>
-                        </ScrollShadow>
+                        <div className="flex-1 min-w-0" />
                     </div>
                     <div className="flex items-center md:gap-2 gap-1 shrink-0">
 
@@ -262,7 +269,7 @@ export function App() {
                     >
                         <Tabs.ListContainer className="border-none">
                             <Tabs.List>
-                                {NAV_LINKS.map(({ to, icon: NavIcon, label, count }) => (
+                                {navLinks.map(({ to, icon: NavIcon, label, count }) => (
                                     <Tabs.Tab
                                         key={to}
                                         id={to}

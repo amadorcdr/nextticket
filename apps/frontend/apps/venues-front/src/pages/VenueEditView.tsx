@@ -1,27 +1,63 @@
 import { useEffect, useState } from "react";
-import { Button, Icon, Router } from "@nextticket-frontend/commons";
+import { ApiError, Button, Icon, Router, toast, useApi } from "@nextticket-frontend/commons";
 import { VenueEditForm } from "../components/VenueEditForm";
-import { VENUES } from "../mocks/venues";
-import type { Venue } from "../types/venue";
+import { toVenueDto, toVenueFromDetail, type ApiVenueDetail } from "../api";
+import type { Venue, VenueFormValues } from "../types/venue";
+
+function toDraft(v: Venue): VenueFormValues {
+    return {
+        name: v.name,
+        address: v.address,
+        city: v.city,
+        state: v.state,
+        total_capacity: v.total_capacity,
+        status: v.status,
+        description: v.description,
+    };
+}
 
 export function VenueEditView() {
     const { id } = Router.useParams<{ id: string }>();
     const navigate = Router.useNavigate();
+    const api = useApi();
 
-    const venue = VENUES.find((v) => v.id === id);
-
-    const toDraft = (v: Venue): Omit<Venue, "images"> => {
-        const { images, ...rest } = v;
-        return rest;
-    };
-
-    const [draft, setDraft] = useState<Omit<Venue, "images"> | null>(venue ? toDraft(venue) : null);
+    const [venue, setVenue] = useState<Venue | null>(null);
+    const [floorsCount, setFloorsCount] = useState(0);
+    const [sectionsCount, setSectionsCount] = useState(0);
+    const [draft, setDraft] = useState<VenueFormValues | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (venue) setDraft(toDraft(venue));
+        if (!id) return;
+        setLoading(true);
+        setNotFound(false);
+        api
+            .get<ApiVenueDetail>(`/venues/${id}`)
+            .then((res) => {
+                const mapped = toVenueFromDetail(res);
+                setVenue(mapped);
+                setFloorsCount(mapped.floorsCount);
+                setSectionsCount(mapped.sectionsCount);
+                setDraft(toDraft(mapped));
+            })
+            .catch((err) => {
+                if (err instanceof ApiError && err.status === 404) {
+                    setNotFound(true);
+                } else {
+                    toast.danger(err instanceof ApiError ? err.message : "No se pudo cargar el recinto");
+                }
+            })
+            .finally(() => setLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    if (!venue || !draft) {
+    if (loading) {
+        return <p className="text-muted text-xs py-16 text-center">Cargando recinto...</p>;
+    }
+
+    if (notFound || !venue || !draft) {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                 <p className="text-foreground font-semibold">Recinto no encontrado</p>
@@ -33,9 +69,18 @@ export function VenueEditView() {
         );
     }
 
-    const handleSave = () => {
-        console.log("Guardado:", draft);
-        navigate("/venues");
+    const handleSave = async () => {
+        if (!id) return;
+        setSaving(true);
+        try {
+            await api.patch(`/venues/${id}`, toVenueDto(draft));
+            toast.success("Recinto actualizado");
+            navigate("/venues");
+        } catch (err) {
+            toast.danger(err instanceof ApiError ? err.message : "No se pudo guardar el recinto");
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -50,15 +95,21 @@ export function VenueEditView() {
                 </div>
             </div>
 
-            <VenueEditForm draft={draft} onChange={setDraft} />
+            <VenueEditForm
+                draft={draft}
+                onChange={setDraft}
+                floorsCount={floorsCount}
+                sectionsCount={sectionsCount}
+                onEditZones={() => navigate(`/venues/${id}/canvas`)}
+            />
 
-            <div className="flex gap-2 justify-end sticky bottom-2">
-                <Button size="sm" variant="secondary" onPress={() => navigate("/venues")}>
+            <div className="flex gap-2 justify-end sticky bottom-0 bg-background border-t border-border pt-3 pb-1">
+                <Button size="sm" variant="secondary" onPress={() => navigate("/venues")} isDisabled={saving}>
                     Cancelar
                 </Button>
-                <Button size="sm" onPress={handleSave}>
+                <Button size="sm" onPress={handleSave} isDisabled={saving}>
                     <Icon.Check />
-                    Guardar cambios
+                    {saving ? "Guardando..." : "Guardar cambios"}
                 </Button>
             </div>
         </div>

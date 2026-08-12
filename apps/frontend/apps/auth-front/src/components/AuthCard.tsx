@@ -5,23 +5,20 @@ import {
   HOME_BY_ROLE,
   Icon,
   Router,
+  SessionRole,
+  toast,
   useSession,
 } from "@nextticket-frontend/commons";
 import { CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
-import { InputField, RoleSelector, UserType, authCardClassName } from "./AuthCardUI";
+import { InputField, authCardClassName } from "./AuthCardUI";
+import { AccountDisabledError, InvalidCredentialsError, login } from "../api";
 
-/** "juan.perez@correo.com" -> "Juan Perez". Solo para la demo. */
-function nameFromEmail(email: string) {
-  const local = email.split("@")[0];
-
-  if (!local) return "Invitado";
-
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(" ");
-}
+const WELCOME_LABEL_BY_ROLE: Record<SessionRole, string> = {
+  usuario: "cliente",
+  organizador: "organizador",
+  validador: "validador",
+  admin: "administrador",
+};
 
 function BackToHome() {
   return (
@@ -40,23 +37,38 @@ function BackToHome() {
 function LoginFace({ onFlip }: { onFlip: () => void }) {
   const navigate = Router.useNavigate();
   const { signIn } = useSession();
-  const [userType, setUserType] = useState<UserType>("usuario");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    // Se guarda la sesión antes de navegar: así cada layout sabe quién entró
-    // y el usuario llega a su pantalla ya identificado.
-    signIn({
-      name: nameFromEmail(email),
-      email: email || `${userType}@nextticket.com`,
-      role: userType,
-    });
+    try {
+      const result = await login(email, password);
 
-    navigate(HOME_BY_ROLE[userType]);
+      // Se guarda la sesión antes de navegar: así cada layout sabe quién entró
+      // y el usuario llega a su pantalla ya identificado.
+      signIn({
+        name: result.name,
+        email: result.email,
+        role: result.role,
+        token: result.token,
+      });
+
+      toast.success(`Bienvenido, ${result.name} (${WELCOME_LABEL_BY_ROLE[result.role]})`);
+      navigate(HOME_BY_ROLE[result.role]);
+    } catch (err) {
+      toast.danger(
+        err instanceof InvalidCredentialsError || err instanceof AccountDisabledError
+          ? err.message
+          : "No se pudo iniciar sesión. Intenta de nuevo.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,15 +79,6 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
         <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Inicio de sesión</h1>
         <p className="text-muted text-xs">Accede a tu cuenta para gestionar tus eventos</p>
       </div>
-
-      <div className="mb-4">
-        <label className="text-muted text-[10px] font-bold tracking-widest uppercase block mb-1.5">
-          Tipo de usuario
-        </label>
-        <RoleSelector value={userType} onChange={setUserType} />
-      </div>
-
-      <div className="border-t border-border mb-4" />
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <InputField
@@ -110,9 +113,9 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
             ¿Olvidaste tu contraseña?
           </a>
         </div>
-        <Button type="submit" fullWidth>
+        <Button type="submit" fullWidth isDisabled={loading}>
           <Icon.LogIn />
-          Ingresar
+          {loading ? "Ingresando..." : "Ingresar"}
         </Button>
       </form>
 

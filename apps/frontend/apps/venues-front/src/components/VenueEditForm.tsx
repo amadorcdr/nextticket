@@ -1,9 +1,12 @@
-import { Button, Icon, Input, Label, Router, TextField } from "@nextticket-frontend/commons";
-import { VENUE_STATUS_OPTIONS, type Venue, type VenueStatus } from "../types/venue";
+import { Button, Icon, Input, Label, TextField } from "@nextticket-frontend/commons";
+import type { VenueFormValues } from "../types/venue";
 
 interface VenueEditFormProps {
-    draft: Omit<Venue, "images">;
-    onChange: (draft: Omit<Venue, "images">) => void;
+    draft: VenueFormValues;
+    onChange: (draft: VenueFormValues) => void;
+    floorsCount: number;
+    sectionsCount: number;
+    onEditZones: () => void;
 }
 
 const MEXICAN_STATES = [
@@ -14,7 +17,7 @@ const MEXICAN_STATES = [
     "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán", "Zacatecas", "CDMX",
 ];
 
-export function VenueEditForm({ draft, onChange }: VenueEditFormProps) {
+export function VenueEditForm({ draft, onChange, floorsCount, sectionsCount, onEditZones }: VenueEditFormProps) {
     const set = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => onChange({ ...draft, [key]: value });
 
     return (
@@ -72,20 +75,6 @@ export function VenueEditForm({ draft, onChange }: VenueEditFormProps) {
                             onChange={(e) => set("total_capacity", Number(e.target.value) || 0)}
                         />
                     </TextField>
-                    <div>
-                        <Label>Estado del recinto</Label>
-                        <select
-                            value={draft.status}
-                            onChange={(e) => set("status", e.target.value as VenueStatus)}
-                            className="mt-1 w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none cursor-pointer"
-                        >
-                            {VENUE_STATUS_OPTIONS.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                    {s.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
                 </div>
             </section>
 
@@ -96,24 +85,16 @@ export function VenueEditForm({ draft, onChange }: VenueEditFormProps) {
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
                     <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-surface-secondary text-muted border border-border">
-                        7 Pisos
+                        {floorsCount} {floorsCount === 1 ? "Piso" : "Pisos"}
                     </span>
                     <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-surface-secondary text-muted border border-border">
-                        28 Secciones
-                    </span>
-                    <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-surface-secondary text-muted border border-border">
-                        20 Elementos
+                        {sectionsCount} Secciones
                     </span>
                 </div>
                 <p className="text-muted text-xs">
-                    Consulta o modifica los pisos, secciones y asientos de este recinto en el editor de zonas.
+                    Agrega, mueve o elimina pisos, secciones y asientos de este recinto en el editor de zonas.
                 </p>
-                <Button
-                    size="sm"
-                    variant="secondary"
-                    fullWidth
-                    render={(domProps: any) => <Router.Link to="/venues/canvas" {...domProps} />}
-                >
+                <Button size="sm" variant="secondary" fullWidth onPress={onEditZones}>
                     <Icon.LayoutGrid />
                     Editar distribución de zonas
                 </Button>

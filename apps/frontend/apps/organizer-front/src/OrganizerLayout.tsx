@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button, Icon, Logo, Panel, ProfileModal, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint } from "@nextticket-frontend/commons";
+import { Button, Icon, Logo, Panel, ProfileModal, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint, useSession } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
   { to: "/organizer/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
@@ -12,11 +12,19 @@ export function OrganizerLayout() {
   const isDesktop = useBreakpoint(1024);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { signOut } = useSession();
 
   const toggleSidebar = useCallback(() => setSidebarVisible((v) => !v), []);
 
   const location = Router.useLocation();
   const navigate = Router.useNavigate();
+
+  const handleSignOut = () => {
+    // Navega primero a una ruta pública y limpia la sesión después: así el
+    // guard de esta ruta no alcanza a redirigir a /sign-in antes de salir.
+    navigate("/", { replace: true });
+    setTimeout(signOut, 0);
+  };
 
   const activeNavKey = NAV_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ?? "none";
 
@@ -56,7 +64,7 @@ export function OrganizerLayout() {
       <div className="flex flex-col gap-2 px-2 shrink-0">
         <button
           type="button"
-          onClick={() => navigate("/")}
+          onClick={handleSignOut}
           className="flex items-center gap-2 px-2 py-1.5 rounded-[10px] text-sm text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
         >
           <Icon.LogOut className="size-4" />

@@ -236,6 +236,7 @@ export class UsersService {
     const data: Record<string, unknown> = {
       name: dto.name,
       email: dto.email,
+      status: dto.status,
       lastModifiedBy: updatedBy ?? null,
     };
 

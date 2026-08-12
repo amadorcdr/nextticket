@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { compare } from 'bcryptjs';
 import { randomUUID } from 'crypto';
@@ -61,6 +61,12 @@ export class AuthService implements OnModuleInit {
 
     if (!user?.password || !passwordMatches) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+
+    if (!user.status) {
+      throw new ForbiddenException(
+        'Tu cuenta está deshabilitada. Contacta a un administrador.',
+      );
     }
 
     const publicUser = await this.usersService.findPublicById(user.id);

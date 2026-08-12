@@ -32,25 +32,40 @@ export function ClientLayout() {
     const { seats } = useCart();
     const [profileOpen, setProfileOpen] = useState(false);
 
+    // "Mis boletos" solo tiene sentido para quien ya inició sesión como cliente:
+    // sin sesión, o con otro rol, no tiene boletos propios que consultar aquí.
+    const visibleLinks = CLIENT_LINKS.filter(
+        (link) => link.to !== "/mis-boletos" || (isAuthenticated && user?.role === "usuario"),
+    );
+
     const activeKey =
-        CLIENT_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ??
+        visibleLinks.find((link) => location.pathname.startsWith(link.to))?.to ??
         "none";
 
     const handleSignOut = () => {
-        signOut();
-        navigate("/");
+        // Navega primero a una ruta pública y limpia la sesión después: si se
+        // hace desde una ruta protegida (ej. /mis-boletos), el guard puede
+        // reaccionar al cambio de sesión antes de que el navigate surta
+        // efecto, y termina mandando a /sign-in en vez de a la landing.
+        navigate("/", { replace: true });
+        setTimeout(signOut, 0);
     };
 
     return (
         <div className="flex flex-col h-full w-full relative p-2 gap-2">
             <header className="flex items-center justify-between gap-4 shrink-0 px-2">
-                <Router.Link
-                    to="/eventos"
-                    className="flex items-center gap-2 text-accent shrink-0"
+                {/* Con sesión activa no hay a dónde "salir": la landing solo se
+                    vuelve a ver cerrando sesión. Sin sesión, sí regresa ahí. */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (!isAuthenticated) navigate("/");
+                    }}
+                    className="flex items-center gap-2 text-accent shrink-0 cursor-pointer"
                 >
                     <Logo size={20} />
                     <h4>Nextticket</h4>
-                </Router.Link>
+                </button>
 
                 {/* Navegacion: en movil se va a la barra inferior */}
                 <nav className="hidden md:flex flex-1 justify-center">
@@ -61,7 +76,7 @@ export function ClientLayout() {
                     >
                         <Tabs.ListContainer className="border-none">
                             <Tabs.List>
-                                {CLIENT_LINKS.map(({ to, icon: NavIcon, label }) => (
+                                {visibleLinks.map(({ to, icon: NavIcon, label }) => (
                                     <Tabs.Tab
                                         key={to}
                                         id={to}
@@ -175,7 +190,7 @@ export function ClientLayout() {
                     >
                         <Tabs.ListContainer className="border-none">
                             <Tabs.List>
-                                {CLIENT_LINKS.map(({ to, icon: NavIcon, label }) => (
+                                {visibleLinks.map(({ to, icon: NavIcon, label }) => (
                                     <Tabs.Tab
                                         key={to}
                                         id={to}

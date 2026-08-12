@@ -1,18 +1,29 @@
-import { Button, Chip, Icon, Table } from "@nextticket-frontend/commons";
+import { Button, Icon, Table } from "@nextticket-frontend/commons";
 import { ROLE_LABELS, type AdminUser } from "../types/user";
 
 interface UserTableProps {
     users: AdminUser[];
-    onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
     onToggleStatus: (user: AdminUser) => void;
 }
 
-export function UserTable({ users, onView, onEdit, onToggleStatus }: UserTableProps) {
+const ROLE_CLASSNAME: Record<AdminUser["role"], string> = {
+    admin: "text-danger bg-danger/10",
+    organizador: "text-accent bg-accent/10",
+    validador: "text-warning bg-warning/10",
+    usuario: "text-muted bg-muted/10",
+};
+
+const STATUS_CLASSNAME: Record<"true" | "false", string> = {
+    true: "text-success bg-success/10",
+    false: "text-muted bg-muted/10",
+};
+
+export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
     return (
         <Table>
             <Table.ScrollContainer>
-                <Table.Content aria-label="Usuarios" className="min-w-160 text-xs">
+                <Table.Content aria-label="Usuarios" className="min-w-160 max-h-100 overflow-y-auto text-xs">
                     <Table.Header>
                         <Table.Column isRowHeader id="name" minWidth={180} className="text-center">
                             Nombre
@@ -37,41 +48,41 @@ export function UserTable({ users, onView, onEdit, onToggleStatus }: UserTablePr
                         {(user) => (
                             <Table.Row>
                                 <Table.Cell className="text-center">
-                                    <span className="text-foreground text-xs font-medium">
-                                        {user.firstName} {user.lastName}
-                                    </span>
+                                    <span className="text-foreground text-xs font-medium">{user.name}</span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
                                     <span className="text-muted text-xs">{user.email}</span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
-                                    <Chip size="sm" variant="soft">
+                                    <span
+                                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${ROLE_CLASSNAME[user.role]}`}
+                                    >
                                         {ROLE_LABELS[user.role]}
-                                    </Chip>
+                                    </span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
-                                    <Chip size="sm" variant="soft" color={user.status === "active" ? "success" : "default"}>
-                                        {user.status === "active" ? "Activo" : "Inactivo"}
-                                    </Chip>
+                                    <span
+                                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${STATUS_CLASSNAME[user.status ? "true" : "false"]}`}
+                                    >
+                                        {user.status ? "Activo" : "Inactivo"}
+                                    </span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
-                                    <span className="text-xs">{user.createdAt}</span>
+                                    <span className="text-xs">{new Date(user.createdAt).toLocaleDateString("es-MX")}</span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
                                     <div className="flex justify-center gap-1">
-                                        <Button size="sm" variant="ghost" isIconOnly onPress={() => onView(user)}>
-                                            <Icon.Eye />
-                                        </Button>
                                         <Button size="sm" variant="ghost" isIconOnly onPress={() => onEdit(user)}>
                                             <Icon.Pencil />
                                         </Button>
                                         <Button
                                             size="sm"
-                                            variant={user.status === "active" ? "danger" : "ghost"}
+                                            variant="ghost"
+                                            color={user.status ? "danger" : "success"}
                                             isIconOnly
                                             onPress={() => onToggleStatus(user)}
                                         >
-                                            {user.status === "active" ? <Icon.UserX /> : <Icon.UserCheck />}
+                                            {user.status ? <Icon.UserX /> : <Icon.UserCheck />}
                                         </Button>
                                     </div>
                                 </Table.Cell>

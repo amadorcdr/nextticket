@@ -72,14 +72,6 @@ export function AdminEventCard({ event }: { event: AdminEvent }) {
                     >
                         Ver detalles
                     </Button>
-                    <Button
-                        size="sm"
-                        fullWidth
-                        render={(domProps: any) => <Router.Link to={`/tickets/${event.id}`} {...domProps} />}
-                    >
-                        <Icon.Ticket />
-                        Ventas
-                    </Button>
                 </div>
             </div>
         </article>
