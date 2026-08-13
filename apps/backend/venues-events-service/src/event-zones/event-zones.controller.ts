@@ -182,6 +182,28 @@ export class EventZonesController {
     );
   }
 
+  @Delete(':zoneId/price-tiers/:tierId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Eliminar nivel de precio (excepto el base, sortOrder 0)',
+  })
+  removePriceTier(
+    @Param('eventId', new ParseUUIDPipe())
+    eventId: string,
+    @Param('zoneId', new ParseUUIDPipe())
+    zoneId: string,
+    @Param('tierId', new ParseUUIDPipe())
+    tierId: string,
+  ) {
+    return this.eventZones.removePriceTier(
+      eventId,
+      zoneId,
+      tierId,
+    );
+  }
+
   @Delete(':zoneId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)

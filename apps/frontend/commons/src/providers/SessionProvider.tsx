@@ -16,6 +16,8 @@ export interface SessionUser {
     role: SessionRole;
     /** JWT emitido por auth-service. Ausente para sesiones que aún no se conectan al backend. */
     token?: string;
+    /** UUID real del usuario en auth-service. Ausente para sesiones que aún no se conectan al backend. */
+    id?: string;
 }
 
 interface SessionContextValue {

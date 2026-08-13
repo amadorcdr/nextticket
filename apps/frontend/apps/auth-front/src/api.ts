@@ -18,6 +18,7 @@ export class AccountDisabledError extends Error {}
 interface LoginApiResponse {
   token: string;
   user: {
+    id: string;
     name: string;
     email: string;
     role: { name: BackendRole };
@@ -26,6 +27,7 @@ interface LoginApiResponse {
 
 export interface LoginResult {
   token: string;
+  id: string;
   name: string;
   email: string;
   role: SessionRole;
@@ -55,6 +57,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 
   return {
     token: data.token,
+    id: data.user.id,
     name: data.user.name,
     email: data.user.email,
     role: ROLE_BY_BACKEND_NAME[data.user.role.name] ?? "usuario",

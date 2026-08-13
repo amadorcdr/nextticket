@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, Description, Input, Label, TextField } from "@heroui/react";
+import { Button, Description, Input, Label, TextField, toast } from "@heroui/react";
 import { Check, KeyRound, Mail, Pencil, X } from "lucide-react";
 import { ThemeSwitcher } from "../molecules/ThemeSwitcher";
 import { useSession, type SessionRole } from "../../providers/SessionProvider";
+import { API_BASE_URL, ApiError, useApi } from "../../providers/api";
 
 export interface ProfileModalProps {
     open: boolean;
@@ -14,7 +15,6 @@ interface ProfileData {
     nombre: string;
     apellido: string;
     email: string;
-    telefono: string;
 }
 
 const ROLE_LABELS: Record<SessionRole, string> = {
@@ -30,37 +30,111 @@ function splitName(fullName: string): { nombre: string; apellido: string } {
 }
 
 export function ProfileModal({ open, onClose }: ProfileModalProps) {
-    const { user } = useSession();
+    const { user, signIn } = useSession();
+    const api = useApi();
 
-    const initial: ProfileData = user
-        ? { ...splitName(user.name), email: user.email, telefono: "" }
-        : { nombre: "", apellido: "", email: "", telefono: "" };
+    const initial: ProfileData = user ? { ...splitName(user.name), email: user.email } : { nombre: "", apellido: "", email: "" };
 
     const [data, setData] = useState<ProfileData>(initial);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<ProfileData>(initial);
+    const [savingProfile, setSavingProfile] = useState(false);
 
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [savingPassword, setSavingPassword] = useState(false);
+
+    // Si cambia el usuario de la sesión (o se reabre el modal), refleja lo último guardado.
+    useEffect(() => {
+        if (!user) return;
+        const next = { ...splitName(user.name), email: user.email };
+        setData(next);
+        setDraft(next);
+    }, [user, open]);
 
     const startEdit = () => {
         setDraft(data);
         setEditing(true);
-    };
-    const saveEdit = () => {
-        setData(draft);
-        setEditing(false);
     };
     const cancelEdit = () => setEditing(false);
 
     const set = (k: keyof ProfileData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
         setDraft((p) => ({ ...p, [k]: e.target.value }));
 
-    const updatePassword = () => {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
+    const saveEdit = async () => {
+        if (!user?.id) {
+            toast.danger("Tu sesión no tiene un id válido. Cierra sesión y vuelve a iniciarla.");
+            return;
+        }
+        const name = `${draft.nombre.trim()} ${draft.apellido.trim()}`.trim();
+        if (!name || !draft.email.trim()) {
+            toast.danger("Nombre y correo son obligatorios.");
+            return;
+        }
+
+        setSavingProfile(true);
+        try {
+            await api.patch(`/users/${user.id}`, { name, email: draft.email.trim() });
+            setData(draft);
+            setEditing(false);
+            signIn({ ...user, name, email: draft.email.trim() });
+            toast.success("Perfil actualizado");
+        } catch (err) {
+            toast.danger(err instanceof ApiError ? err.message : "No se pudo actualizar el perfil");
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const updatePassword = async () => {
+        if (!user?.id) {
+            toast.danger("Tu sesión no tiene un id válido. Cierra sesión y vuelve a iniciarla.");
+            return;
+        }
+        if (!currentPassword) {
+            toast.danger("Ingresa tu contraseña actual.");
+            return;
+        }
+        if (newPassword.length < 8) {
+            toast.danger("La nueva contraseña debe tener al menos 8 caracteres.");
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast.danger("La confirmación no coincide con la nueva contraseña.");
+            return;
+        }
+
+        setSavingPassword(true);
+        try {
+            // Verifica la contraseña actual llamando a /auth/login directo (sin
+            // useApi): si se usara useApi y la contraseña actual estuviera mal,
+            // el 401 dispararía su signOut() automático y cerraría la sesión
+            // válida que ya tenía el usuario — justo lo que no queremos aquí.
+            const verifyRes = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: user.email, password: currentPassword }),
+            });
+            if (verifyRes.status === 401) {
+                toast.danger("Tu contraseña actual no es correcta.");
+                return;
+            }
+            if (!verifyRes.ok) {
+                toast.danger("No se pudo verificar tu contraseña actual.");
+                return;
+            }
+
+            await api.patch(`/users/${user.id}`, { password: newPassword });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            toast.success("Contraseña actualizada");
+        } catch (err) {
+            toast.danger(err instanceof ApiError ? err.message : "No se pudo actualizar la contraseña");
+        } finally {
+            setSavingPassword(false);
+        }
     };
 
     if (!open || !user) return null;
@@ -95,25 +169,25 @@ export function ProfileModal({ open, onClose }: ProfileModalProps) {
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                                 {!editing ? (
-                                    <Button size="sm" variant="secondary" onPress={startEdit}>
-                                        <Pencil />
+                                    <Button size="sm" variant="secondary" className="h-7 px-2.5 text-xs gap-1.5" onPress={startEdit}>
+                                        <Pencil className="size-3.5" />
                                         Editar perfil
                                     </Button>
                                 ) : (
                                     <>
-                                        <Button size="sm" variant="ghost" onPress={cancelEdit}>
+                                        <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onPress={cancelEdit} isDisabled={savingProfile}>
                                             Cancelar
                                         </Button>
-                                        <Button size="sm" onPress={saveEdit}>
-                                            <Check />
-                                            Guardar
+                                        <Button size="sm" className="h-7 px-2.5 text-xs gap-1.5" onPress={saveEdit} isDisabled={savingProfile}>
+                                            <Check className="size-3.5" />
+                                            {savingProfile ? "Guardando..." : "Guardar"}
                                         </Button>
                                     </>
                                 )}
-                                <Button size="sm" variant="ghost" isIconOnly onPress={onClose}>
-                                    <X />
+                                <Button size="sm" variant="ghost" isIconOnly className="size-7" onPress={onClose}>
+                                    <X className="size-3.5" />
                                 </Button>
                             </div>
                         </div>
@@ -141,13 +215,9 @@ export function ProfileModal({ open, onClose }: ProfileModalProps) {
                                     <Label>Apellido</Label>
                                     <Input value={editing ? draft.apellido : data.apellido} onChange={set("apellido")} />
                                 </TextField>
-                                <TextField isDisabled={!editing}>
+                                <TextField isDisabled={!editing} className="col-span-2">
                                     <Label>Correo electrónico</Label>
                                     <Input type="email" value={editing ? draft.email : data.email} onChange={set("email")} />
-                                </TextField>
-                                <TextField isDisabled={!editing}>
-                                    <Label>Teléfono</Label>
-                                    <Input value={editing ? draft.telefono : data.telefono} onChange={set("telefono")} />
                                 </TextField>
                             </div>
                         </div>
@@ -184,9 +254,9 @@ export function ProfileModal({ open, onClose }: ProfileModalProps) {
                                 </TextField>
                             </div>
                             <div className="flex justify-end">
-                                <Button size="sm" variant="secondary" onPress={updatePassword}>
-                                    <KeyRound />
-                                    Actualizar contraseña
+                                <Button size="sm" variant="secondary" className="h-7 px-2.5 text-xs gap-1.5" onPress={updatePassword} isDisabled={savingPassword}>
+                                    <KeyRound className="size-3.5" />
+                                    {savingPassword ? "Actualizando..." : "Actualizar contraseña"}
                                 </Button>
                             </div>
                         </div>

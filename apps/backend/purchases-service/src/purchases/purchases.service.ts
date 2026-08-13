@@ -243,9 +243,19 @@ export class PurchasesService {
   ) {
     const isAdmin = requester.role === AUTH_ROLES.ADMIN;
 
-    // Cada quien ve solo sus compras; el ADMIN ve todas.
+    // El ORGANIZER puede ver TODAS las compras de un evento (no solo las
+    // propias), pero únicamente si ese evento es suyo.
+    const isOrganizerViewingOwnEvent =
+      !isAdmin && requester.role === AUTH_ROLES.ORGANIZER && Boolean(eventId);
+
+    if (isOrganizerViewingOwnEvent) {
+      await this.assertOrganizerOwnsEvent(eventId as string, requester.sub);
+    }
+
+    // Cada quien ve solo sus compras; el ADMIN ve todas; el ORGANIZER ve
+    // todas las de su propio evento (ya verificado arriba).
     const where = {
-      ...(isAdmin ? {} : { userId: requester.sub }),
+      ...(isAdmin || isOrganizerViewingOwnEvent ? {} : { userId: requester.sub }),
       ...(eventId ? { eventId } : {}),
     };
 
@@ -281,7 +291,21 @@ export class PurchasesService {
     return response;
   }
 
-  async getStats(eventId?: string): Promise<PurchasesStatsResponseDto> {
+  async getStats(
+    requester: AuthenticatedUser,
+    eventId?: string,
+  ): Promise<PurchasesStatsResponseDto> {
+    if (requester.role !== AUTH_ROLES.ADMIN) {
+      // Un ORGANIZER solo puede pedir las métricas de UN evento (el suyo),
+      // nunca las globales de la plataforma.
+      if (!eventId) {
+        throw new ForbiddenException(
+          'Debes indicar un eventId para consultar estas métricas',
+        );
+      }
+      await this.assertOrganizerOwnsEvent(eventId, requester.sub);
+    }
+
     const cacheKey = eventId ? this.eventStatsCacheKey(eventId) : STATS_CACHE_KEY;
     const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
     if (cached) return cached;
@@ -332,6 +356,40 @@ export class PurchasesService {
 
   private eventStatsCacheKey(eventId: string) {
     return `purchases:stats:event:${eventId}`;
+  }
+
+  /**
+   * eventId es un id "opaco" a venues-events-service (microservicios
+   * separados, sin FK): para saber si el evento es del ORGANIZER que
+   * pregunta, se le pide directo a ese servicio por su endpoint público
+   * GET /events/:id (no requiere auth) y se compara organizerId.
+   */
+  private async assertOrganizerOwnsEvent(eventId: string, organizerId: string) {
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/events/${eventId}`);
+    } catch {
+      throw new NotFoundException(
+        'No se pudo verificar el evento (venues-events-service no responde)',
+      );
+    }
+
+    if (response.status === 404) {
+      throw new NotFoundException(`Event ${eventId} no existe`);
+    }
+    if (!response.ok) {
+      throw new NotFoundException('No se pudo verificar el evento');
+    }
+
+    const event = (await response.json()) as { organizerId?: string };
+
+    if (event.organizerId !== organizerId) {
+      throw new ForbiddenException(
+        'Solo puedes consultar las compras de tus propios eventos',
+      );
+    }
   }
 
   async findOne(id: string, requester: AuthenticatedUser) {

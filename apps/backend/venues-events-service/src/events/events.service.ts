@@ -347,6 +347,36 @@ export class EventsService {
     return event;
   }
 
+  /**
+   * Actualiza imageUrl con la imagen recién subida a disco (ver
+   * events.controller.ts#uploadImage). No pasa por UpdateEventDto porque el
+   * valor lo arma este método (siempre una URL válida hacia
+   * GET /events/images/:filename), no algo que mande el cliente.
+   */
+  async setImage(id: string, filename: string, userId: string) {
+    await this.findOneFromDatabase(id);
+
+    const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:3001';
+    const imageUrl = `${gatewayUrl}/events/images/${filename}`;
+
+    const event = await this.prisma.event.update({
+      where: {
+        id,
+      },
+      data: {
+        imageUrl,
+        lastModifiedBy: userId,
+      },
+      include: {
+        venue: true,
+      },
+    });
+
+    await this.invalidateEventCache(id);
+
+    return event;
+  }
+
   async updateStatus(id: string, status: EventStatus, userId: string) {
     const currentEvent = await this.findOneFromDatabase(id);
 
@@ -398,11 +428,22 @@ export class EventsService {
       );
     }
 
-    await this.prisma.event.delete({
-      where: {
-        id,
-      },
-    });
+    // event_category_assignments apunta al evento con onDelete: Restrict (a
+    // propósito, para no perder el historial en el caso normal). Al borrar
+    // un DRAFT/CANCELED sin zonas no hay nada que proteger ahí, así que se
+    // limpia antes o la base rechaza el delete con un error crudo.
+    await this.prisma.$transaction([
+      this.prisma.eventCategoryAssignment.deleteMany({
+        where: {
+          eventId: id,
+        },
+      }),
+      this.prisma.event.delete({
+        where: {
+          id,
+        },
+      }),
+    ]);
 
     await this.invalidateEventCache(id);
 

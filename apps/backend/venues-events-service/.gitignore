@@ -3,3 +3,6 @@ node_modules
 .env
 
 /generated/prisma
+
+# Imágenes de eventos subidas localmente (no son código, no van al repo)
+/uploads

@@ -1,66 +1,86 @@
-import { useState } from "react";
-import { Icon, ListBox, Select, SearchField, Table } from "@nextticket-frontend/commons";
+import { useEffect, useState } from "react";
+import { ApiError, Button, Chip, Icon, ListBox, Select, Table, useApi, useSession } from "@nextticket-frontend/commons";
+import { useEventSalesSummary, type ApiPurchaseStatus } from "@nextticket-frontend/tickets-front";
+import type { ApiEvent } from "../api";
 
-const EVENTOS_SELECT = ["Neon Nights Festival 2024", "Clásicos de Otoño: Orquesta", "Rock Revolution Tour", "Electronic Beach Party"];
+// El backend no soporta busqueda por texto en la query todavia (solo
+// page/limit): se trae una sola pagina grande, mismo patron que MyEvents.
+const FETCH_LIMIT = 100;
 
-interface ZonaData {
-  label: string;
-  count: number;
+interface Paginated<T> {
+  data: T[];
 }
 
-const ZONAS: ZonaData[] = [
-  { label: "VIP Gold", count: 561 },
-  { label: "General A", count: 312 },
-  { label: "General B", count: 187 },
-  { label: "Palcos", count: 188 },
-];
-
-const TOTAL_VENDIDOS = ZONAS.reduce((s, z) => s + z.count, 0);
-
-interface VentaRow {
-  folio: string;
-  zona: string;
-  asiento: string;
-  cliente: string;
-  fecha: string;
-  hora: string;
-  monto: number;
+interface EventOption {
+  id: string;
+  name: string;
 }
 
-const VENTAS: VentaRow[] = [
-  { folio: "#TK-9872", zona: "VIP Gold", asiento: "B-12", cliente: "Juan Pérez", fecha: "26 Oct", hora: "14:20", monto: 2500 },
-  { folio: "#TK-9871", zona: "General A", asiento: "C-08", cliente: "María García", fecha: "26 Oct", hora: "13:45", monto: 800 },
-  { folio: "#TK-9870", zona: "VIP Gold", asiento: "A-01", cliente: "Carlos Slim", fecha: "26 Oct", hora: "12:30", monto: 2500 },
-  { folio: "#TK-9869", zona: "Palcos", asiento: "P-04", cliente: "Lucía Méndez", fecha: "26 Oct", hora: "11:15", monto: 3800 },
-  { folio: "#TK-9868", zona: "General B", asiento: "F-22", cliente: "Roberto Gómez", fecha: "26 Oct", hora: "10:50", monto: 600 },
-  { folio: "#TK-9867", zona: "General A", asiento: "D-11", cliente: "Elena Poniatowska", fecha: "26 Oct", hora: "09:12", monto: 800 },
-  { folio: "#TK-9866", zona: "VIP Gold", asiento: "B-02", cliente: "Diego Luna", fecha: "25 Oct", hora: "22:05", monto: 2500 },
-];
+type ChipColor = "default" | "success" | "warning" | "danger" | "accent";
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+const PURCHASE_STATUS_COLOR: Record<ApiPurchaseStatus, ChipColor> = {
+  PENDING: "warning",
+  CONFIRMED: "success",
+  CANCELED: "danger",
+  REFUNDED: "default",
+};
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value);
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-surface border border-border rounded-[10px] p-3">
-      <p className="text-muted text-[11px] font-semibold uppercase tracking-wide mb-1">{label}</p>
-      <div className="flex items-baseline gap-2">
-        <p className="text-foreground text-lg font-bold">{value}</p>
-        {sub && (
-          <span className="text-success text-[11px] font-semibold flex items-center gap-0.5">
-            <Icon.TrendingUp className="size-3" />
-            {sub}
-          </span>
-        )}
-      </div>
+      <p className="text-muted text-[11px] font-semibold uppercase tracking-wide mb-1 truncate">{label}</p>
+      <p className="text-foreground text-lg font-bold truncate">{value}</p>
     </div>
   );
 }
 
+/*
+ * purchases-service ahora deja a un ORGANIZER consultar /purchases y
+ * /purchases/stats de un eventId, pero solo si ese evento es suyo (verifica
+ * organizerId llamando a venues-events-service). Por eso ya se puede volver
+ * a usar el mismo hook que Admin ("Ver ventas"), con ingreso real (no
+ * estimado) y el listado real de compras.
+ *
+ * Único hueco que queda: el nombre del comprador puede salir como "Un
+ * usuario" en vez del nombre real — GET /users/:id sigue siendo solo
+ * uno-mismo-o-ADMIN, así que si el organizador no es esa persona, la
+ * búsqueda del nombre falla en silencio (el hook ya lo maneja con fallback).
+ */
 export function SalesEvent() {
-  const [selectedEvent, setSelectedEvent] = useState(EVENTOS_SELECT[0]);
-  const [search, setSearch] = useState("");
+  const api = useApi();
+  const { user } = useSession();
 
-  const filteredVentas = VENTAS.filter(
-    (v) => v.folio.toLowerCase().includes(search.toLowerCase()) || v.cliente.toLowerCase().includes(search.toLowerCase()) || v.zona.toLowerCase().includes(search.toLowerCase())
-  );
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setEventsLoading(false);
+      setEventsError("Tu sesión no tiene un id de usuario válido. Cierra sesión y vuelve a iniciarla.");
+      return;
+    }
+
+    setEventsLoading(true);
+    setEventsError(null);
+    api
+      .get<Paginated<ApiEvent>>(`/events?organizerId=${user.id}&limit=${FETCH_LIMIT}`)
+      .then((res) => {
+        const options = res.data.map((ev) => ({ id: ev.id, name: ev.name }));
+        setEvents(options);
+        setSelectedEventId((prev) => prev ?? options[0]?.id);
+      })
+      .catch((err) => setEventsError(err instanceof ApiError ? err.message : "No se pudieron cargar tus eventos"))
+      .finally(() => setEventsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const { data, loading, error, notFound, retry } = useEventSalesSummary(selectedEventId);
 
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-500">
@@ -68,22 +88,32 @@ export function SalesEvent() {
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
           <h3>Ventas por Evento</h3>
-          <p className="text-muted text-xs mt-0.5">{selectedEvent} — resumen de boletos y transacciones</p>
+          <p className="text-muted text-xs mt-0.5">
+            {data ? `${data.event.name} — resumen de boletos y transacciones` : "Selecciona un evento para ver su resumen de ventas"}
+          </p>
         </div>
 
-        <Select className="w-fit" aria-label="Evento" value={selectedEvent} onChange={(v) => v && setSelectedEvent(v as string)}>
+        <Select
+          className="w-fit"
+          aria-label="Evento"
+          value={selectedEventId}
+          onChange={(v) => v && setSelectedEventId(v as string)}
+          isDisabled={eventsLoading || events.length === 0}
+        >
           <Select.Trigger>
             <div className="flex items-center gap-2">
               <Icon.Calendar className="shrink-0 size-3.5" />
-              <Select.Value className="line-clamp-1 max-w-50 text-xs">{() => selectedEvent}</Select.Value>
+              <Select.Value className="line-clamp-1 max-w-50 text-xs">
+                {() => events.find((e) => e.id === selectedEventId)?.name ?? "Sin eventos"}
+              </Select.Value>
             </div>
             <Select.Indicator />
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
-              {EVENTOS_SELECT.map((e) => (
-                <ListBox.Item key={e} id={e} textValue={e}>
-                  {e}
+              {events.map((e) => (
+                <ListBox.Item key={e.id} id={e.id} textValue={e.name}>
+                  {e.name}
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
               ))}
@@ -92,108 +122,129 @@ export function SalesEvent() {
         </Select>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <StatCard label="Boletos Vendidos" value="1.2k" sub="+12%" />
-        <StatCard label="Ventas Totales" value="$150k" sub="+8%" />
-        <StatCard label="Zona Más Vendida" value="VIP Gold" />
-        <StatCard label="Asientos Disponibles" value="450" />
-      </div>
+      {eventsLoading && <p className="text-muted text-xs py-8 text-center">Cargando tus eventos...</p>}
 
-      {/* Ventas por zona + tabla */}
-      <div className="grid md:grid-cols-[240px_1fr] gap-2">
-        <div className="bg-surface border border-border rounded-[10px] p-3">
-          <p className="text-foreground font-semibold text-xs mb-2">Ventas por Zona</p>
-          <div className="flex flex-col gap-2">
-            {ZONAS.map((z) => {
-              const pct = Math.round((z.count / TOTAL_VENDIDOS) * 100);
-              return (
-                <div key={z.label} className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-muted">{z.label}</span>
-                    <span className="text-foreground font-medium">{z.count.toLocaleString()}</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-default overflow-hidden">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 pt-2 border-t border-border flex justify-between text-[11px]">
-            <span className="text-muted uppercase tracking-wide font-semibold">Total</span>
-            <span className="text-foreground font-bold">{TOTAL_VENDIDOS.toLocaleString()}</span>
-          </div>
+      {!eventsLoading && eventsError && <p className="text-muted text-xs py-8 text-center">{eventsError}</p>}
+
+      {!eventsLoading && !eventsError && events.length === 0 && (
+        <p className="text-muted text-xs py-8 text-center">Todavía no tienes eventos. Crea uno en "Mis Eventos" para ver sus ventas aquí.</p>
+      )}
+
+      {!eventsLoading && !eventsError && events.length > 0 && loading && (
+        <p className="text-muted text-xs py-8 text-center">Cargando resumen de ventas...</p>
+      )}
+
+      {!eventsLoading && !eventsError && events.length > 0 && notFound && (
+        <p className="text-muted text-xs py-8 text-center">Este evento ya no existe.</p>
+      )}
+
+      {!eventsLoading && !eventsError && events.length > 0 && !loading && !notFound && (error || !data) && (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-muted text-xs text-center">{error ?? "No se pudo cargar el resumen de ventas"}</p>
+          <Button size="sm" onPress={retry}>
+            Reintentar
+          </Button>
         </div>
+      )}
 
-        <div className="flex flex-col gap-2">
-          <SearchField name="search-sales" className="max-w-80" value={search} onChange={setSearch}>
-            <SearchField.Group>
-              <SearchField.SearchIcon>
-                <Icon.Search />
-              </SearchField.SearchIcon>
-              <SearchField.Input placeholder="Buscar folio, cliente..." />
-              <SearchField.ClearButton>
-                <Icon.X />
-              </SearchField.ClearButton>
-            </SearchField.Group>
-          </SearchField>
+      {!eventsLoading && !eventsError && data && (
+        <>
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <StatCard label="Boletos Vendidos" value={data.metrics.sold.toLocaleString()} />
+            <StatCard label="Ventas Totales" value={formatCurrency(data.metrics.totalRevenue)} />
+            <StatCard label="Ocupación" value={`${data.metrics.occupancyPercentage}%`} />
+            <StatCard label="Asientos Disponibles" value={data.metrics.available.toLocaleString()} />
+          </div>
 
-          <Table>
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Ventas recientes" className="min-w-140 text-xs">
-                <Table.Header>
-                  <Table.Column isRowHeader id="folio" minWidth={90} className="text-center">
-                    Folio
-                  </Table.Column>
-                  <Table.Column id="zona" minWidth={100} className="text-center">
-                    Zona
-                  </Table.Column>
-                  <Table.Column id="asiento" minWidth={70} className="text-center">
-                    Asiento
-                  </Table.Column>
-                  <Table.Column id="cliente" minWidth={140} className="text-center">
-                    Cliente
-                  </Table.Column>
-                  <Table.Column id="fecha" minWidth={80} className="text-center">
-                    Fecha
-                  </Table.Column>
-                  <Table.Column id="monto" minWidth={80} className="text-center">
-                    Monto
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body items={filteredVentas}>
-                  {(v) => (
-                    <Table.Row>
-                      <Table.Cell className="text-center">
-                        <span className="font-mono text-xs text-foreground">{v.folio}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-default text-foreground">{v.zona}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <span className="text-xs">{v.asiento}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <span className="text-xs">{v.cliente}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <div>
-                          <p className="text-foreground text-xs">{v.fecha}</p>
-                          <p className="text-muted text-[11px]">{v.hora}</p>
+          {/* Ventas por zona + compras recientes */}
+          <div className="grid md:grid-cols-[240px_1fr] gap-2">
+            <div className="bg-surface border border-border rounded-[10px] p-3">
+              <p className="text-foreground font-semibold text-xs mb-2">Ventas por Zona</p>
+              {data.zones.length === 0 ? (
+                <p className="text-muted text-xs py-4 text-center">Sin zonas configuradas.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {data.zones.map((z) => {
+                    const pct = z.capacity > 0 ? Math.round((z.sold / z.capacity) * 100) : 0;
+                    return (
+                      <div key={z.zoneId} className="flex flex-col gap-1">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-muted truncate">{z.label}</span>
+                          <span className="text-foreground font-medium">{z.sold.toLocaleString()}</span>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <span className="text-foreground text-xs font-semibold">${v.monto.toLocaleString()}</span>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </div>
-      </div>
+                        <div className="h-1 rounded-full bg-default overflow-hidden">
+                          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-3 pt-2 border-t border-border flex justify-between text-[11px]">
+                <span className="text-muted uppercase tracking-wide font-semibold">Total</span>
+                <span className="text-foreground font-bold">{data.metrics.sold.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Table>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="Compras recientes" className="min-w-140 text-xs">
+                    <Table.Header>
+                      <Table.Column isRowHeader id="folio" minWidth={90} className="text-center">
+                        Folio
+                      </Table.Column>
+                      <Table.Column id="buyer" minWidth={140} className="text-center">
+                        Comprador
+                      </Table.Column>
+                      <Table.Column id="quantity" minWidth={80} className="text-center">
+                        Cantidad
+                      </Table.Column>
+                      <Table.Column id="total" minWidth={90} className="text-center">
+                        Total
+                      </Table.Column>
+                      <Table.Column id="date" minWidth={110} className="text-center">
+                        Fecha
+                      </Table.Column>
+                      <Table.Column id="status" minWidth={100} className="text-center">
+                        Estado
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body items={data.recentPurchases}>
+                      {(purchase) => (
+                        <Table.Row>
+                          <Table.Cell className="text-center">
+                            <span className="font-mono text-xs text-foreground">{purchase.folio}</span>
+                          </Table.Cell>
+                          <Table.Cell className="text-center">
+                            <span className="text-xs">{purchase.buyer}</span>
+                          </Table.Cell>
+                          <Table.Cell className="text-center">
+                            <span className="text-xs">{purchase.quantity}</span>
+                          </Table.Cell>
+                          <Table.Cell className="text-center">
+                            <span className="text-foreground text-xs font-semibold">{formatCurrency(purchase.total)}</span>
+                          </Table.Cell>
+                          <Table.Cell className="text-center">
+                            <span className="text-xs">{purchase.date}</span>
+                          </Table.Cell>
+                          <Table.Cell className="text-center">
+                            <Chip size="sm" variant="soft" color={PURCHASE_STATUS_COLOR[purchase.status]}>
+                              {purchase.statusLabel}
+                            </Chip>
+                          </Table.Cell>
+                        </Table.Row>
+                      )}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+              {data.recentPurchases.length === 0 && <p className="text-muted text-xs py-4 text-center">Este evento todavía no tiene compras.</p>}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

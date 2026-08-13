@@ -52,6 +52,7 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
       // Se guarda la sesión antes de navegar: así cada layout sabe quién entró
       // y el usuario llega a su pantalla ya identificado.
       signIn({
+        id: result.id,
         name: result.name,
         email: result.email,
         role: result.role,

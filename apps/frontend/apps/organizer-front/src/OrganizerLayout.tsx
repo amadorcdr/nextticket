@@ -4,8 +4,8 @@ import { Button, Icon, Logo, Panel, ProfileModal, Router, ScrollShadow, Tabs, To
 const NAV_LINKS = [
   { to: "/organizer/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
   { to: "/organizer/myEvents", icon: Icon.Calendar, label: "Mis Eventos" },
-  { to: "/organizer/salesEvent", icon: Icon.Wallet, label: "Ventas" },
   { to: "/organizer/zonas", icon: Icon.LayoutGrid, label: "Zonas de Venta" },
+  { to: "/organizer/salesEvent", icon: Icon.Wallet, label: "Ventas" },
 ];
 
 export function OrganizerLayout() {
