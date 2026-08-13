@@ -1,5 +1,5 @@
 import { Chip, Icon } from "@nextticket-frontend/commons";
-import type { UpcomingEventStatus, UpcomingEventSummary } from "../../mocks/dashboardMocks";
+import type { UpcomingEventStatus, UpcomingEventSummary } from "../../types/dashboard";
 
 type ChipColor = "default" | "success" | "warning" | "danger" | "accent";
 

@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { EventsStatsResponseDto } from './dto/events-stats-response.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import {
@@ -24,7 +25,12 @@ import {
 } from '../common/pagination.helper';
 
 const EVENTS_LIST_CACHE_KEY = 'events:list';
+const EVENTS_STATS_CACHE_KEY = 'events:stats';
 const CATEGORY_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ACTIVE_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.PUBLISHED,
+  EventStatus.SOLD_OUT,
+];
 
 @Injectable()
 export class EventsService {
@@ -112,6 +118,7 @@ export class EventsService {
     status?: EventStatus,
     categoryId?: string,
     categorySlug?: string,
+    upcoming?: boolean,
   ) {
     if (categorySlug && !CATEGORY_SLUG_REGEX.test(categorySlug)) {
       throw new BadRequestException(
@@ -123,7 +130,8 @@ export class EventsService {
       Boolean(organizerId) ||
       Boolean(status) ||
       Boolean(categoryId) ||
-      Boolean(categorySlug);
+      Boolean(categorySlug) ||
+      Boolean(upcoming);
 
     /*
      * Solo usamos caché para la página por defecto del listado general sin
@@ -146,6 +154,7 @@ export class EventsService {
     const where = {
       organizerId,
       status,
+      startsAt: upcoming ? { gte: new Date() } : undefined,
       categories:
         categoryId || categorySlug
           ? {
@@ -206,6 +215,38 @@ export class EventsService {
     }
 
     return response;
+  }
+
+  async getStats(): Promise<EventsStatsResponseDto> {
+    const cached = await this.redis.get<EventsStatsResponseDto>(
+      EVENTS_STATS_CACHE_KEY,
+    );
+
+    if (cached) {
+      return cached;
+    }
+
+    const now = new Date();
+
+    const [totalEvents, activeEvents, upcomingEvents] =
+      await this.prisma.$transaction([
+        this.prisma.event.count(),
+        this.prisma.event.count({
+          where: { status: { in: ACTIVE_EVENT_STATUSES } },
+        }),
+        this.prisma.event.count({
+          where: {
+            status: { in: ACTIVE_EVENT_STATUSES },
+            startsAt: { gt: now },
+          },
+        }),
+      ]);
+
+    const stats = { totalEvents, activeEvents, upcomingEvents };
+
+    await this.redis.set(EVENTS_STATS_CACHE_KEY, stats, 30);
+
+    return stats;
   }
 
   async findOne(id: string) {
@@ -552,6 +593,7 @@ export class EventsService {
 
   private async invalidateEventCache(id?: string) {
     await this.redis.del(EVENTS_LIST_CACHE_KEY);
+    await this.redis.del(EVENTS_STATS_CACHE_KEY);
 
     if (id) {
       await this.redis.del(this.getEventCacheKey(id));

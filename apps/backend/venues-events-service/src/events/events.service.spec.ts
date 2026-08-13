@@ -15,7 +15,10 @@ describe('EventsService', () => {
     event: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
 
   const redis = {
@@ -210,5 +213,76 @@ describe('EventsService', () => {
 
     expect(prisma.event.update).not.toHaveBeenCalled();
     expect(prisma.event.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  describe('getStats', () => {
+    it('returns aggregated counts and caches the result', async () => {
+      redis.get.mockResolvedValueOnce(null);
+      prisma.$transaction.mockResolvedValueOnce([24, 9, 6]);
+
+      await expect(service.getStats()).resolves.toEqual({
+        totalEvents: 24,
+        activeEvents: 9,
+        upcomingEvents: 6,
+      });
+
+      expect(redis.set).toHaveBeenCalledWith(
+        'events:stats',
+        { totalEvents: 24, activeEvents: 9, upcomingEvents: 6 },
+        30,
+      );
+    });
+
+    it('returns the cached value without touching the database', async () => {
+      redis.get.mockResolvedValueOnce({
+        totalEvents: 1,
+        activeEvents: 1,
+        upcomingEvents: 1,
+      });
+
+      await expect(service.getStats()).resolves.toEqual({
+        totalEvents: 1,
+        activeEvents: 1,
+        upcomingEvents: 1,
+      });
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll upcoming filter', () => {
+    it('adds a startsAt >= now filter when upcoming is true', async () => {
+      prisma.$transaction.mockResolvedValueOnce([[], 0]);
+
+      await service.findAll(
+        { page: 1, limit: 20 },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true,
+      );
+
+      expect(prisma.event.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            startsAt: expect.objectContaining({ gte: expect.any(Date) }),
+          }),
+        }),
+      );
+    });
+
+    it('does not filter by date when upcoming is not set', async () => {
+      redis.get.mockResolvedValueOnce(null);
+      prisma.$transaction.mockResolvedValueOnce([[], 0]);
+
+      await service.findAll({ page: 1, limit: 20 });
+
+      expect(prisma.event.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ startsAt: undefined }),
+        }),
+      );
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { Icon } from "@nextticket-frontend/commons";
-import type { ActivityType, RecentActivityItem } from "../../mocks/dashboardMocks";
+import type { ActivityType, RecentActivityItem } from "../../types/dashboard";
 
 const ACTIVITY_META: Record<ActivityType, { icon: typeof Icon.Circle; className: string }> = {
     compra: { icon: Icon.ShoppingCart, className: "bg-success/10 text-success" },

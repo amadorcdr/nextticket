@@ -28,6 +28,8 @@ describe('PurchasesService', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      aggregate: jest.fn(),
+      count: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -244,5 +246,47 @@ describe('PurchasesService', () => {
         paymentResult: expect.objectContaining({ approved: false }),
       }),
     );
+  });
+
+  describe('getStats', () => {
+    it('sums confirmed revenue and counts recent purchases', async () => {
+      redis.get.mockResolvedValueOnce(null);
+      prisma.$transaction.mockResolvedValueOnce([{ _sum: { total: '3420500.00' } }, 37]);
+
+      await expect(service.getStats()).resolves.toEqual({
+        totalRevenue: 3420500,
+        recentPurchasesCount: 37,
+      });
+
+      expect(redis.set).toHaveBeenCalledWith(
+        'purchases:stats',
+        { totalRevenue: 3420500, recentPurchasesCount: 37 },
+        30,
+      );
+    });
+
+    it('returns zero revenue when there are no confirmed purchases', async () => {
+      redis.get.mockResolvedValueOnce(null);
+      prisma.$transaction.mockResolvedValueOnce([{ _sum: { total: null } }, 0]);
+
+      await expect(service.getStats()).resolves.toEqual({
+        totalRevenue: 0,
+        recentPurchasesCount: 0,
+      });
+    });
+
+    it('returns the cached value without touching the database', async () => {
+      redis.get.mockResolvedValueOnce({
+        totalRevenue: 999,
+        recentPurchasesCount: 1,
+      });
+
+      await expect(service.getStats()).resolves.toEqual({
+        totalRevenue: 999,
+        recentPurchasesCount: 1,
+      });
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 });

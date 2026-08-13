@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseBoolPipe,
   ParseEnumPipe,
   ParseUUIDPipe,
   Patch,
@@ -28,6 +29,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { AssignEventCategoriesDto } from './dto/assign-event-categories.dto';
 import { CreateEventDto } from './dto/create-event.dto';
+import { EventsStatsResponseDto } from './dto/events-stats-response.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
@@ -72,6 +74,11 @@ export class EventsController {
     required: false,
     description: 'Filtrar por slug de categoria',
   })
+  @ApiQuery({
+    name: 'upcoming',
+    required: false,
+    description: 'Si es true, solo incluye eventos cuya fecha de inicio aún no ocurre',
+  })
   findAll(
     @Query() pagination: PaginationQueryDto,
     @Query('organizerId', new ParseUUIDPipe({ optional: true }))
@@ -82,6 +89,8 @@ export class EventsController {
     categoryId?: string,
     @Query('category')
     categorySlug?: string,
+    @Query('upcoming', new ParseBoolPipe({ optional: true }))
+    upcoming?: boolean,
   ) {
     return this.events.findAll(
       pagination,
@@ -89,7 +98,19 @@ export class EventsController {
       status,
       categoryId,
       categorySlug,
+      upcoming,
     );
+  }
+
+  @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Métricas agregadas de eventos para el Dashboard de Administrador',
+  })
+  getStats(): Promise<EventsStatsResponseDto> {
+    return this.events.getStats();
   }
 
   @Get(':id')

@@ -18,6 +18,7 @@ import {
   SimulatedPaymentMethod,
 } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
+import { PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -28,7 +29,9 @@ import {
 } from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'purchases:list';
+const STATS_CACHE_KEY = 'purchases:stats';
 const BLOCK_TTL_SECONDS = 8 * 60;
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type PaymentDecision = {
   approved: boolean;
@@ -209,6 +212,7 @@ export class PurchasesService {
       );
     }
     await this.redis.del(LIST_CACHE_KEY);
+    await this.redis.del(STATS_CACHE_KEY);
 
     if (!paymentDecision.approved) {
       return {
@@ -268,6 +272,33 @@ export class PurchasesService {
     return response;
   }
 
+  async getStats(): Promise<PurchasesStatsResponseDto> {
+    const cached =
+      await this.redis.get<PurchasesStatsResponseDto>(STATS_CACHE_KEY);
+    if (cached) return cached;
+
+    const since = new Date(Date.now() - RECENT_WINDOW_MS);
+
+    const [revenueAggregate, recentPurchasesCount] =
+      await this.prisma.$transaction([
+        this.prisma.purchase.aggregate({
+          _sum: { total: true },
+          where: { status: 'CONFIRMED' },
+        }),
+        this.prisma.purchase.count({
+          where: { createdAt: { gte: since } },
+        }),
+      ]);
+
+    const stats: PurchasesStatsResponseDto = {
+      totalRevenue: Number(revenueAggregate._sum.total ?? 0),
+      recentPurchasesCount,
+    };
+
+    await this.redis.set(STATS_CACHE_KEY, stats, 30);
+    return stats;
+  }
+
   async findOne(id: string, requester: AuthenticatedUser) {
     const purchase = await this.prisma.purchase.findUnique({
       where: { id },
@@ -293,6 +324,7 @@ export class PurchasesService {
       include: { details: true, payments: true },
     });
     await this.redis.del(LIST_CACHE_KEY);
+    await this.redis.del(STATS_CACHE_KEY);
     return purchase;
   }
 
@@ -303,6 +335,7 @@ export class PurchasesService {
       data: { status: 'CANCELED' },
     });
     await this.redis.del(LIST_CACHE_KEY);
+    await this.redis.del(STATS_CACHE_KEY);
     return { canceled: true };
   }
 

@@ -21,6 +21,7 @@ import { PurchasesService } from './purchases.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
+import { PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 
 @ApiTags('purchases')
@@ -92,6 +93,17 @@ export class PurchasesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.purchases.findAll(pagination, user);
+  }
+
+  @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Métricas agregadas de compras para el Dashboard de Administrador',
+  })
+  getStats(): Promise<PurchasesStatsResponseDto> {
+    return this.purchases.getStats();
   }
 
   @Get(':id')

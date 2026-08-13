@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
+import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
@@ -21,6 +22,7 @@ import {
 } from '../common/pagination.helper';
 
 const LIST_CACHE_KEY = 'tickets:list';
+const STATS_CACHE_KEY = 'tickets:stats';
 const FOLIO_PREFIX = 'TK';
 const SHA_256_HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 
@@ -79,6 +81,7 @@ export class TicketsService {
     });
 
     await this.redis.del(LIST_CACHE_KEY);
+    await this.redis.del(STATS_CACHE_KEY);
     return ticket;
   }
 
@@ -110,6 +113,37 @@ export class TicketsService {
 
     if (useCache) await this.redis.set(LIST_CACHE_KEY, response, 30);
     return response;
+  }
+
+  // ── Aggregated stats for the Admin Dashboard ──────────────
+
+  async getStats(): Promise<TicketsStatsResponseDto> {
+    const cached =
+      await this.redis.get<TicketsStatsResponseDto>(STATS_CACHE_KEY);
+    if (cached) return cached;
+
+    const notCanceled = { status: { not: 'CANCELED' as const } };
+
+    const [totalSold, grouped] = await Promise.all([
+      this.prisma.ticket.count({ where: notCanceled }),
+      this.prisma.ticket.groupBy({
+        by: ['eventZoneId'],
+        where: notCanceled,
+        _count: true,
+        orderBy: { eventZoneId: 'asc' },
+      }),
+    ]);
+
+    const stats: TicketsStatsResponseDto = {
+      totalSold,
+      byEventZone: grouped.map((group) => ({
+        eventZoneId: group.eventZoneId,
+        count: group._count,
+      })),
+    };
+
+    await this.redis.set(STATS_CACHE_KEY, stats, 30);
+    return stats;
   }
 
   // ── Get ticket by ID ─────────────────────────────────────
@@ -186,6 +220,7 @@ export class TicketsService {
       data: { status: dto.status },
     });
     await this.redis.del(LIST_CACHE_KEY);
+    await this.redis.del(STATS_CACHE_KEY);
     return ticket;
   }
 

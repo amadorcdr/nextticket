@@ -22,6 +22,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ParseQrHashPipe } from '../ticket-validations/pipes/parse-qr-hash.pipe';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { TicketsService } from './tickets.service';
 
@@ -89,6 +90,17 @@ export class TicketsController {
   ) {
     this.assertSelfOrAdmin(user, userId);
     return this.tickets.findByUser(userId);
+  }
+
+  @Get('stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Métricas agregadas de boletos para el Dashboard de Administrador',
+  })
+  getStats(): Promise<TicketsStatsResponseDto> {
+    return this.tickets.getStats();
   }
 
   @Get('event-zone/:eventZoneId')
