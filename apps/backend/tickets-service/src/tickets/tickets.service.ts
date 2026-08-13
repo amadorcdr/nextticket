@@ -11,6 +11,10 @@ import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
+import {
+  TicketZoneStatusCountsDto,
+  TicketsEventZoneStatsResponseDto,
+} from './dto/tickets-event-zone-stats-response.dto';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
@@ -144,6 +148,60 @@ export class TicketsService {
 
     await this.redis.set(STATS_CACHE_KEY, stats, 30);
     return stats;
+  }
+
+  // ── Aggregated stats for a single event's sales summary ───
+
+  async getStatsByEventZones(
+    eventZoneIds: string[],
+  ): Promise<TicketsEventZoneStatsResponseDto> {
+    const byZone = new Map<string, TicketZoneStatusCountsDto>(
+      eventZoneIds.map((eventZoneId) => [
+        eventZoneId,
+        { eventZoneId, total: 0, sold: 0, validated: 0, unvalidated: 0, canceled: 0 },
+      ]),
+    );
+
+    if (eventZoneIds.length > 0) {
+      const grouped = await this.prisma.ticket.groupBy({
+        by: ['eventZoneId', 'status'],
+        where: { eventZoneId: { in: eventZoneIds } },
+        _count: true,
+      });
+
+      for (const group of grouped) {
+        const zone = byZone.get(group.eventZoneId);
+        if (!zone) continue;
+
+        zone.total += group._count;
+
+        if (group.status === 'CANCELED') {
+          zone.canceled += group._count;
+        } else {
+          zone.sold += group._count;
+          if (group.status === 'USED') {
+            zone.validated += group._count;
+          } else {
+            // ISSUED o EXPIRED: vendido pero no validado.
+            zone.unvalidated += group._count;
+          }
+        }
+      }
+    }
+
+    const byEventZone = eventZoneIds.map((id) => byZone.get(id)!);
+
+    return byEventZone.reduce<TicketsEventZoneStatsResponseDto>(
+      (acc, zone) => {
+        acc.total += zone.total;
+        acc.sold += zone.sold;
+        acc.validated += zone.validated;
+        acc.unvalidated += zone.unvalidated;
+        acc.canceled += zone.canceled;
+        return acc;
+      },
+      { total: 0, sold: 0, validated: 0, unvalidated: 0, canceled: 0, byEventZone },
+    );
   }
 
   // ── Get ticket by ID ─────────────────────────────────────

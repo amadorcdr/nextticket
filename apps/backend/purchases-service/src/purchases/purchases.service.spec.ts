@@ -31,6 +31,9 @@ describe('PurchasesService', () => {
       aggregate: jest.fn(),
       count: jest.fn(),
     },
+    purchaseDetail: {
+      groupBy: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
   const redis = {
@@ -195,6 +198,7 @@ describe('PurchasesService', () => {
     prisma.purchase.findUnique.mockResolvedValue({
       id: 'purchase-id',
       userId: USER_ID,
+      eventId: '550e8400-e29b-41d4-a716-446655440010',
     });
     prisma.purchase.update.mockResolvedValue({ id: 'purchase-id' });
 
@@ -205,6 +209,9 @@ describe('PurchasesService', () => {
       where: { id: 'purchase-id' },
       data: { status: 'CANCELED' },
     });
+    expect(redis.del).toHaveBeenCalledWith(
+      'purchases:stats:event:550e8400-e29b-41d4-a716-446655440010',
+    );
   });
 
   it('stores a canceled purchase when simulated card is declined', async () => {
@@ -251,7 +258,8 @@ describe('PurchasesService', () => {
   describe('getStats', () => {
     it('sums confirmed revenue and counts recent purchases', async () => {
       redis.get.mockResolvedValueOnce(null);
-      prisma.$transaction.mockResolvedValueOnce([{ _sum: { total: '3420500.00' } }, 37]);
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '3420500.00' } });
+      prisma.purchase.count.mockResolvedValueOnce(37);
 
       await expect(service.getStats()).resolves.toEqual({
         totalRevenue: 3420500,
@@ -263,11 +271,13 @@ describe('PurchasesService', () => {
         { totalRevenue: 3420500, recentPurchasesCount: 37 },
         30,
       );
+      expect(prisma.purchaseDetail.groupBy).not.toHaveBeenCalled();
     });
 
     it('returns zero revenue when there are no confirmed purchases', async () => {
       redis.get.mockResolvedValueOnce(null);
-      prisma.$transaction.mockResolvedValueOnce([{ _sum: { total: null } }, 0]);
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: null } });
+      prisma.purchase.count.mockResolvedValueOnce(0);
 
       await expect(service.getStats()).resolves.toEqual({
         totalRevenue: 0,
@@ -286,7 +296,63 @@ describe('PurchasesService', () => {
         recentPurchasesCount: 1,
       });
 
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.purchase.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('filters revenue and recent count by eventId, and includes zone breakdown', async () => {
+      const eventId = '550e8400-e29b-41d4-a716-446655440010';
+      redis.get.mockResolvedValueOnce(null);
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '1500.00' } });
+      prisma.purchase.count.mockResolvedValueOnce(3);
+      prisma.purchaseDetail.groupBy.mockResolvedValueOnce([
+        { eventZoneId: 'zone-1', _sum: { finalPrice: '1000.00', taxAmount: '160.00' } },
+        { eventZoneId: 'zone-2', _sum: { finalPrice: '500.00', taxAmount: '80.00' } },
+      ]);
+
+      await expect(service.getStats(eventId)).resolves.toEqual({
+        totalRevenue: 1500,
+        recentPurchasesCount: 3,
+        byEventZone: [
+          { eventZoneId: 'zone-1', revenue: 1160 },
+          { eventZoneId: 'zone-2', revenue: 580 },
+        ],
+      });
+
+      expect(prisma.purchase.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'CONFIRMED', eventId }),
+        }),
+      );
+      expect(prisma.purchaseDetail.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['eventZoneId'],
+          where: { purchase: { eventId, status: 'CONFIRMED' } },
+        }),
+      );
+      expect(redis.set).toHaveBeenCalledWith(
+        `purchases:stats:event:${eventId}`,
+        expect.objectContaining({ totalRevenue: 1500 }),
+        30,
+      );
+    });
+  });
+
+  describe('findAll eventId filter', () => {
+    it('filters by eventId and skips the cache', async () => {
+      prisma.$transaction.mockResolvedValueOnce([[], 0]);
+
+      await service.findAll(
+        { page: 1, limit: 20 },
+        { sub: USER_ID, email: 'admin@test.com', role: 'ADMIN' },
+        '550e8400-e29b-41d4-a716-446655440010',
+      );
+
+      expect(redis.get).not.toHaveBeenCalled();
+      expect(prisma.purchase.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { eventId: '550e8400-e29b-41d4-a716-446655440010' },
+        }),
+      );
     });
   });
 });

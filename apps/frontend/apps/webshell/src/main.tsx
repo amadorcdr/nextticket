@@ -4,7 +4,7 @@ import { Router, ThemeProvider, CartProvider, SessionProvider, ToastProvider, Re
 import { App } from './App';
 import { AuthModule, SignIn, SignUp } from "@nextticket-frontend/auth-front";
 import { PurchasesModule } from "@nextticket-frontend/purchases-front";
-import { TicketsModule } from "@nextticket-frontend/tickets-front";
+import { TicketsModule, EventSalesSummary } from "@nextticket-frontend/tickets-front";
 import { VenuesModule, VenueEditView, VenueCanvasCreate, VenueCanvasEdit } from "@nextticket-frontend/venues-front";
 import {
     EventsModule,
@@ -94,6 +94,7 @@ createRoot(document.getElementById('root')!).render(
 
                             <Router.Route path="events/*" element={<EventsModule />} />
                             <Router.Route path="users/*" element={<UsersModule />} />
+                            <Router.Route path="tickets/:eventId" element={<EventSalesSummary />} />
                         </Router.Route>
                     </Router.Route>
 

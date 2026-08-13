@@ -18,7 +18,7 @@ import {
   SimulatedPaymentMethod,
 } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
-import { PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
+import { PurchaseZoneRevenueDto, PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -213,6 +213,7 @@ export class PurchasesService {
     }
     await this.redis.del(LIST_CACHE_KEY);
     await this.redis.del(STATS_CACHE_KEY);
+    await this.redis.del(this.eventStatsCacheKey(dto.eventId));
 
     if (!paymentDecision.approved) {
       return {
@@ -235,18 +236,26 @@ export class PurchasesService {
     };
   }
 
-  async findAll(pagination: PaginationQueryDto, requester: AuthenticatedUser) {
+  async findAll(
+    pagination: PaginationQueryDto,
+    requester: AuthenticatedUser,
+    eventId?: string,
+  ) {
     const isAdmin = requester.role === AUTH_ROLES.ADMIN;
 
     // Cada quien ve solo sus compras; el ADMIN ve todas.
-    const where = isAdmin ? {} : { userId: requester.sub };
+    const where = {
+      ...(isAdmin ? {} : { userId: requester.sub }),
+      ...(eventId ? { eventId } : {}),
+    };
 
     /*
      * La llave de caché es única para todo el servicio, así que solo se
-     * cachea la vista global del ADMIN. Si cacheáramos la de cada usuario
-     * bajo esa misma llave, un usuario vería las compras de otro.
+     * cachea la vista global del ADMIN sin filtros. Si cacheáramos la de
+     * cada usuario o de un eventId bajo esa misma llave, se mezclarían
+     * resultados de vistas distintas.
      */
-    const useCache = isAdmin && isCacheablePage(pagination);
+    const useCache = isAdmin && isCacheablePage(pagination) && !eventId;
 
     if (useCache) {
       const cached =
@@ -272,31 +281,57 @@ export class PurchasesService {
     return response;
   }
 
-  async getStats(): Promise<PurchasesStatsResponseDto> {
-    const cached =
-      await this.redis.get<PurchasesStatsResponseDto>(STATS_CACHE_KEY);
+  async getStats(eventId?: string): Promise<PurchasesStatsResponseDto> {
+    const cacheKey = eventId ? this.eventStatsCacheKey(eventId) : STATS_CACHE_KEY;
+    const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
     if (cached) return cached;
 
     const since = new Date(Date.now() - RECENT_WINDOW_MS);
+    const revenueWhere = {
+      status: 'CONFIRMED' as const,
+      ...(eventId ? { eventId } : {}),
+    };
+    const recentWhere = {
+      createdAt: { gte: since },
+      ...(eventId ? { eventId } : {}),
+    };
 
-    const [revenueAggregate, recentPurchasesCount] =
-      await this.prisma.$transaction([
+    const [revenueAggregate, recentPurchasesCount, zoneRevenue] =
+      await Promise.all([
         this.prisma.purchase.aggregate({
           _sum: { total: true },
-          where: { status: 'CONFIRMED' },
+          where: revenueWhere,
         }),
-        this.prisma.purchase.count({
-          where: { createdAt: { gte: since } },
-        }),
+        this.prisma.purchase.count({ where: recentWhere }),
+        eventId
+          ? this.prisma.purchaseDetail.groupBy({
+              by: ['eventZoneId'],
+              where: { purchase: { eventId, status: 'CONFIRMED' } },
+              _sum: { finalPrice: true, taxAmount: true },
+            })
+          : Promise.resolve(null),
       ]);
+
+    const byEventZone: PurchaseZoneRevenueDto[] | undefined = zoneRevenue
+      ? zoneRevenue.map((zone) => ({
+          eventZoneId: zone.eventZoneId,
+          revenue:
+            Number(zone._sum.finalPrice ?? 0) + Number(zone._sum.taxAmount ?? 0),
+        }))
+      : undefined;
 
     const stats: PurchasesStatsResponseDto = {
       totalRevenue: Number(revenueAggregate._sum.total ?? 0),
       recentPurchasesCount,
+      ...(byEventZone ? { byEventZone } : {}),
     };
 
-    await this.redis.set(STATS_CACHE_KEY, stats, 30);
+    await this.redis.set(cacheKey, stats, 30);
     return stats;
+  }
+
+  private eventStatsCacheKey(eventId: string) {
+    return `purchases:stats:event:${eventId}`;
   }
 
   async findOne(id: string, requester: AuthenticatedUser) {
@@ -317,7 +352,7 @@ export class PurchasesService {
   }
 
   async update(id: string, dto: UpdatePurchaseDto, userId: string) {
-    await this.assertPurchaseBelongsToUser(id, userId);
+    const existing = await this.assertPurchaseBelongsToUser(id, userId);
     const purchase = await this.prisma.purchase.update({
       where: { id },
       data: dto,
@@ -325,17 +360,19 @@ export class PurchasesService {
     });
     await this.redis.del(LIST_CACHE_KEY);
     await this.redis.del(STATS_CACHE_KEY);
+    await this.redis.del(this.eventStatsCacheKey(existing.eventId));
     return purchase;
   }
 
   async remove(id: string, userId: string) {
-    await this.assertPurchaseBelongsToUser(id, userId);
+    const existing = await this.assertPurchaseBelongsToUser(id, userId);
     await this.prisma.purchase.update({
       where: { id },
       data: { status: 'CANCELED' },
     });
     await this.redis.del(LIST_CACHE_KEY);
     await this.redis.del(STATS_CACHE_KEY);
+    await this.redis.del(this.eventStatsCacheKey(existing.eventId));
     return { canceled: true };
   }
 

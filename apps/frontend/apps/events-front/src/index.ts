@@ -5,6 +5,5 @@ export { SeatSelection } from './pages/SeatSelection';
 export { AdminEventsView } from './pages/AdminEventsView';
 export { EventCard } from './components/EventCard';
 export { CLIENT_EVENTS } from './mocks/clientEvents';
-export { ADMIN_EVENTS } from './mocks/adminEvents';
 export type { ClientEvent, ClientEventStatus } from './types/client';
 export type { AdminEvent, AdminEventStatus } from './types/admin';

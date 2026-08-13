@@ -68,9 +68,9 @@ export function AdminEventCard({ event }: { event: AdminEvent }) {
                         size="sm"
                         variant="secondary"
                         fullWidth
-                        render={(domProps: any) => <Router.Link to={`/event/${event.id}`} {...domProps} />}
+                        render={(domProps: any) => <Router.Link to={`/tickets/${event.id}`} {...domProps} />}
                     >
-                        Ver detalles
+                        Ver ventas
                     </Button>
                 </div>
             </div>

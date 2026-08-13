@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -88,11 +88,17 @@ export class PurchasesController {
   @ApiOperation({
     summary: 'Listar compras propias, paginadas (el ADMIN ve todas)',
   })
+  @ApiQuery({
+    name: 'eventId',
+    required: false,
+    description: 'Filtrar por evento',
+  })
   findAll(
     @Query() pagination: PaginationQueryDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Query('eventId', new ParseUUIDPipe({ optional: true })) eventId?: string,
   ) {
-    return this.purchases.findAll(pagination, user);
+    return this.purchases.findAll(pagination, user, eventId);
   }
 
   @Get('stats')
@@ -100,10 +106,17 @@ export class PurchasesController {
   @Roles(AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Métricas agregadas de compras para el Dashboard de Administrador',
+    summary: 'Métricas agregadas de compras para el Dashboard de Administrador o para un evento',
   })
-  getStats(): Promise<PurchasesStatsResponseDto> {
-    return this.purchases.getStats();
+  @ApiQuery({
+    name: 'eventId',
+    required: false,
+    description: 'Si se indica, agrega las métricas solo de ese evento',
+  })
+  getStats(
+    @Query('eventId', new ParseUUIDPipe({ optional: true })) eventId?: string,
+  ): Promise<PurchasesStatsResponseDto> {
+    return this.purchases.getStats(eventId);
   }
 
   @Get(':id')

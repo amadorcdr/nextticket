@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseArrayPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -11,7 +12,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
@@ -23,6 +24,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ParseQrHashPipe } from '../ticket-validations/pipes/parse-qr-hash.pipe';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
+import { TicketsEventZoneStatsResponseDto } from './dto/tickets-event-zone-stats-response.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { TicketsService } from './tickets.service';
 
@@ -101,6 +103,28 @@ export class TicketsController {
   })
   getStats(): Promise<TicketsStatsResponseDto> {
     return this.tickets.getStats();
+  }
+
+  @Get('stats/by-event-zones')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Métricas de boletos agregadas para el resumen de ventas de un evento',
+  })
+  @ApiQuery({
+    name: 'eventZoneIds',
+    description: 'Lista de UUIDs de zonas del evento, separados por coma',
+    example: '550e8400-e29b-41d4-a716-446655440000,550e8400-e29b-41d4-a716-446655440001',
+  })
+  getStatsByEventZones(
+    @Query(
+      'eventZoneIds',
+      new ParseArrayPipe({ items: String, separator: ',', optional: true }),
+    )
+    eventZoneIds: string[] = [],
+  ): Promise<TicketsEventZoneStatsResponseDto> {
+    return this.tickets.getStatsByEventZones(eventZoneIds);
   }
 
   @Get('event-zone/:eventZoneId')
