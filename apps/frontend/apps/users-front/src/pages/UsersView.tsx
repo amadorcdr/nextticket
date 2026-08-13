@@ -94,11 +94,12 @@ export function UsersView() {
                 const created = await api.post<ApiUser>("/users", {
                     name: data.name,
                     email: data.email,
-                    password: data.password,
                     roleId: ROLE_ID_BY_ROLE[data.role],
                 });
                 setUsers((prev) => [toAdminUser(created), ...prev]);
-                toast.success("Usuario creado");
+                toast.success(
+                    `Usuario registrado correctamente. Se envió un correo a ${created.email} para que active su cuenta y establezca su contraseña.`,
+                );
             } else if (selectedUser) {
                 const updated = await api.patch<ApiUser>(`/users/${selectedUser.id}`, {
                     name: data.name,

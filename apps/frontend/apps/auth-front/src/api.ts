@@ -60,3 +60,70 @@ export async function login(email: string, password: string): Promise<LoginResul
     role: ROLE_BY_BACKEND_NAME[data.user.role.name] ?? "usuario",
   };
 }
+
+async function readErrorMessage(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null);
+  const message = Array.isArray(body?.message) ? body.message.join(", ") : body?.message;
+  return message || fallback;
+}
+
+export interface RegisterResult {
+  message: string;
+  email: string;
+}
+
+/**
+ * Autorregistro de Cliente: ya no manda contraseña. La cuenta queda
+ * pendiente y la contraseña se establece al activarla (ver activateAccount).
+ */
+export async function register(name: string, email: string): Promise<RegisterResult> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "No se pudo completar el registro. Intenta de nuevo."));
+  }
+
+  return response.json();
+}
+
+/**
+ * Único mecanismo de activación: lo usa tanto el autorregistro de Cliente
+ * como el alta de Organizador/Validador desde el panel de Administración.
+ */
+export async function activateAccount(
+  token: string,
+  password: string,
+  confirmPassword: string,
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password, confirmPassword }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(response, "No se pudo activar la cuenta. Intenta de nuevo más tarde."),
+    );
+  }
+
+  return response.json();
+}
+
+export async function resendActivation(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/resend-activation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "No se pudo reenviar el correo de activación."));
+  }
+
+  return response.json();
+}

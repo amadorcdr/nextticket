@@ -6,6 +6,7 @@ import {
 import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { ActivationService } from '../activation/activation.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
@@ -25,6 +26,7 @@ const USER_PUBLIC_SELECT = {
   createdBy: true,
   lastModifiedBy: true,
   status: true,
+  accountStatus: true,
   updatedAt: true,
   name: true,
   email: true,
@@ -58,6 +60,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly activation: ActivationService,
   ) {}
 
   async ensureDefaultRoles() {
@@ -102,13 +105,24 @@ export class UsersService {
     });
   }
 
+  /**
+   * Alta administrativa: crea al usuario como PENDING (sin contraseña) y
+   * dispara el correo de activación. Es el mismo camino que usa el
+   * autorregistro de Cliente (ver AuthService.register) — la única
+   * diferencia entre roles es quién llama a este método.
+   */
   async create(dto: CreateUserDto, createdBy?: string | null) {
-    return this.createLocalUser(dto, createdBy);
+    const user = await this.createLocalUser(dto, createdBy);
+    await this.activation.issueAndSendActivation(user);
+    return user;
   }
 
-  async createLocalUser(dto: CreateUserDto, createdBy?: string | null) {
+  /** Crea la cuenta local en estado PENDING; nunca recibe ni guarda contraseña. */
+  async createLocalUser(
+    dto: { name: string; email: string; roleId?: string },
+    createdBy?: string | null,
+  ) {
     const role = await this.resolveRole(dto.roleId);
-    const password = await hash(dto.password, 10);
 
     let user: PublicUser;
     try {
@@ -116,7 +130,8 @@ export class UsersService {
         data: {
           name: dto.name,
           email: dto.email,
-          password,
+          password: null,
+          accountStatus: 'PENDING',
           roleId: role.id,
           provider: 'LOCAL',
           providerId: null,
@@ -132,6 +147,24 @@ export class UsersService {
       }
       throw error;
     }
+
+    await this.redis.del(LIST_CACHE_KEY);
+    return user;
+  }
+
+  /**
+   * Cierra el flujo de activación: hashea la contraseña que eligió el
+   * propio usuario y pasa la cuenta de PENDING a ACTIVE. El token que
+   * autoriza esta llamada ya se validó y consumió en ActivationService.
+   */
+  async setPasswordAndActivate(id: string, password: string) {
+    const hashed = await hash(password, 10);
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { password: hashed, accountStatus: 'ACTIVE' },
+      select: USER_PUBLIC_SELECT,
+    });
 
     await this.redis.del(LIST_CACHE_KEY);
     return user;
@@ -157,6 +190,9 @@ export class UsersService {
             providerId: input.providerId,
             lastModifiedBy: input.createdBy ?? null,
             roleId: existingByEmail.roleId ?? role.id,
+            // Iniciar sesión con Google ya prueba que el correo es suyo:
+            // no tiene sentido dejarlo colgado en PENDING sin poder activarse.
+            accountStatus: 'ACTIVE',
           },
           select: USER_PUBLIC_SELECT,
         })
@@ -242,6 +278,9 @@ export class UsersService {
 
     if (dto.password) {
       data.password = await hash(dto.password, 10);
+      // Si alguien le pone contraseña a una cuenta PENDING por esta vía,
+      // ya puede iniciar sesión: no debe quedar marcada como pendiente.
+      data.accountStatus = 'ACTIVE';
     }
 
     const user = await this.prisma.user.update({

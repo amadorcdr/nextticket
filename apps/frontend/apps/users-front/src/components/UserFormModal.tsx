@@ -9,7 +9,12 @@ export interface UserFormValues {
     name: string;
     email: string;
     role: AdminUserRole;
-    /** Solo se envía si se llenó: en editar es opcional, en crear es obligatorio. */
+    /**
+     * Solo aplica al editar: restablece la contraseña de una cuenta ya
+     * activa. Al crear, el usuario la establece él mismo desde el correo
+     * de activación (ver ActivationService en el backend), así que este
+     * campo ni se muestra ni se envía.
+     */
     password: string;
 }
 
@@ -40,12 +45,14 @@ export function UserFormModal({ open, mode, user, saving, onClose, onSave }: Use
 
     const isCreate = mode === "create";
     const title = isCreate ? "Crear Usuario" : "Editar Usuario";
-    const subtitle = isCreate ? "Da de alta una nueva cuenta en la plataforma." : "Modifica los datos de la cuenta.";
+    const subtitle = isCreate
+        ? "Se enviará un correo para que la persona active su cuenta y establezca su contraseña."
+        : "Modifica los datos de la cuenta.";
 
     const set = (k: "name" | "email" | "password") => (e: React.ChangeEvent<HTMLInputElement>) =>
         setDraft((p) => ({ ...p, [k]: e.target.value }));
 
-    const canSave = draft.name.trim() && draft.email.trim() && (!isCreate || draft.password.trim().length >= 8);
+    const canSave = draft.name.trim() && draft.email.trim() && (isCreate || !draft.password.trim() || draft.password.trim().length >= 8);
 
     const handleSave = () => {
         if (!canSave) return;
@@ -88,34 +95,44 @@ export function UserFormModal({ open, mode, user, saving, onClose, onSave }: Use
                             <Input placeholder="nombre@ejemplo.com" value={draft.email} onChange={set("email")} />
                         </TextField>
 
-                        <TextField name="password">
-                            <div className="flex items-center gap-1">
-                                <Label>{isCreate ? "Contraseña" : "Nueva contraseña (opcional)"}</Label>
-                                <Tooltip>
-                                    <Tooltip.Trigger>
-                                        <Icon.Info className="size-3.5 text-muted" />
-                                    </Tooltip.Trigger>
-                                    <Tooltip.Content>Mínimo 8 caracteres</Tooltip.Content>
-                                </Tooltip>
+                        {isCreate ? (
+                            <div className="flex items-start gap-2 text-xs text-muted bg-accent/5 border border-accent/15 rounded-[10px] px-3 py-2">
+                                <Icon.Mail className="size-4 shrink-0 mt-0.5 text-accent" />
+                                <span>
+                                    La persona recibirá un correo con un enlace para activar su cuenta y establecer su
+                                    propia contraseña.
+                                </span>
                             </div>
-                            <InputGroup>
-                                <InputGroup.Input
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="••••••••"
-                                    value={draft.password}
-                                    onChange={set("password")}
-                                />
-                                <InputGroup.Suffix>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword((v) => !v)}
-                                        className="text-muted hover:text-foreground transition-colors"
-                                    >
-                                        {showPassword ? <Icon.EyeOff className="size-4" /> : <Icon.Eye className="size-4" />}
-                                    </button>
-                                </InputGroup.Suffix>
-                            </InputGroup>
-                        </TextField>
+                        ) : (
+                            <TextField name="password">
+                                <div className="flex items-center gap-1">
+                                    <Label>Nueva contraseña (opcional)</Label>
+                                    <Tooltip>
+                                        <Tooltip.Trigger>
+                                            <Icon.Info className="size-3.5 text-muted" />
+                                        </Tooltip.Trigger>
+                                        <Tooltip.Content>Mínimo 8 caracteres</Tooltip.Content>
+                                    </Tooltip>
+                                </div>
+                                <InputGroup>
+                                    <InputGroup.Input
+                                        type={showPassword ? "text" : "password"}
+                                        placeholder="••••••••"
+                                        value={draft.password}
+                                        onChange={set("password")}
+                                    />
+                                    <InputGroup.Suffix>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword((v) => !v)}
+                                            className="text-muted hover:text-foreground transition-colors"
+                                        >
+                                            {showPassword ? <Icon.EyeOff className="size-4" /> : <Icon.Eye className="size-4" />}
+                                        </button>
+                                    </InputGroup.Suffix>
+                                </InputGroup>
+                            </TextField>
+                        )}
 
                         <div>
                             <Label>Rol</Label>

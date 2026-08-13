@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { hash } from 'bcryptjs';
 import { decode } from 'jsonwebtoken';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
+import { ActivationService } from '../activation/activation.service';
 import { AuthService } from './auth.service';
 import { AUTH_PROVIDERS } from './auth.constants';
 
@@ -21,6 +22,7 @@ describe('AuthService', () => {
     createLocalUser: jest.fn(),
     findByEmailForAuth: jest.fn(),
     findPublicById: jest.fn(),
+    setPasswordAndActivate: jest.fn(),
     upsertOAuthUser: jest.fn(),
   };
 
@@ -42,10 +44,16 @@ describe('AuthService', () => {
     del: jest.fn(),
   };
 
+  const activation = {
+    issueAndSendActivation: jest.fn(),
+    consumeToken: jest.fn(),
+  };
+
   const publicUser = {
     id: USER_ID,
     name: 'Aidee',
     email: 'aidee@test.com',
+    accountStatus: 'PENDING',
     role: { id: 'role-id', name: 'CLIENT' },
   };
 
@@ -61,6 +69,7 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: usersService },
         { provide: ConfigService, useValue: config },
         { provide: RedisService, useValue: redis },
+        { provide: ActivationService, useValue: activation },
       ],
     }).compile();
 
@@ -68,41 +77,110 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('never returns the password and issues a token with sub, email and role', async () => {
+    it('creates the user as PENDING and sends the activation email, without logging in', async () => {
       usersService.createLocalUser.mockResolvedValue(publicUser);
 
       const result = await service.register({
         name: 'Aidee',
         email: 'aidee@test.com',
-        password: PASSWORD,
       } as never);
 
-      expect(JSON.stringify(result)).not.toContain(PASSWORD);
-      expect(result.user).not.toHaveProperty('password');
+      expect(activation.issueAndSendActivation).toHaveBeenCalledWith(publicUser);
+      expect(result).not.toHaveProperty('token');
+      expect(result.email).toBe('aidee@test.com');
+    });
+  });
 
-      const payload = decode(result.token) as Record<string, unknown>;
-      expect(payload).toEqual(
-        expect.objectContaining({
-          sub: USER_ID,
-          email: 'aidee@test.com',
-          role: 'CLIENT',
-        }),
-      );
-      expect(payload.exp).toBeDefined();
+  describe('resendActivation', () => {
+    it('resends the activation email for a PENDING account', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue(publicUser);
+
+      await service.resendActivation('aidee@test.com');
+
+      expect(activation.issueAndSendActivation).toHaveBeenCalledWith(publicUser);
     });
 
-    it('delegates hashing to UsersService instead of storing plain text', async () => {
-      usersService.createLocalUser.mockResolvedValue(publicUser);
+    it('does nothing (but still answers success) for an unknown email', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue(null);
 
-      await service.register({
-        name: 'Aidee',
-        email: 'aidee@test.com',
+      const result = await service.resendActivation('nadie@test.com');
+
+      expect(activation.issueAndSendActivation).not.toHaveBeenCalled();
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('does nothing for an already ACTIVE account', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'ACTIVE',
+      });
+
+      await service.resendActivation('aidee@test.com');
+
+      expect(activation.issueAndSendActivation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('activateAccount', () => {
+    it('rejects mismatched passwords before touching the token', async () => {
+      await expect(
+        service.activateAccount({
+          token: 'abc',
+          password: PASSWORD,
+          confirmPassword: 'otra-cosa',
+        } as never),
+      ).rejects.toThrow('Las contraseñas no coinciden');
+
+      expect(activation.consumeToken).not.toHaveBeenCalled();
+    });
+
+    it('sets the password and activates the account for a valid token', async () => {
+      activation.consumeToken.mockResolvedValue({ userId: USER_ID });
+      usersService.findPublicById.mockResolvedValue(publicUser);
+
+      const result = await service.activateAccount({
+        token: 'abc',
         password: PASSWORD,
+        confirmPassword: PASSWORD,
       } as never);
 
-      // El DTO llega tal cual; el hash lo aplica UsersService con bcrypt.
-      const [dto] = usersService.createLocalUser.mock.calls[0];
-      expect(dto.password).toBe(PASSWORD);
+      expect(usersService.setPasswordAndActivate).toHaveBeenCalledWith(
+        USER_ID,
+        PASSWORD,
+      );
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('refuses to activate an account that is already ACTIVE', async () => {
+      activation.consumeToken.mockResolvedValue({ userId: USER_ID });
+      usersService.findPublicById.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'ACTIVE',
+      });
+
+      await expect(
+        service.activateAccount({
+          token: 'abc',
+          password: PASSWORD,
+          confirmPassword: PASSWORD,
+        } as never),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(usersService.setPasswordAndActivate).not.toHaveBeenCalled();
+    });
+
+    it('propagates an invalid/expired/already-used token as-is', async () => {
+      activation.consumeToken.mockRejectedValue(
+        new Error('El enlace de activación no es válido o ha expirado.'),
+      );
+
+      await expect(
+        service.activateAccount({
+          token: 'abc',
+          password: PASSWORD,
+          confirmPassword: PASSWORD,
+        } as never),
+      ).rejects.toThrow('El enlace de activación no es válido o ha expirado.');
     });
   });
 
@@ -110,6 +188,7 @@ describe('AuthService', () => {
     it('returns a token when the password is correct', async () => {
       usersService.findByEmailForAuth.mockResolvedValue({
         id: USER_ID,
+        status: true,
         password: await hash(PASSWORD, 10),
       });
       usersService.findPublicById.mockResolvedValue(publicUser);
@@ -151,6 +230,18 @@ describe('AuthService', () => {
       expect(unknownEmail).toBe(wrongPassword);
     });
 
+    it('rejects a PENDING account (no password set yet) with the same generic message', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue({
+        id: USER_ID,
+        accountStatus: 'PENDING',
+        password: null,
+      });
+
+      await expect(
+        service.login({ email: 'aidee@test.com', password: PASSWORD } as never),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
     it('rejects an OAuth-only account that has no password', async () => {
       usersService.findByEmailForAuth.mockResolvedValue({
         id: USER_ID,
@@ -166,14 +257,15 @@ describe('AuthService', () => {
   describe('signToken', () => {
     it('fails loudly when JWT_SECRET is not configured', async () => {
       config.get.mockReturnValue(undefined);
-      usersService.createLocalUser.mockResolvedValue(publicUser);
+      usersService.findByEmailForAuth.mockResolvedValue({
+        id: USER_ID,
+        status: true,
+        password: await hash(PASSWORD, 10),
+      });
+      usersService.findPublicById.mockResolvedValue(publicUser);
 
       await expect(
-        service.register({
-          name: 'Aidee',
-          email: 'aidee@test.com',
-          password: PASSWORD,
-        } as never),
+        service.login({ email: 'aidee@test.com', password: PASSWORD } as never),
       ).rejects.toThrow('JWT_SECRET is not configured');
     });
   });

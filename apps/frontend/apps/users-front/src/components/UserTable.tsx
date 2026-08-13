@@ -19,6 +19,8 @@ const STATUS_CLASSNAME: Record<"true" | "false", string> = {
     false: "text-muted bg-muted/10",
 };
 
+const PENDING_CLASSNAME = "text-warning bg-warning/10";
+
 export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
     return (
         <Table>
@@ -62,9 +64,13 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
                                 </Table.Cell>
                                 <Table.Cell className="text-center">
                                     <span
-                                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${STATUS_CLASSNAME[user.status ? "true" : "false"]}`}
+                                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                                            user.accountStatus === "PENDING"
+                                                ? PENDING_CLASSNAME
+                                                : STATUS_CLASSNAME[user.status ? "true" : "false"]
+                                        }`}
                                     >
-                                        {user.status ? "Activo" : "Inactivo"}
+                                        {user.accountStatus === "PENDING" ? "Pendiente" : user.status ? "Activo" : "Inactivo"}
                                     </span>
                                 </Table.Cell>
                                 <Table.Cell className="text-center">

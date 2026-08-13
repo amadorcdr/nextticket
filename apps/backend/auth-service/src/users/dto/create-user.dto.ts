@@ -1,6 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
+/**
+ * El ADMIN ya no fija la contraseña: crea la cuenta como PENDING y
+ * ActivationService envía el correo con el enlace para que el propio
+ * usuario la establezca (ver ActivationService.issueAndSendActivation).
+ */
 export class CreateUserDto {
   @ApiProperty({ example: 'John Doe' })
   @IsString()
@@ -12,12 +17,6 @@ export class CreateUserDto {
   @IsEmail()
   @MaxLength(255)
   email!: string;
-
-  @ApiProperty({ example: 'SecurePass123!' })
-  @IsString()
-  @MinLength(8)
-  @MaxLength(72)
-  password!: string;
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440010',

@@ -1,12 +1,21 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { compare } from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { sign, type SignOptions } from 'jsonwebtoken';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
+import { ActivationService } from '../activation/activation.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ActivateAccountDto } from './dto/activate-account.dto';
 import { AUTH_PROVIDERS } from './auth.constants';
 
 type JwtUser = {
@@ -32,22 +41,55 @@ export class AuthService implements OnModuleInit {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
+    private readonly activation: ActivationService,
   ) {}
 
   async onModuleInit() {
     await this.usersService.ensureDefaultRoles();
   }
 
+  /**
+   * Autorregistro de Cliente: crea la cuenta como PENDING (sin contraseña) y
+   * envía el correo de activación. Es el mismo camino que usa el ADMIN al
+   * dar de alta Organizador/Validador (ver UsersService.create) — ya no
+   * inicia sesión automáticamente, porque todavía no tiene contraseña.
+   */
   async register(dto: RegisterDto) {
     const user = await this.usersService.createLocalUser(dto);
+    await this.activation.issueAndSendActivation(user);
     return {
-      token: this.signToken({
-        sub: user.id,
-        email: user.email,
-        role: user.role.name,
-      }),
-      user,
+      message: 'Registro exitoso. Revisa tu correo para activar tu cuenta.',
+      email: user.email,
     };
+  }
+
+  /** Reenvía el correo de activación; no revela si el correo existe o ya está activo. */
+  async resendActivation(email: string) {
+    const user = await this.usersService.findByEmailForAuth(email);
+    if (user?.accountStatus === 'PENDING') {
+      await this.activation.issueAndSendActivation(user);
+    }
+    return {
+      message:
+        'Si el correo corresponde a una cuenta pendiente de activación, se envió un nuevo enlace.',
+    };
+  }
+
+  /** Único punto de activación: lo usan Cliente, Organizador y Validador por igual. */
+  async activateAccount(dto: ActivateAccountDto) {
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Las contraseñas no coinciden');
+    }
+
+    const { userId } = await this.activation.consumeToken(dto.token);
+    const user = await this.usersService.findPublicById(userId);
+
+    if (user.accountStatus === 'ACTIVE') {
+      throw new ConflictException('Esta cuenta ya fue activada.');
+    }
+
+    await this.usersService.setPasswordAndActivate(userId, dto.password);
+    return { message: 'Tu cuenta ha sido activada correctamente.' };
   }
 
   async login(dto: LoginDto) {

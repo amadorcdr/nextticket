@@ -4,6 +4,8 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ActivateAccountDto } from './dto/activate-account.dto';
+import { ResendActivationDto } from './dto/resend-activation.dto';
 import { CurrentUser } from './current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -13,9 +15,25 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  @ApiOperation({ summary: 'Register a client user' })
+  @ApiOperation({
+    summary: 'Registrar un Cliente (cuenta queda PENDING hasta activarla)',
+  })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('activate')
+  @ApiOperation({
+    summary: 'Activar cuenta y establecer contraseña con el token del correo',
+  })
+  activate(@Body() dto: ActivateAccountDto) {
+    return this.authService.activateAccount(dto);
+  }
+
+  @Post('resend-activation')
+  @ApiOperation({ summary: 'Reenviar el correo de activación' })
+  resendActivation(@Body() dto: ResendActivationDto) {
+    return this.authService.resendActivation(dto.email);
   }
 
   @Post('login')
