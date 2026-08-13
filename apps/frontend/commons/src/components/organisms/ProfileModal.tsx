@@ -169,26 +169,50 @@ export function ProfileModal({ open, onClose }: ProfileModalProps) {
                                 <p className="text-foreground font-bold text-sm">Seguridad</p>
                                 <Description>Actualiza la contraseña de tu cuenta</Description>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <TextField className="sm:col-span-2">
-                                    <Label>Contraseña actual</Label>
-                                    <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-                                </TextField>
-                                <TextField>
-                                    <Label>Nueva contraseña</Label>
-                                    <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-                                </TextField>
-                                <TextField>
-                                    <Label>Confirmar contraseña</Label>
-                                    <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                                </TextField>
-                            </div>
-                            <div className="flex justify-end">
-                                <Button size="sm" variant="secondary" onPress={updatePassword}>
-                                    <KeyRound />
-                                    Actualizar contraseña
-                                </Button>
-                            </div>
+                            {/*
+                                autoComplete="off" en el <form> es necesario: sin un formulario
+                                propio, el navegador trata todos los inputs de la página como uno
+                                solo y, al ver un campo type="password", autocompleta el texto más
+                                cercano (p. ej. la barra de búsqueda de Eventos) con una credencial
+                                guardada del sitio.
+                            */}
+                            <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                    <TextField className="sm:col-span-2">
+                                        <Label>Contraseña actual</Label>
+                                        <Input
+                                            type="password"
+                                            autoComplete="current-password"
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                        />
+                                    </TextField>
+                                    <TextField>
+                                        <Label>Nueva contraseña</Label>
+                                        <Input
+                                            type="password"
+                                            autoComplete="new-password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                        />
+                                    </TextField>
+                                    <TextField>
+                                        <Label>Confirmar contraseña</Label>
+                                        <Input
+                                            type="password"
+                                            autoComplete="new-password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                        />
+                                    </TextField>
+                                </div>
+                                <div className="flex justify-end mt-3.5">
+                                    <Button size="sm" variant="secondary" onPress={updatePassword}>
+                                        <KeyRound />
+                                        Actualizar contraseña
+                                    </Button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>

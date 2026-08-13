@@ -82,17 +82,25 @@ export function UserFormModal({ open, mode, user, saving, onClose, onSave }: Use
                     </Button>
                 </div>
 
-                {/* Form body — centrado verticalmente para no dejar un hueco muerto al fondo */}
+                {/* Form body — centrado verticalmente para no dejar un hueco muerto al fondo.
+                    Va dentro de un <form autoComplete="off"> propio: sin esto, Chrome trata
+                    todos los inputs de la página como un solo formulario implícito y, al ver
+                    un campo de contraseña, autocompleta el campo de texto más cercano (p. ej.
+                    la barra de búsqueda) con una credencial guardada del sitio. */}
                 <div className="relative flex-1 overflow-y-auto">
-                    <div className="relative z-10 px-6 py-4 flex flex-col justify-center gap-5 min-h-full">
+                    <form
+                        autoComplete="off"
+                        onSubmit={(e) => e.preventDefault()}
+                        className="relative z-10 px-6 py-4 flex flex-col justify-center gap-5 min-h-full"
+                    >
                         <TextField isRequired name="nombre">
                             <Label>Nombre completo</Label>
-                            <Input placeholder="Ej: Juan Pérez" value={draft.name} onChange={set("name")} />
+                            <Input placeholder="Ej: Juan Pérez" autoComplete="off" value={draft.name} onChange={set("name")} />
                         </TextField>
 
                         <TextField isRequired name="email" type="email">
                             <Label>Correo electrónico</Label>
-                            <Input placeholder="nombre@ejemplo.com" value={draft.email} onChange={set("email")} />
+                            <Input placeholder="nombre@ejemplo.com" autoComplete="off" value={draft.email} onChange={set("email")} />
                         </TextField>
 
                         {isCreate ? (
@@ -118,6 +126,7 @@ export function UserFormModal({ open, mode, user, saving, onClose, onSave }: Use
                                     <InputGroup.Input
                                         type={showPassword ? "text" : "password"}
                                         placeholder="••••••••"
+                                        autoComplete="new-password"
                                         value={draft.password}
                                         onChange={set("password")}
                                     />
@@ -148,7 +157,7 @@ export function UserFormModal({ open, mode, user, saving, onClose, onSave }: Use
                                 ))}
                             </select>
                         </div>
-                    </div>
+                    </form>
                 </div>
 
                 {/* Footer */}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, Button, Icon, Pagination, toast, useApi } from "@nextticket-frontend/commons";
 import { UserTable } from "../components/UserTable";
-import { UserFilters } from "../components/UserFilters";
+import { UserFilters, type StatusFilter } from "../components/UserFilters";
 import { UserFormModal, type UserFormMode, type UserFormValues } from "../components/UserFormModal";
 import { ModalDeleteUser } from "../components/ModalDeleteUser";
 import { ROLE_ID_BY_ROLE, toAdminUser, type AdminUser, type AdminUserRole, type ApiUser } from "../types/user";
@@ -22,6 +22,7 @@ export function UsersView() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState<AdminUserRole | "all">("all");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [page, setPage] = useState(1);
 
     const [modalOpen, setModalOpen] = useState(false);
@@ -46,13 +47,15 @@ export function UsersView() {
     const filtered = useMemo(() => {
         return users.filter((u) => {
             const matchesRole = roleFilter === "all" || u.role === roleFilter;
+            const matchesStatus =
+                statusFilter === "all" || (statusFilter === "active" ? u.status : !u.status);
             const query = search.toLowerCase();
             const matchesSearch = !query || u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query);
-            return matchesRole && matchesSearch;
+            return matchesRole && matchesStatus && matchesSearch;
         });
-    }, [users, roleFilter, search]);
+    }, [users, roleFilter, statusFilter, search]);
 
-    useEffect(() => setPage(1), [search, roleFilter]);
+    useEffect(() => setPage(1), [search, roleFilter, statusFilter]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages);
@@ -138,7 +141,14 @@ export function UsersView() {
                 </Button>
             </div>
 
-            <UserFilters search={search} onSearchChange={setSearch} roleFilter={roleFilter} onRoleFilterChange={setRoleFilter} />
+            <UserFilters
+                search={search}
+                onSearchChange={setSearch}
+                roleFilter={roleFilter}
+                onRoleFilterChange={setRoleFilter}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+            />
 
             {loading ? (
                 <p className="text-muted text-xs py-8 text-center">Cargando usuarios...</p>
