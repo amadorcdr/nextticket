@@ -107,6 +107,33 @@ function GeneralAdmissionStepper({
     );
 }
 
+/**
+ * El endpoint de asientos limita `limit` a 100 (ver MAX_LIMIT en el backend),
+ * así que una zona con más de 100 asientos necesita varias páginas: se pide
+ * una página a la vez hasta que `hasNextPage` sea false.
+ */
+const SEATS_PAGE_LIMIT = 100;
+
+async function fetchAllSeats(
+    api: ReturnType<typeof useApi>,
+    eventId: string,
+    eventZoneId: string,
+): Promise<ApiEventSeat[]> {
+    const seats: ApiEventSeat[] = [];
+    let page = 1;
+
+    while (true) {
+        const result = await api.get<Paginated<ApiEventSeat>>(
+            `/events/${eventId}/seats?eventZoneId=${eventZoneId}&limit=${SEATS_PAGE_LIMIT}&page=${page}`,
+        );
+        seats.push(...result.data);
+        if (!result.meta?.hasNextPage) break;
+        page += 1;
+    }
+
+    return seats;
+}
+
 export function SeatSelection() {
     const { eventId } = Router.useParams();
     const navigate = Router.useNavigate();
@@ -148,9 +175,7 @@ export function SeatSelection() {
 
                 const results = await Promise.all(
                     reservedZones.map((zone) =>
-                        api
-                            .get<Paginated<ApiEventSeat>>(`/events/${eventId}/seats?eventZoneId=${zone.id}&limit=500`)
-                            .then((page) => [zone.id, page.data] as const),
+                        fetchAllSeats(api, eventId, zone.id).then((seats) => [zone.id, seats] as const),
                     ),
                 );
                 setSeatsByZone(Object.fromEntries(results));
