@@ -42,8 +42,10 @@ describe('PurchasesService', () => {
     get: jest.fn(),
     set: jest.fn(),
     setIfAbsent: jest.fn(),
+    acquireMultiLock: jest.fn(),
     ttl: jest.fn(),
     del: jest.fn(),
+    delMany: jest.fn(),
   };
   const gateway = {
     emitBlockLocked: jest.fn(),
@@ -55,6 +57,9 @@ describe('PurchasesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     prisma.temporaryBlock.findMany.mockResolvedValue([]);
+    // Por defecto el usuario SÍ tiene turno vigente en la fila virtual; los
+    // tests que necesitan probar el caso contrario lo sobreescriben.
+    redis.get.mockResolvedValue({ queueEntryId: 'entry-1', userId: USER_ID });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -68,22 +73,31 @@ describe('PurchasesService', () => {
     service = module.get<PurchasesService>(PurchasesService);
   });
 
-  it('creates a temporary block using Redis NX lock', async () => {
+  it('creates a temporary block using Redis NX lock (general admission)', async () => {
     redis.setIfAbsent.mockResolvedValue(true);
-    prisma.temporaryBlock.create.mockResolvedValue({ id: 'block-id' });
+    prisma.temporaryBlock.create.mockResolvedValue({
+      id: 'block-id',
+      eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
+      eventSeatId: null,
+      quantity: 1,
+    });
 
-    await expect(
-      service.createTemporaryBlock(
-        {
-          eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
-          eventSeatId: '550e8400-e29b-41d4-a716-446655440002',
-        },
-        USER_ID,
-      ),
-    ).resolves.toEqual({ id: 'block-id' });
+    const result = await service.createTemporaryBlock(
+      {
+        eventId: '550e8400-e29b-41d4-a716-446655440010',
+        eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
+      },
+      USER_ID,
+    );
 
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'HELD',
+        blocks: [expect.objectContaining({ blockId: 'block-id' })],
+      }),
+    );
     expect(redis.setIfAbsent).toHaveBeenCalledWith(
-      'event-zone:550e8400-e29b-41d4-a716-446655440001:seat:550e8400-e29b-41d4-a716-446655440002',
+      'event-zone:550e8400-e29b-41d4-a716-446655440001:general-admission',
       expect.objectContaining({ quantity: 1 }),
       480,
     );
@@ -94,19 +108,20 @@ describe('PurchasesService', () => {
     );
   });
 
-  it('rejects a seat block asking for more than one place', async () => {
+  it('rejects a hold when the user has no active admission from the virtual queue', async () => {
+    redis.get.mockResolvedValueOnce(null);
+
     await expect(
       service.createTemporaryBlock(
         {
+          eventId: '550e8400-e29b-41d4-a716-446655440010',
           eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
-          eventSeatId: '550e8400-e29b-41d4-a716-446655440002',
-          quantity: 5,
         },
         USER_ID,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
 
-    // The request is rejected before taking the lock, so no lock is leaked.
+    // Se rechaza antes de tocar el lock: no se filtra ningún lock huérfano.
     expect(redis.setIfAbsent).not.toHaveBeenCalled();
     expect(prisma.temporaryBlock.create).not.toHaveBeenCalled();
   });
@@ -117,12 +132,117 @@ describe('PurchasesService', () => {
     await expect(
       service.createTemporaryBlock(
         {
+          eventId: '550e8400-e29b-41d4-a716-446655440010',
           eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
-          eventSeatId: '550e8400-e29b-41d4-a716-446655440002',
         },
         USER_ID,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  describe('reserved seat holds (atomic multi-seat)', () => {
+    const ZONE_ID = '550e8400-e29b-41d4-a716-446655440001';
+    let fetchSpy: jest.SpyInstance;
+
+    afterEach(() => {
+      fetchSpy?.mockRestore();
+    });
+
+    it('blocks multiple seats atomically after validating them against venues-events-service', async () => {
+      const seatA = '550e8400-e29b-41d4-a716-446655440002';
+      const seatB = '550e8400-e29b-41d4-a716-446655440003';
+      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { id: seatA, eventZoneId: ZONE_ID, status: 'AVAILABLE' },
+          { id: seatB, eventZoneId: ZONE_ID, status: 'AVAILABLE' },
+        ],
+      } as Response);
+      redis.acquireMultiLock.mockResolvedValue(true);
+      prisma.$transaction.mockResolvedValue([
+        { id: 'block-a', eventZoneId: ZONE_ID, eventSeatId: seatA, quantity: 1 },
+        { id: 'block-b', eventZoneId: ZONE_ID, eventSeatId: seatB, quantity: 1 },
+      ]);
+
+      const result = await service.createTemporaryBlock(
+        {
+          eventId: '550e8400-e29b-41d4-a716-446655440010',
+          eventZoneId: ZONE_ID,
+          eventSeatIds: [seatA, seatB],
+        },
+        USER_ID,
+      );
+
+      expect(result.blocks).toHaveLength(2);
+      expect(redis.acquireMultiLock).toHaveBeenCalledWith(
+        [`event-zone:${ZONE_ID}:seat:${seatA}`, `event-zone:${ZONE_ID}:seat:${seatB}`],
+        480,
+        expect.any(Array),
+      );
+    });
+
+    it('rejects the whole hold, without touching Redis, when one seat is not AVAILABLE', async () => {
+      const seatA = '550e8400-e29b-41d4-a716-446655440002';
+      const seatB = '550e8400-e29b-41d4-a716-446655440003';
+      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { id: seatA, eventZoneId: ZONE_ID, status: 'AVAILABLE' },
+          { id: seatB, eventZoneId: ZONE_ID, status: 'SOLD' },
+        ],
+      } as Response);
+
+      await expect(
+        service.createTemporaryBlock(
+          {
+            eventId: '550e8400-e29b-41d4-a716-446655440010',
+            eventZoneId: ZONE_ID,
+            eventSeatIds: [seatA, seatB],
+          },
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(redis.acquireMultiLock).not.toHaveBeenCalled();
+    });
+
+    it('rejects when a requested seat id does not exist for the event', async () => {
+      const seatA = '550e8400-e29b-41d4-a716-446655440002';
+      fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      } as Response);
+
+      await expect(
+        service.createTemporaryBlock(
+          {
+            eventId: '550e8400-e29b-41d4-a716-446655440010',
+            eventZoneId: ZONE_ID,
+            eventSeatIds: [seatA],
+          },
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('releaseTemporaryBlock ownership', () => {
+    it("rejects releasing another user's temporary block", async () => {
+      prisma.temporaryBlock.findUnique.mockResolvedValue({
+        id: 'block-1',
+        userId: 'otro-usuario',
+        eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
+        eventSeatId: null,
+      });
+
+      await expect(service.releaseTemporaryBlock('block-1', USER_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(redis.del).not.toHaveBeenCalled();
+    });
   });
 
   it('creates a confirmed purchase with details and approved payment', async () => {

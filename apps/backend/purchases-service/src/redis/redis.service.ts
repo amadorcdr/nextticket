@@ -1,6 +1,23 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 
+// Adquiere N locks (SET NX EX) de forma atómica: si CUALQUIERA de las
+// claves ya existe, no se toca ninguna. Evita el caso "A1 y A2 bloqueados,
+// A3 ya estaba ocupado" al apartar varios asientos a la vez (Módulo 7 ·
+// hold múltiple). Los scripts Lua se ejecutan atómicamente en Redis.
+const ACQUIRE_MULTI_LOCK_SCRIPT = `
+local ttl = tonumber(ARGV[1])
+for i, key in ipairs(KEYS) do
+  if redis.call('EXISTS', key) == 1 then
+    return 0
+  end
+end
+for i, key in ipairs(KEYS) do
+  redis.call('SET', key, ARGV[i + 1], 'EX', ttl)
+end
+return 1
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client!: Redis;
@@ -44,5 +61,36 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async del(key: string): Promise<void> {
     await this.client.del(key);
+  }
+
+  async delMany(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    await this.client.del(...keys);
+  }
+
+  /**
+   * All-or-nothing: adquiere el lock de cada key en `keys` con el payload
+   * en la misma posición de `payloads`. Si alguna key ya está tomada, no
+   * adquiere ninguna y devuelve false.
+   */
+  async acquireMultiLock(
+    keys: string[],
+    ttlSeconds: number,
+    payloads: unknown[],
+  ): Promise<boolean> {
+    if (keys.length === 0) return true;
+    if (keys.length !== payloads.length) {
+      throw new Error('keys and payloads must have the same length');
+    }
+
+    const serializedPayloads = payloads.map((payload) => JSON.stringify(payload));
+    const result = await this.client.eval(
+      ACQUIRE_MULTI_LOCK_SCRIPT,
+      keys.length,
+      ...keys,
+      String(ttlSeconds),
+      ...serializedPayloads,
+    );
+    return result === 1;
   }
 }

@@ -32,7 +32,10 @@ export class PurchasesController {
   @Post('temporary-blocks')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('bearer')
-  @ApiOperation({ summary: 'Crear bloqueo temporal de asiento o zona' })
+  @ApiOperation({
+    summary:
+      'Crear bloqueo temporal de uno o varios asientos (atómico) o de admisión general por cantidad. Requiere una admisión ACTIVA vigente en la fila virtual del evento (POST /purchases/queue/:eventId).',
+  })
   createTemporaryBlock(
     @Body() dto: CreateTemporaryBlockDto,
     @CurrentUser() user: AuthenticatedUser,

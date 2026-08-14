@@ -1,15 +1,18 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TemporaryBlock } from '@prisma/client';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { buildAdmissionKey } from '../event-queue/admission-key.util';
 import { PurchasesGateway } from './purchases.gateway';
 import {
   CreatePurchaseDto,
@@ -30,7 +33,7 @@ import {
 
 const LIST_CACHE_KEY = 'purchases:list';
 const STATS_CACHE_KEY = 'purchases:stats';
-const BLOCK_TTL_SECONDS = 8 * 60;
+const SEAT_HOLD_TTL_SECONDS = Number(process.env.SEAT_HOLD_TTL_SECONDS ?? 8 * 60);
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type PaymentDecision = {
@@ -48,21 +51,38 @@ export class PurchasesService {
   ) {}
 
   async createTemporaryBlock(dto: CreateTemporaryBlockDto, userId: string) {
-    if (dto.eventSeatId && dto.quantity && dto.quantity > 1) {
-      throw new BadRequestException(
-        'quantity must be 1 when blocking a specific seat',
+    await this.assertHasActiveAdmission(dto.eventId, userId);
+
+    if (dto.eventSeatIds?.length) {
+      return this.createReservedSeatBlocks(dto, userId);
+    }
+    return this.createGeneralAdmissionBlock(dto, userId);
+  }
+
+  /** Módulo 8 → Módulo 7: sin turno vigente en la fila virtual no hay hold. */
+  private async assertHasActiveAdmission(eventId: string, userId: string) {
+    const admission = await this.redis.get(buildAdmissionKey(eventId, userId));
+    if (!admission) {
+      throw new ForbiddenException(
+        'Debes tener un turno vigente en la fila virtual de este evento para bloquear asientos',
       );
     }
+  }
 
-    const quantity = dto.eventSeatId ? 1 : (dto.quantity ?? 1);
+  private async createGeneralAdmissionBlock(
+    dto: CreateTemporaryBlockDto,
+    userId: string,
+  ) {
+    const quantity = dto.quantity ?? 1;
     const startedAt = new Date();
-    const expiresAt = new Date(startedAt.getTime() + BLOCK_TTL_SECONDS * 1000);
-    const lockKey = this.buildBlockKey(dto.eventZoneId, dto.eventSeatId);
+    const expiresAt = new Date(startedAt.getTime() + SEAT_HOLD_TTL_SECONDS * 1000);
+    const holdGroupId = randomUUID();
+    const lockKey = this.buildBlockKey(dto.eventZoneId);
 
     const lockPayload = {
       userId,
       eventZoneId: dto.eventZoneId,
-      eventSeatId: dto.eventSeatId ?? null,
+      eventSeatId: null,
       quantity,
       lockedAt: startedAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
@@ -71,11 +91,11 @@ export class PurchasesService {
     const acquired = await this.redis.setIfAbsent(
       lockKey,
       lockPayload,
-      BLOCK_TTL_SECONDS,
+      SEAT_HOLD_TTL_SECONDS,
     );
     if (!acquired) {
       throw new ConflictException(
-        'Seat or zone is already temporarily blocked',
+        'La zona ya tiene un bloqueo de admisión general activo',
       );
     }
 
@@ -84,10 +104,10 @@ export class PurchasesService {
         data: {
           userId,
           eventZoneId: dto.eventZoneId,
-          eventSeatId: dto.eventSeatId,
           quantity,
           startedAt,
           expiresAt,
+          holdGroupId,
         },
       });
 
@@ -97,11 +117,154 @@ export class PurchasesService {
         eventSeatId: block.eventSeatId,
       });
 
-      return block;
+      return this.toHoldResponse(holdGroupId, dto, [block], expiresAt);
     } catch (error) {
       await this.redis.del(lockKey);
       throw error;
     }
+  }
+
+  /**
+   * Bloquea uno o varios asientos reservados de forma atómica: si CUALQUIERA
+   * ya está bloqueado, vendido o no es vendible, no se bloquea NINGUNO
+   * (evita quedar con A1/A2 apartados y A3 sin apartar).
+   */
+  private async createReservedSeatBlocks(
+    dto: CreateTemporaryBlockDto,
+    userId: string,
+  ) {
+    const eventSeatIds = dto.eventSeatIds as string[];
+    await this.assertSeatsAreVendible(dto.eventId, dto.eventZoneId, eventSeatIds);
+
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + SEAT_HOLD_TTL_SECONDS * 1000);
+    const holdGroupId = randomUUID();
+
+    const keys = eventSeatIds.map((seatId) =>
+      this.buildBlockKey(dto.eventZoneId, seatId),
+    );
+    const payloads = eventSeatIds.map((seatId) => ({
+      userId,
+      eventZoneId: dto.eventZoneId,
+      eventSeatId: seatId,
+      quantity: 1,
+      lockedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    }));
+
+    const acquired = await this.redis.acquireMultiLock(
+      keys,
+      SEAT_HOLD_TTL_SECONDS,
+      payloads,
+    );
+    if (!acquired) {
+      throw new ConflictException(
+        'Uno o más asientos ya están bloqueados o vendidos; no se bloqueó ninguno',
+      );
+    }
+
+    try {
+      const blocks = await this.prisma.$transaction(
+        eventSeatIds.map((seatId) =>
+          this.prisma.temporaryBlock.create({
+            data: {
+              userId,
+              eventZoneId: dto.eventZoneId,
+              eventSeatId: seatId,
+              quantity: 1,
+              startedAt,
+              expiresAt,
+              holdGroupId,
+            },
+          }),
+        ),
+      );
+
+      for (const block of blocks) {
+        this.gateway.emitBlockLocked({
+          blockId: block.id,
+          eventZoneId: block.eventZoneId,
+          eventSeatId: block.eventSeatId,
+        });
+      }
+
+      return this.toHoldResponse(holdGroupId, dto, blocks, expiresAt);
+    } catch (error) {
+      await this.redis.delMany(keys);
+      throw error;
+    }
+  }
+
+  /**
+   * Nunca confía en los eventSeatId que manda el cliente: verifica contra
+   * venues-events-service que cada asiento exista, pertenezca a la zona del
+   * evento indicado y esté realmente AVAILABLE antes de bloquear nada.
+   */
+  private async assertSeatsAreVendible(
+    eventId: string,
+    eventZoneId: string,
+    eventSeatIds: string[],
+  ) {
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+    const ids = eventSeatIds.join(',');
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${baseUrl}/events/${eventId}/seats/by-event-seat-ids?ids=${encodeURIComponent(ids)}`,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudieron verificar los asientos (venues-events-service no responde)',
+      );
+    }
+    if (!response.ok) {
+      throw new BadRequestException('No se pudieron verificar los asientos solicitados');
+    }
+
+    const seats = (await response.json()) as Array<{
+      id: string;
+      eventZoneId: string;
+      status: string;
+    }>;
+    const byId = new Map(seats.map((seat) => [seat.id, seat]));
+
+    for (const seatId of eventSeatIds) {
+      const seat = byId.get(seatId);
+      if (!seat) {
+        throw new NotFoundException(`El asiento ${seatId} no existe en este evento`);
+      }
+      if (seat.eventZoneId !== eventZoneId) {
+        throw new BadRequestException(
+          `El asiento ${seatId} no pertenece a la zona indicada`,
+        );
+      }
+      if (seat.status !== 'AVAILABLE') {
+        throw new ConflictException(
+          `El asiento ${seatId} no está disponible (status=${seat.status})`,
+        );
+      }
+    }
+  }
+
+  private toHoldResponse(
+    holdGroupId: string,
+    dto: CreateTemporaryBlockDto,
+    blocks: TemporaryBlock[],
+    expiresAt: Date,
+  ) {
+    return {
+      holdId: holdGroupId,
+      eventId: dto.eventId,
+      eventZoneId: dto.eventZoneId,
+      status: 'HELD' as const,
+      expiresAt,
+      blocks: blocks.map((block) => ({
+        blockId: block.id,
+        eventSeatId: block.eventSeatId,
+        quantity: block.quantity,
+      })),
+    };
   }
 
   async findActiveBlocksByUser(userId: string) {

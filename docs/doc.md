@@ -86,12 +86,27 @@ un rol (`ORGANIZER`, `VALIDATOR`, `ADMIN`, …) exige además ese rol.
 
 ## purchases-service
 
+### Módulo 8 · Fila Virtual (previo obligatorio al hold)
+
 | Método | Ruta | Acceso | Qué hace |
 |--------|------|--------|----------|
-| `POST` | `/purchases/temporary-blocks` | cualquier sesión | Crear bloqueo temporal de asiento o zona |
+| `POST` | `/purchases/queue/:eventId` | cualquier sesión | Unirse a la fila virtual del evento (idempotente vía `idempotencyKey`) |
+| `GET` | `/purchases/queue/:eventId/me` | cualquier sesión | Consultar mi entrada de fila activa (WAITING/ADMITTED con posición o TTL de admisión) |
+| `GET` | `/purchases/queue/:eventId/:entryId` | cualquier sesión (dueño) | Consultar el estado de una entrada de fila por id |
+
+### Módulo 7 · Bloqueo Temporal (requiere admisión ACTIVA de la fila virtual)
+
+| Método | Ruta | Acceso | Qué hace |
+|--------|------|--------|----------|
+| `POST` | `/purchases/temporary-blocks` | cualquier sesión con admisión ACTIVA | Bloquear uno o varios asientos (`eventSeatIds`, atómico) o admisión general por `quantity` |
 | `GET` | `/purchases/temporary-blocks/me` | cualquier sesión | Listar mis bloqueos temporales activos |
 | `POST` | `/purchases/temporary-blocks/expire` | ADMIN |  |
-| `DELETE` | `/purchases/temporary-blocks/:id` | cualquier sesión | Liberar manualmente un bloqueo temporal |
+| `DELETE` | `/purchases/temporary-blocks/:id` | cualquier sesión (dueño) | Liberar manualmente un bloqueo temporal |
+
+### Módulo 6 · Compra Simulada
+
+| Método | Ruta | Acceso | Qué hace |
+|--------|------|--------|----------|
 | `POST` | `/purchases` | cualquier sesión | Crear compra simulada y registrar pago |
 | `GET` | `/purchases` | cualquier sesión |  |
 | `GET` | `/purchases/:id` | cualquier sesión | Obtener compra por id (propia o ADMIN) |
