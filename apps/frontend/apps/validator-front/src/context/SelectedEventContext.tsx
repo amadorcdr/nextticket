@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { ValidatorEvent } from "../mocks/validatorEvents";
+import type { ValidatorEvent } from "../types/validatorEvents";
 
 interface SelectedEventContextValue {
     selectedEvent: ValidatorEvent | null;

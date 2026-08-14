@@ -6,7 +6,8 @@ import { ValidationPage } from "./pages/ValidationPage";
 
 /**
  * Módulo del rol Validador.
- * Flujo 100% frontend con datos simulados: sin APIs, sesión, tokens ni permisos.
+ * Consulta eventos y valida boletos contra el backend real (venues-events-service /
+ * tickets-service vía el api-gateway); requiere sesión con rol validador/admin.
  */
 export function ValidatorModule() {
     return (

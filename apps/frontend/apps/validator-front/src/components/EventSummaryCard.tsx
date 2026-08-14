@@ -1,5 +1,5 @@
 import { Button, Card, Chip, Icon } from "@nextticket-frontend/commons";
-import { getEventAvailability, type ValidatorEvent } from "../mocks/validatorEvents";
+import { getEventAvailability, type ValidatorEvent } from "../types/validatorEvents";
 import { formatEventDate, formatEventSchedule } from "../utils/format";
 
 interface EventSummaryCardProps {
@@ -51,7 +51,7 @@ export function EventSummaryCard({ event, onChangeEvent }: EventSummaryCardProps
                 </div>
                 <div className="flex items-center gap-2">
                     <Icon.MapPin className="size-4 shrink-0 text-muted" />
-                    <span>{event.area}</span>
+                    <span>{event.address || event.city}</span>
                 </div>
             </Card.Content>
         </Card>

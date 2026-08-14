@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Card, Chip, Icon } from "@nextticket-frontend/commons";
-import { getEventAvailability, type ValidatorEvent } from "../mocks/validatorEvents";
+import { getEventAvailability, type ValidatorEvent } from "../types/validatorEvents";
 import { formatEventDate, formatEventSchedule } from "../utils/format";
 
 interface EventCardProps {
@@ -71,10 +71,12 @@ export function EventCard({ event, onSelect }: EventCardProps) {
                     <Icon.Building2 className="size-4 shrink-0" />
                     <span className="truncate">{event.venue}</span>
                 </span>
-                <span className="flex items-center gap-2">
-                    <Icon.MapPin className="size-4 shrink-0" />
-                    <span className="truncate">{event.area}</span>
-                </span>
+                {event.address ? (
+                    <span className="flex items-center gap-2">
+                        <Icon.MapPin className="size-4 shrink-0" />
+                        <span className="truncate">{event.address}</span>
+                    </span>
+                ) : null}
             </Card.Content>
 
             <Card.Footer className="flex flex-col items-stretch gap-3">

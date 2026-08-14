@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
+    ApiError,
     Button,
     Description,
     FieldError,
@@ -8,38 +9,52 @@ import {
     Label,
     Spinner,
     TextField,
+    useApi,
 } from "@nextticket-frontend/commons";
-import { validateFolio, type ValidationResult } from "../mocks/validatorTickets";
+import { validateTicket } from "../api";
+import type { ValidatorEvent } from "../types/validatorEvents";
+import type { ValidationResult } from "../types/validatorTickets";
 
 interface FolioValidationFormProps {
+    event: ValidatorEvent;
     isProcessing: boolean;
     onValidate: (result: ValidationResult) => void;
     onProcessingChange: (isProcessing: boolean) => void;
+    onServiceError: (message: string) => void;
 }
 
-/** Validación por folio resuelta contra los boletos mock, sin peticiones HTTP. */
+/** Validación por folio contra POST /tickets/validations (tickets-service). */
 export function FolioValidationForm({
+    event,
     isProcessing,
     onValidate,
     onProcessingChange,
+    onServiceError,
 }: FolioValidationFormProps) {
+    const api = useApi();
     const [folio, setFolio] = useState("");
     const [error, setError] = useState<string | null>(null);
 
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
+    function handleSubmit(event_: FormEvent<HTMLFormElement>) {
+        event_.preventDefault();
 
-        if (!folio.trim()) {
+        const trimmed = folio.trim();
+        if (!trimmed) {
             setError("Ingresa un folio para continuar.");
             return;
         }
 
         setError(null);
         onProcessingChange(true);
-        window.setTimeout(() => {
-            onValidate(validateFolio(folio, "folio"));
-            onProcessingChange(false);
-        }, 700);
+
+        validateTicket(api, event, { folio: trimmed }, "folio")
+            .then(onValidate)
+            .catch((err) => {
+                onServiceError(
+                    err instanceof ApiError ? err.message : "No se pudo validar el boleto. Intenta de nuevo.",
+                );
+            })
+            .finally(() => onProcessingChange(false));
     }
 
     return (
@@ -56,11 +71,8 @@ export function FolioValidationForm({
                 fullWidth
             >
                 <Label>Folio del boleto</Label>
-                <Input placeholder="Ej. VALIDO001" className="font-mono uppercase" />
-                <Description>
-                    Escribe el folio impreso en el boleto. Puedes probar con VALIDO001, USADO001 o
-                    INVALIDO001.
-                </Description>
+                <Input placeholder="Ej. TK-A1B2C3D4E5" className="font-mono uppercase" />
+                <Description>Escribe el folio impreso o mostrado en el boleto del asistente.</Description>
                 <FieldError>{error}</FieldError>
             </TextField>
 
