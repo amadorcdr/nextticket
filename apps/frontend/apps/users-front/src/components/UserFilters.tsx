@@ -9,14 +9,37 @@ export const ROLE_FILTER_OPTIONS: { id: AdminUserRole | "all"; label: string }[]
     { id: "validador", label: "Validadores" },
 ];
 
+export type StatusFilter = "all" | "active" | "inactive";
+
+const STATUS_FILTER_OPTIONS: { id: StatusFilter; label: string }[] = [
+    { id: "all", label: "Todos" },
+    { id: "active", label: "Activos" },
+    { id: "inactive", label: "Inactivos" },
+];
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+    all: "Todos",
+    active: "Activos",
+    inactive: "Inactivos",
+};
+
 interface UserFiltersProps {
     search: string;
     onSearchChange: (value: string) => void;
     roleFilter: AdminUserRole | "all";
     onRoleFilterChange: (value: AdminUserRole | "all") => void;
+    statusFilter: StatusFilter;
+    onStatusFilterChange: (value: StatusFilter) => void;
 }
 
-export function UserFilters({ search, onSearchChange, roleFilter, onRoleFilterChange }: UserFiltersProps) {
+export function UserFilters({
+    search,
+    onSearchChange,
+    roleFilter,
+    onRoleFilterChange,
+    statusFilter,
+    onStatusFilterChange,
+}: UserFiltersProps) {
     return (
         <div className="flex flex-wrap items-center gap-2">
             <SearchField name="search-users" className="flex-1 min-w-45 max-w-100" value={search} onChange={onSearchChange}>
@@ -24,7 +47,7 @@ export function UserFilters({ search, onSearchChange, roleFilter, onRoleFilterCh
                     <SearchField.SearchIcon>
                         <Icon.Search />
                     </SearchField.SearchIcon>
-                    <SearchField.Input placeholder="Buscar por nombre o correo..." />
+                    <SearchField.Input placeholder="Buscar por nombre o correo..." autoComplete="off" />
                     <SearchField.ClearButton>
                         <Icon.X />
                     </SearchField.ClearButton>
@@ -47,6 +70,31 @@ export function UserFilters({ search, onSearchChange, roleFilter, onRoleFilterCh
                 <Select.Popover>
                     <ListBox>
                         {ROLE_FILTER_OPTIONS.map((opt) => (
+                            <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
+                                {opt.label}
+                                <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                        ))}
+                    </ListBox>
+                </Select.Popover>
+            </Select>
+
+            <Select
+                className="w-fit"
+                aria-label="Estado"
+                value={statusFilter}
+                onChange={(value) => onStatusFilterChange(value as StatusFilter)}
+            >
+                <Select.Trigger>
+                    <div className="flex items-center gap-2">
+                        <Icon.Activity className="shrink-0 size-3.5" />
+                        <span className="text-xs">{STATUS_FILTER_LABELS[statusFilter]}</span>
+                    </div>
+                    <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                    <ListBox>
+                        {STATUS_FILTER_OPTIONS.map((opt) => (
                             <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
                                 {opt.label}
                                 <ListBox.ItemIndicator />
