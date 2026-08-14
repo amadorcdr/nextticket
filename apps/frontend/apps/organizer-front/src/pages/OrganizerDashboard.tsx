@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { ApiError, Button, Table, useApi, useSession } from "@nextticket-frontend/commons";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { ApiError, Button, Icon, useApi, useSession } from "@nextticket-frontend/commons";
 import { toOrganizerEventRow, type ApiEvent, type ApiTicketsEventZoneStats, type OrganizerEventRow } from "../api";
 
 // El backend no soporta busqueda por texto en la query todavia (solo
 // page/limit): se trae una sola pagina grande, mismo patron que MyEvents.
 const FETCH_LIMIT = 100;
-const TOP_EVENTS_LIMIT = 5;
-const UPCOMING_LIMIT = 5;
+// Mismos topes que el Dashboard de Admin: listas cortas y legibles en vez de
+// volcar todo lo que exista.
+const OCCUPANCY_LIMIT = 4;
+const UPCOMING_LIMIT = 4;
 
 interface Paginated<T> {
   data: T[];
@@ -18,11 +20,16 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value);
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, icon: StatIcon }: { label: string; value: string; icon: ComponentType<{ className?: string }> }) {
   return (
-    <div className="bg-surface border border-border rounded-[10px] p-3">
-      <p className="text-muted text-[11px] font-semibold uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-foreground text-lg font-bold">{value}</p>
+    <div className="bg-surface border border-border rounded-[10px] p-3 flex items-center gap-3">
+      <div className="shrink-0 size-9 rounded-[10px] bg-accent/10 text-accent flex items-center justify-center">
+        <StatIcon className="size-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-muted text-[11px] font-semibold uppercase tracking-wide mb-1 truncate">{label}</p>
+        <p className="text-foreground text-lg font-bold truncate">{value}</p>
+      </div>
     </div>
   );
 }
@@ -93,13 +100,13 @@ export function OrganizerDashboard() {
   const ticketsSold = rows.reduce((sum, r) => sum + r.sold, 0);
   const totalRevenue = [...revenueByEventId.values()].reduce((sum, v) => sum + v, 0);
 
-  const salesByEvent = useMemo(
+  const occupancyByEvent = useMemo(
     () =>
       rows
         .filter((r) => r.total > 0)
         .map((r) => ({ id: r.id, name: r.name, pct: Math.round((r.sold / r.total) * 100) }))
         .sort((a, b) => b.pct - a.pct)
-        .slice(0, TOP_EVENTS_LIMIT),
+        .slice(0, OCCUPANCY_LIMIT),
     [rows],
   );
 
@@ -131,7 +138,7 @@ export function OrganizerDashboard() {
       {loading && <p className="text-muted text-xs py-8 text-center">Cargando resumen...</p>}
 
       {!loading && error && (
-        <div className="flex flex-col items-center gap-3 py-8">
+        <div className="bg-surface border border-border rounded-[10px] p-6 flex flex-col items-center gap-3">
           <p className="text-muted text-xs text-center">{error}</p>
           <Button size="sm" onPress={load}>
             Reintentar
@@ -140,38 +147,61 @@ export function OrganizerDashboard() {
       )}
 
       {!loading && !error && rows.length === 0 && (
-        <p className="text-muted text-xs py-8 text-center">Todavía no tienes eventos. Crea el primero en "Mis Eventos".</p>
+        <p className="text-muted text-xs py-8 text-center bg-surface border border-border rounded-[10px]">
+          Todavía no tienes eventos. Crea el primero en "Mis Eventos".
+        </p>
       )}
 
       {!loading && !error && rows.length > 0 && (
         <>
           {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <StatCard label="Total Eventos" value={totalEvents.toLocaleString()} />
-            <StatCard label="Eventos Activos" value={activeEvents.toLocaleString()} />
-            <StatCard label="Boletos Vendidos" value={ticketsSold.toLocaleString()} />
-            <StatCard label="Ventas Totales" value={formatCurrency(totalRevenue)} />
+          <div className="flex flex-col gap-2">
+            <p className="text-muted text-[11px] font-semibold uppercase tracking-wide">Resumen general</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <StatCard label="Total Eventos" value={totalEvents.toLocaleString()} icon={Icon.Calendar} />
+              <StatCard label="Eventos Activos" value={activeEvents.toLocaleString()} icon={Icon.CalendarCheck} />
+              <StatCard label="Boletos Vendidos" value={ticketsSold.toLocaleString()} icon={Icon.Ticket} />
+              <StatCard label="Ventas Totales" value={formatCurrency(totalRevenue)} icon={Icon.Wallet} />
+            </div>
           </div>
 
-          {/* Ventas por evento + Top evento */}
-          <div className="grid md:grid-cols-2 gap-2">
-            <div className="bg-surface border border-border rounded-[10px] p-3">
-              <p className="text-foreground font-semibold text-xs mb-2">Ventas por Evento</p>
-              {salesByEvent.length === 0 ? (
-                <p className="text-muted text-xs py-4 text-center">Todavía no hay zonas configuradas en tus eventos.</p>
+          {/* Próximos eventos + Top evento */}
+          <div className="grid lg:grid-cols-2 gap-2">
+            <div className="bg-surface border border-border rounded-[10px] p-3 flex flex-col gap-2">
+              <p className="text-foreground font-semibold text-xs">Próximos Eventos</p>
+              {upcomingEvents.length === 0 ? (
+                <p className="text-muted text-xs py-4 text-center">No tienes eventos activos próximos.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {salesByEvent.map(({ id, name, pct }) => (
-                    <div key={id} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-muted truncate">{name}</span>
-                        <span className="text-foreground font-medium">{pct}%</span>
+                  {upcomingEvents.map((ev) => {
+                    const pct = ev.total > 0 ? Math.round((ev.sold / ev.total) * 100) : 0;
+                    return (
+                      <div
+                        key={ev.id}
+                        className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-surface p-3 hover:bg-surface-secondary transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-foreground text-xs font-medium truncate">{ev.name}</p>
+                          <p className="text-muted text-[11px] flex items-center gap-1.5 mt-0.5">
+                            <Icon.Calendar className="size-3" />
+                            {ev.date}
+                            <span className="mx-0.5">·</span>
+                            <Icon.MapPin className="size-3" />
+                            <span className="truncate">{ev.venue}</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-muted text-[11px] font-mono hidden sm:inline">
+                            {ev.sold.toLocaleString()} / {ev.total.toLocaleString()} ({pct}%)
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-success">
+                            <span className="size-1.5 rounded-full bg-success" />
+                            Activo
+                          </span>
+                        </div>
                       </div>
-                      <div className="h-1 rounded-full bg-default overflow-hidden">
-                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -192,71 +222,25 @@ export function OrganizerDashboard() {
             </div>
           </div>
 
-          {/* Próximos eventos */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-foreground font-semibold text-xs">Próximos Eventos</p>
-            {upcomingEvents.length === 0 ? (
-              <p className="text-muted text-xs py-4 text-center bg-surface border border-border rounded-[10px]">
-                No tienes eventos activos próximos.
-              </p>
+          {/* Ocupación por evento */}
+          <div className="bg-surface border border-border rounded-[10px] p-3 flex flex-col gap-2">
+            <p className="text-foreground font-semibold text-xs">Ocupación por Evento</p>
+            {occupancyByEvent.length === 0 ? (
+              <p className="text-muted text-xs py-4 text-center">Todavía no hay zonas configuradas en tus eventos.</p>
             ) : (
-              <Table>
-                <Table.ScrollContainer>
-                  <Table.Content aria-label="Próximos eventos" className="min-w-160 text-xs">
-                    <Table.Header>
-                      <Table.Column isRowHeader id="name" minWidth={200} className="text-center">
-                        Evento
-                      </Table.Column>
-                      <Table.Column id="date" minWidth={110} className="text-center">
-                        Fecha
-                      </Table.Column>
-                      <Table.Column id="sold" minWidth={160} className="text-center">
-                        Boletos Vendidos
-                      </Table.Column>
-                      <Table.Column id="status" minWidth={100} className="text-center">
-                        Estado
-                      </Table.Column>
-                    </Table.Header>
-                    <Table.Body items={upcomingEvents}>
-                      {(ev) => {
-                        const pct = ev.total > 0 ? Math.round((ev.sold / ev.total) * 100) : 0;
-                        return (
-                          <Table.Row>
-                            <Table.Cell className="text-center">
-                              <div>
-                                <p className="text-foreground text-xs font-medium">{ev.name}</p>
-                                <p className="text-muted text-[11px]">{ev.venue}</p>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <span className="text-xs">{ev.date}</span>
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <div className="flex flex-col gap-1 w-36 mx-auto">
-                                <div className="flex justify-between text-[11px]">
-                                  <span className="text-muted font-mono">
-                                    {ev.sold.toLocaleString()} / {ev.total.toLocaleString()}
-                                  </span>
-                                  <span className="text-foreground font-medium">{pct}%</span>
-                                </div>
-                                <div className="h-1 rounded-full bg-default overflow-hidden">
-                                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                                </div>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="text-center">
-                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-success">
-                                <span className="size-1.5 rounded-full bg-success" />
-                                {ev.status}
-                              </span>
-                            </Table.Cell>
-                          </Table.Row>
-                        );
-                      }}
-                    </Table.Body>
-                  </Table.Content>
-                </Table.ScrollContainer>
-              </Table>
+              <div className="flex flex-col gap-2">
+                {occupancyByEvent.map(({ id, name, pct }) => (
+                  <div key={id} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-muted truncate">{name}</span>
+                      <span className="text-foreground font-medium shrink-0">{pct}% ocupado</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-default overflow-hidden">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>
