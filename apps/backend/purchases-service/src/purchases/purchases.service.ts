@@ -23,6 +23,7 @@ import {
 } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
 import { PurchaseZoneRevenueDto, PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
+import { PurchasesStatsQueryDto } from './dto/purchases-stats-query.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -620,8 +621,10 @@ export class PurchasesService {
 
   async getStats(
     requester: AuthenticatedUser,
-    eventId?: string,
+    query: PurchasesStatsQueryDto = {},
   ): Promise<PurchasesStatsResponseDto> {
+    const { eventId, from, to } = query;
+
     if (requester.role !== AUTH_ROLES.ADMIN) {
       // Un ORGANIZER solo puede pedir las métricas de UN evento (el suyo),
       // nunca las globales de la plataforma.
@@ -633,19 +636,37 @@ export class PurchasesService {
       await this.assertOrganizerOwnsEvent(eventId, requester.sub);
     }
 
+    const hasPeriod = Boolean(from || to);
+
+    // Las consultas por periodo son puntuales y cada rango daría un resultado
+    // distinto: cachearlas bajo la clave global devolvería el acumulado.
     const cacheKey = eventId ? this.eventStatsCacheKey(eventId) : STATS_CACHE_KEY;
-    const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
-    if (cached) return cached;
+    if (!hasPeriod) {
+      const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
+      if (cached) return cached;
+    }
+
+    const periodFilter = hasPeriod
+      ? {
+          createdAt: {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to ? { lte: new Date(to) } : {}),
+          },
+        }
+      : {};
 
     const since = new Date(Date.now() - RECENT_WINDOW_MS);
     const revenueWhere = {
       status: 'CONFIRMED' as const,
       ...(eventId ? { eventId } : {}),
+      ...periodFilter,
     };
-    const recentWhere = {
-      createdAt: { gte: since },
-      ...(eventId ? { eventId } : {}),
-    };
+    // Con periodo explícito, "recientes" pasa a significar "del periodo":
+    // preguntar por mayo y recibir el conteo de las últimas 24 h no tendría
+    // sentido para quien consulta.
+    const recentWhere = hasPeriod
+      ? { ...(eventId ? { eventId } : {}), ...periodFilter }
+      : { createdAt: { gte: since }, ...(eventId ? { eventId } : {}) };
 
     const [revenueAggregate, recentPurchasesCount, zoneRevenue] =
       await Promise.all([
@@ -657,8 +678,11 @@ export class PurchasesService {
         eventId
           ? this.prisma.purchaseDetail.groupBy({
               by: ['eventZoneId'],
-              where: { purchase: { eventId, status: 'CONFIRMED' } },
+              where: {
+                purchase: { eventId, status: 'CONFIRMED', ...periodFilter },
+              },
               _sum: { finalPrice: true, taxAmount: true },
+              _count: { _all: true },
             })
           : Promise.resolve(null),
       ]);
@@ -668,6 +692,9 @@ export class PurchasesService {
           eventZoneId: zone.eventZoneId,
           revenue:
             Number(zone._sum.finalPrice ?? 0) + Number(zone._sum.taxAmount ?? 0),
+          // Cada PurchaseDetail es un boleto, así que contarlos es contar
+          // los boletos vendidos de la zona.
+          ticketsSold: zone._count._all,
         }))
       : undefined;
 
@@ -675,9 +702,14 @@ export class PurchasesService {
       totalRevenue: Number(revenueAggregate._sum.total ?? 0),
       recentPurchasesCount,
       ...(byEventZone ? { byEventZone } : {}),
+      from: from ?? null,
+      to: to ?? null,
     };
 
-    await this.redis.set(cacheKey, stats, 30);
+    if (!hasPeriod) {
+      await this.redis.set(cacheKey, stats, 30);
+    }
+
     return stats;
   }
 

@@ -511,11 +511,13 @@ describe('PurchasesService', () => {
       await expect(service.getStats(ADMIN_USER)).resolves.toEqual({
         totalRevenue: 3420500,
         recentPurchasesCount: 37,
+        from: null,
+        to: null,
       });
 
       expect(redis.set).toHaveBeenCalledWith(
         'purchases:stats',
-        { totalRevenue: 3420500, recentPurchasesCount: 37 },
+        { totalRevenue: 3420500, recentPurchasesCount: 37, from: null, to: null },
         30,
       );
       expect(prisma.purchaseDetail.groupBy).not.toHaveBeenCalled();
@@ -529,6 +531,8 @@ describe('PurchasesService', () => {
       await expect(service.getStats(ADMIN_USER)).resolves.toEqual({
         totalRevenue: 0,
         recentPurchasesCount: 0,
+        from: null,
+        to: null,
       });
     });
 
@@ -552,17 +556,27 @@ describe('PurchasesService', () => {
       prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '1500.00' } });
       prisma.purchase.count.mockResolvedValueOnce(3);
       prisma.purchaseDetail.groupBy.mockResolvedValueOnce([
-        { eventZoneId: 'zone-1', _sum: { finalPrice: '1000.00', taxAmount: '160.00' } },
-        { eventZoneId: 'zone-2', _sum: { finalPrice: '500.00', taxAmount: '80.00' } },
+        {
+          eventZoneId: 'zone-1',
+          _sum: { finalPrice: '1000.00', taxAmount: '160.00' },
+          _count: { _all: 4 },
+        },
+        {
+          eventZoneId: 'zone-2',
+          _sum: { finalPrice: '500.00', taxAmount: '80.00' },
+          _count: { _all: 2 },
+        },
       ]);
 
-      await expect(service.getStats(ADMIN_USER, eventId)).resolves.toEqual({
+      await expect(service.getStats(ADMIN_USER, { eventId })).resolves.toEqual({
         totalRevenue: 1500,
         recentPurchasesCount: 3,
         byEventZone: [
-          { eventZoneId: 'zone-1', revenue: 1160 },
-          { eventZoneId: 'zone-2', revenue: 580 },
+          { eventZoneId: 'zone-1', revenue: 1160, ticketsSold: 4 },
+          { eventZoneId: 'zone-2', revenue: 580, ticketsSold: 2 },
         ],
+        from: null,
+        to: null,
       });
 
       expect(prisma.purchase.aggregate).toHaveBeenCalledWith(
@@ -581,6 +595,51 @@ describe('PurchasesService', () => {
         expect.objectContaining({ totalRevenue: 1500 }),
         30,
       );
+    });
+
+    it('acota la recaudación al periodo y devuelve el rango aplicado', async () => {
+      const from = '2026-05-01T00:00:00.000Z';
+      const to = '2026-05-31T23:59:59.000Z';
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '6200.00' } });
+      prisma.purchase.count.mockResolvedValueOnce(2);
+
+      await expect(service.getStats(ADMIN_USER, { from, to })).resolves.toEqual({
+        totalRevenue: 6200,
+        recentPurchasesCount: 2,
+        from,
+        to,
+      });
+
+      expect(prisma.purchase.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'CONFIRMED',
+            createdAt: { gte: new Date(from), lte: new Date(to) },
+          }),
+        }),
+      );
+    });
+
+    it('no usa ni escribe caché cuando hay periodo: cada rango da otro total', async () => {
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '100.00' } });
+      prisma.purchase.count.mockResolvedValueOnce(1);
+
+      await service.getStats(ADMIN_USER, { from: '2026-01-01T00:00:00.000Z' });
+
+      expect(redis.get).not.toHaveBeenCalled();
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('con periodo, el conteo de compras es del periodo y no de las últimas 24 h', async () => {
+      const from = '2026-05-01T00:00:00.000Z';
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '0' } });
+      prisma.purchase.count.mockResolvedValueOnce(0);
+
+      await service.getStats(ADMIN_USER, { from });
+
+      expect(prisma.purchase.count).toHaveBeenCalledWith({
+        where: { createdAt: { gte: new Date(from) } },
+      });
     });
   });
 
@@ -630,7 +689,7 @@ describe('PurchasesService', () => {
         json: async () => ({ organizerId: 'someone-else' }),
       } as Response);
 
-      await expect(service.getStats(ORGANIZER, EVENT_ID)).rejects.toThrow(ForbiddenException);
+      await expect(service.getStats(ORGANIZER, { eventId: EVENT_ID })).rejects.toThrow(ForbiddenException);
     });
 
     it('getStats allows an ORGANIZER querying their own event', async () => {
@@ -644,7 +703,7 @@ describe('PurchasesService', () => {
       prisma.purchase.count.mockResolvedValueOnce(1);
       prisma.purchaseDetail.groupBy.mockResolvedValueOnce([]);
 
-      await expect(service.getStats(ORGANIZER, EVENT_ID)).resolves.toEqual(
+      await expect(service.getStats(ORGANIZER, { eventId: EVENT_ID })).resolves.toEqual(
         expect.objectContaining({ totalRevenue: 100 }),
       );
     });
@@ -652,7 +711,7 @@ describe('PurchasesService', () => {
     it('getStats reports the event as not found when venues-events-service 404s', async () => {
       fetchSpy.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) } as Response);
 
-      await expect(service.getStats(ORGANIZER, EVENT_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.getStats(ORGANIZER, { eventId: EVENT_ID })).rejects.toThrow(NotFoundException);
     });
 
     it('findAll lets an ORGANIZER see every purchase of their own event, not just their own', async () => {

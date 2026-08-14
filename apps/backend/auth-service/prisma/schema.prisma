@@ -28,6 +28,10 @@ model User {
   roleId        String
   provider      String   @default("LOCAL")
   providerId    String?  @unique
+  /// Palabra única para entrar desde la skill de Alexa. Dictar un correo y una
+  /// contraseña por voz falla demasiado, así que se usa una sola palabra.
+  /// Null = esa cuenta no tiene acceso por voz.
+  alexaSeed     String?  @unique
   role          Role     @relation(fields: [roleId], references: [id])
 }
 

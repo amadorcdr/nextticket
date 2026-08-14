@@ -9,6 +9,7 @@ import { ResendActivationDto } from './dto/resend-activation.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { DiscardPasswordResetDto } from './dto/discard-password-reset.dto';
+import { AlexaSeedDto } from './dto/alexa-seed.dto';
 import { CurrentUser } from './current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -93,5 +94,29 @@ export class AuthController {
   @ApiOperation({ summary: 'Get the authenticated user' })
   me(@CurrentUser() user: { sub: string }) {
     return this.authService.me(user.sub);
+  }
+
+  @Post('alexa/seed')
+  @ApiOperation({
+    summary: 'Iniciar sesión desde Alexa con la palabra clave',
+    description:
+      'La skill de voz manda una sola palabra en vez de correo y contraseña. ' +
+      'Devuelve el mismo { token, user } que el login normal.',
+  })
+  loginWithAlexaSeed(@Body() dto: AlexaSeedDto) {
+    return this.authService.loginWithAlexaSeed(dto);
+  }
+
+  @Post('alexa/seed/generate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Generar mi palabra clave para entrar por Alexa',
+    description:
+      'Reemplaza la palabra anterior, si había una. Devuelve `spoken`, que es ' +
+      'cómo debe dictarla el usuario en voz alta.',
+  })
+  generateAlexaSeed(@CurrentUser() user: { sub: string }) {
+    return this.authService.generateAlexaSeed(user.sub);
   }
 }
