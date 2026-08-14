@@ -1,0 +1,88 @@
+{
+  "formatVersion": "nextticket-canvas-v12",
+  "physical": {
+    "venue": {
+      "id": "5954d7ac-5a20-4e95-951c-b2918e3d896e",
+      "name": "Recinto Prueba Import JSON",
+      "address": "Test 1",
+      "city": "CDMX",
+      "addressState": null,
+      "country": "Mexico",
+      "totalCapacity": 8,
+      "description": null,
+      "status": "ACTIVE"
+    },
+    "floors": [
+      { "id": "d7dd154d-38a4-476d-ae41-c2bad9721318", "venueId": "5954d7ac-5a20-4e95-951c-b2918e3d896e", "name": "Planta Baja", "levelIndex": 0 }
+    ],
+    "sections": [
+      {
+        "id": "46b225f7-e96b-43bb-84c5-fb1f66d1d611",
+        "venueId": "5954d7ac-5a20-4e95-951c-b2918e3d896e",
+        "floorId": "d7dd154d-38a4-476d-ae41-c2bad9721318",
+        "name": "VIP",
+        "description": null,
+        "capacity": 4,
+        "status": "ACTIVE",
+        "color": "#a855f7",
+        "prefix": null,
+        "coordinateX": 100,
+        "coordinateY": 100,
+        "width": 250,
+        "height": 120,
+        "rotationDegrees": 0,
+        "isEllipse": false,
+        "points": [],
+        "rowSeatCounts": [4],
+        "rowNames": ["A"]
+      },
+      {
+        "id": "59c7423f-2b6f-49a4-a741-fba31eb81f1a",
+        "venueId": "5954d7ac-5a20-4e95-951c-b2918e3d896e",
+        "floorId": "d7dd154d-38a4-476d-ae41-c2bad9721318",
+        "name": "General",
+        "description": null,
+        "capacity": 4,
+        "status": "ACTIVE",
+        "color": "#38bdf8",
+        "prefix": null,
+        "coordinateX": 400,
+        "coordinateY": 100,
+        "width": 250,
+        "height": 120,
+        "rotationDegrees": 0,
+        "isEllipse": false,
+        "points": [],
+        "rowSeatCounts": [4],
+        "rowNames": ["B"]
+      }
+    ],
+    "seats": [
+      { "id": "547e5474-d19a-444d-a334-e34c847736ed", "sectionId": "46b225f7-e96b-43bb-84c5-fb1f66d1d611", "row": "A", "number": "1", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "51716aff-2ed4-48f4-833d-49b49da24547", "sectionId": "46b225f7-e96b-43bb-84c5-fb1f66d1d611", "row": "A", "number": "2", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "1aa6b37e-a8e3-41ab-8b2d-cb53304ec2f4", "sectionId": "46b225f7-e96b-43bb-84c5-fb1f66d1d611", "row": "A", "number": "3", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "50a83c81-3caa-4bf4-bba6-0a676839846d", "sectionId": "46b225f7-e96b-43bb-84c5-fb1f66d1d611", "row": "A", "number": "4", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "100da13c-4603-424a-a50f-a2e59a829b9e", "sectionId": "59c7423f-2b6f-49a4-a741-fba31eb81f1a", "row": "B", "number": "1", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "682ae09a-af1a-4f9d-b087-f0c4939f574a", "sectionId": "59c7423f-2b6f-49a4-a741-fba31eb81f1a", "row": "B", "number": "2", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "d4549800-6d33-48d9-b8c1-b88405a39d7e", "sectionId": "59c7423f-2b6f-49a4-a741-fba31eb81f1a", "row": "B", "number": "3", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" },
+      { "id": "e09bf1b1-b066-462b-adec-390b496bbc92", "sectionId": "59c7423f-2b6f-49a4-a741-fba31eb81f1a", "row": "B", "number": "4", "type": "STANDARD", "coordinateX": null, "coordinateY": null, "status": "AVAILABLE" }
+    ],
+    "canvasElements": [
+      {
+        "id": "element_escenario",
+        "floorId": "d7dd154d-38a4-476d-ae41-c2bad9721318",
+        "elementType": "STAGE",
+        "name": "Escenario",
+        "status": true,
+        "color": "#334155",
+        "coordinateX": 100,
+        "coordinateY": -60,
+        "width": 550,
+        "height": 100,
+        "rotationDegrees": 0,
+        "isEllipse": false,
+        "points": []
+      }
+    ]
+  }
+}

@@ -7,9 +7,141 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────────────────────
+// TICKETS SERVICE — data model
+//
+// Owns three functional modules from the reference schema:
+//   · Tickets       — Ticket issuance, QR hash generation, lifecycle
+//   · Transfers     — Peer-to-peer ticket transfers with new QR emission
+//   · Validations   — Gate-scan validation records (success / rejection)
+//
+// Cross-service references (purchaseId, purchaseDetailId, eventSeatId,
+// eventZoneId, currentHolderId, validatorId, fromUserId, toUserId) are
+// OPAQUE UUIDs: they point at rows owned by other microservices
+// (identity / venues-events / purchases), so they carry no @relation
+// and no foreign key. Referential integrity across the service boundary
+// is replaced by eventual consistency (saga + events).
+//
+// NOTE: Partial unique indexes and CHECK constraints from the reference
+// SQL (e.g., uk_tickets_issued_seat WHERE status='ISSUED') cannot be
+// expressed in schema.prisma. They are added by hand to the generated
+// migration SQL / enforced in the service layer.
+// ─────────────────────────────────────────────────────────────
+
+// ── Enums ───────────────────────────────────────────────────
+
+enum TicketOriginType {
+  PURCHASE
+  COMPLIMENTARY
+  STAFF
+  TRANSFER
+}
+
+enum TicketStatus {
+  ISSUED
+  USED
+  CANCELED
+  EXPIRED
+}
+
+enum TicketTransferStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  CANCELED
+}
+
+// ── Ticket ──────────────────────────────────────────────────
+// Each row represents a single issued ticket with a unique QR hash.
+// The qrCode column stores a SHA-256 hash; the actual QR image is
+// generated on-the-fly by the service — never persisted.
 model Ticket {
-  id        String   @id @default(uuid())
-  folio     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+  lastModifiedBy String?  @db.Uuid
+  updatedAt      DateTime @updatedAt
+
+  purchaseId       String?          @db.Uuid   // opaque → purchases service
+  purchaseDetailId String?          @db.Uuid   // opaque → purchases service
+  eventSeatId      String?          @db.Uuid   // opaque → venues-events service
+  eventZoneId      String           @db.Uuid   // opaque → venues-events service
+  currentHolderId  String           @db.Uuid   // opaque → identity service
+
+  originType TicketOriginType @default(PURCHASE)
+  folio      String           @unique @db.VarChar(20)
+  qrCode     String           @unique @db.VarChar(255)
+  issuedAt   DateTime
+  status     TicketStatus     @default(ISSUED)
+
+  validations        TicketValidation[]
+  transfersAsOriginal TicketTransfer[]  @relation("OriginalTicket")
+  transfersAsIssued   TicketTransfer[]  @relation("IssuedTicket")
+
+  @@index([purchaseId])
+  @@index([eventZoneId])
+  @@index([eventSeatId])
+  @@index([currentHolderId])
+  @@index([originType])
+  @@index([status])
+  @@index([issuedAt])
+}
+
+// ── Ticket Validation ───────────────────────────────────────
+// One record per gate-scan attempt. result=1 means successful entry,
+// result=0 means rejection (with mandatory rejectionReason).
+// Business rule: only one successful validation per ticket
+// (enforced via partial unique index in migration SQL).
+model TicketValidation {
+  id          String   @id @default(uuid()) @db.Uuid
+  createdAt   DateTime @default(now())
+
+  ticketId    String   @db.Uuid
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+
+  validatorId String   @db.Uuid   // opaque → identity service
+
+  validatedAt DateTime
+  result      Int      @db.SmallInt   // 1 = success, 0 = rejection
+  rejectionReason String? @db.VarChar(255)
+
+  @@index([ticketId])
+  @@index([validatorId])
+  @@index([validatedAt])
+  @@index([result])
+}
+
+// ── Ticket Transfer ─────────────────────────────────────────
+// Peer-to-peer transfer flow:
+//   1. Sender requests transfer → status = PENDING
+//   2. On completion:
+//      a. Original ticket → status = CANCELED
+//      b. New ticket issued (origin_type = TRANSFER) with fresh QR hash
+//      c. Transfer record updated: issuedTicketId = new ticket, status = COMPLETED
+//   3. issuedTicketId is NULL until transfer completes
+model TicketTransfer {
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  createdBy      String?  @db.Uuid
+  lastModifiedBy String?  @db.Uuid
+  updatedAt      DateTime @updatedAt
+
+  ticketId       String   @db.Uuid
+  ticket         Ticket   @relation("OriginalTicket", fields: [ticketId], references: [id])
+
+  issuedTicketId String?  @db.Uuid
+  issuedTicket   Ticket?  @relation("IssuedTicket", fields: [issuedTicketId], references: [id])
+
+  fromUserId     String   @db.Uuid   // opaque → identity service
+  toUserId       String   @db.Uuid   // opaque → identity service
+
+  transferFee    Decimal  @default(0) @db.Decimal(11, 2)
+  completedAt    DateTime?
+  status         TicketTransferStatus @default(PENDING)
+
+  @@index([ticketId])
+  @@index([issuedTicketId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
 }

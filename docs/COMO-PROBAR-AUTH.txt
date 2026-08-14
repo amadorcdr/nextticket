@@ -1,0 +1,298 @@
+================================================================================
+NEXTTICKET - COMO PROBAR EL BLOQUE DE AUTENTICACION Y OAUTH
+Rama: features/categories-event/auth/pagination
+================================================================================
+
+Este instructivo es para quien vaya a probar el login, el registro y el flujo
+de Google OAuth. Yo no pude correrlo end-to-end porque no tengo Docker
+disponible en mi maquina: el codigo compila y las pruebas unitarias pasan,
+pero NADIE lo ha ejecutado todavia contra una base de datos real.
+
+Lo que hay que confirmar es exactamente eso: que corre.
+
+
+================================================================================
+0. QUE INCLUYE ESTA RAMA
+================================================================================
+
+  - Modelo User + Role en auth-service (email unico, password opcional para
+    los usuarios de OAuth, provider y providerId).
+  - Migracion nueva: 20260730120000_add_users_roles_auth
+  - Endpoints: POST /auth/register, POST /auth/login, GET /auth/google,
+    GET /auth/google/callback, GET /auth/me
+  - Guards JWT + roles, en archivo IDENTICO en los 4 microservicios.
+  - Identidad tomada del token y no del body (organizerId, userId,
+    currentHolderId, fromUserId, validatorId).
+
+QUE **NO** INCLUYE, para que nadie lo busque:
+  - El decorador @Roles() NO esta aplicado todavia en ningun endpoint.
+    El guard existe y funciona, pero la matriz publico / Cliente / Organizador
+    / Validador va en otro PR, porque toca controllers de otras personas.
+  - No hay endpoint de logout ni revocacion de tokens.
+  - No estan implementados permissions ni role_permissions del nextticket.sql.
+
+
+================================================================================
+1. REQUISITOS
+================================================================================
+
+  - Docker Desktop abierto
+  - Node 22
+  - pnpm 11
+
+IMPORTANTE SOBRE pnpm: esta rama agrega un archivo pnpm-workspace.yaml en cada
+microservicio. NO lo borren. pnpm 11 dejo de leer esos ajustes desde .npmrc, y
+sin ellos el cliente de Prisma que se genera no encuentra sus dependencias y
+el servicio ni siquiera arranca. El sintoma es:
+
+    Cannot find module '@prisma/client-runtime-utils'
+
+Si les sale eso, es que la instalacion se hizo sin ese archivo. Borren
+node_modules y vuelvan a instalar.
+
+
+================================================================================
+2. LEVANTAR POSTGRES Y REDIS
+================================================================================
+
+Solo hay un docker-compose y vive en purchases-service, pero levanta la
+infraestructura de todos:
+
+    cd apps/backend/purchases-service
+    docker compose up -d
+
+Eso deja Postgres 16 en localhost:5432 (usuario postgres, password postgres)
+y Redis 7 en localhost:6379.
+
+OJO, ESTE PASO SE OLVIDA SIEMPRE: el compose solo crea la base purchases_db.
+La base auth_db NO se crea sola, hay que crearla a mano:
+
+    docker exec -it purchases-db psql -U postgres -c "CREATE DATABASE auth_db;"
+
+Para verificar que quedo:
+
+    docker exec -it purchases-db psql -U postgres -l
+
+Redis es obligatorio para el flujo de Google: ahi se guarda el "state" de un
+solo uso que protege el OAuth. Si Redis no esta arriba, GET /auth/google falla.
+
+
+================================================================================
+3. CREAR EL ARCHIVO .env
+================================================================================
+
+En apps/backend/auth-service, copien .env.example a .env y ajusten:
+
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/auth_db?schema=public"
+    REDIS_URL="redis://localhost:6379"
+    PORT=3002
+    GATEWAY_URL=http://localhost:3001
+    JWT_SECRET=un-secreto-cualquiera-para-desarrollo
+    JWT_EXPIRES_IN=1d
+    GOOGLE_CLIENT_ID=...
+    GOOGLE_CLIENT_SECRET=...
+    GOOGLE_CALLBACK_URL=http://localhost:3002/auth/google/callback
+
+REGLA QUE NO SE PUEDE SALTAR: el JWT_SECRET tiene que ser EL MISMO en los
+cuatro servicios (auth, venues-events, purchases, tickets). Si no coincide,
+el token que emite auth-service es rechazado por los demas con 401 y van a
+pensar que el guard esta roto cuando en realidad es el secreto.
+
+El .env esta en el .gitignore. No lo suban.
+
+
+================================================================================
+4. CREDENCIALES DE GOOGLE (solo si van a probar el boton de Google)
+================================================================================
+
+El registro y el login con contraseña funcionan SIN esto. Si no configuran
+Google, GET /auth/google responde:
+
+    400 - "Google OAuth is not configured"
+
+Eso es lo esperado, no es un bug.
+
+Para probarlo de verdad hay que crear un proyecto en Google Cloud Console,
+generar credenciales de tipo "OAuth client ID - Web application" y registrar
+esta URI de redireccion autorizada:
+
+    http://localhost:3002/auth/google/callback
+
+Despues pegan el client id y el secret en su .env local.
+
+NO suban esas credenciales al repositorio ni las manden por chat. Si se les
+va una por error no basta con borrarla en otro commit: hay que revocarla en
+la consola de Google y generar otra.
+
+
+================================================================================
+5. INSTALAR, MIGRAR Y SEMBRAR
+================================================================================
+
+    cd apps/backend/auth-service
+    pnpm install
+    pnpm exec prisma migrate deploy
+    pnpm exec prisma db seed
+
+La migracion crea la tabla Role y le agrega a User las columnas email,
+password, roleId, provider, providerId, status, createdBy y lastModifiedBy.
+
+AVISO: email y roleId entran como NOT NULL sin valor por defecto. Si su base
+auth_db ya tiene usuarios de antes, la migracion va a fallar. En ese caso, y
+solo en desarrollo:
+
+    pnpm exec prisma migrate reset
+
+El seed siembra tres roles: CLIENT, ORGANIZER y VALIDATOR. Si sale bien
+imprime "Roles sembrados: CLIENT, ORGANIZER, VALIDATOR".
+
+(Nota: el seed estaba roto en la rama anterior porque construia el cliente de
+Prisma sin el adapter que exige Prisma 7. Ya quedo arreglado, pero es el
+primer punto donde vale la pena confirmar que de verdad corre.)
+
+
+================================================================================
+6. LEVANTAR LOS SERVICIOS
+================================================================================
+
+    cd apps/backend/auth-service
+    pnpm start:dev
+
+Y en otra terminal, si quieren probar pasando por el punto unico de entrada:
+
+    cd apps/backend/api-gateway
+    pnpm install
+    pnpm start:dev
+
+Documentacion interactiva:
+    http://localhost:3002/docs/auth
+    o por el gateway: http://localhost:3001/docs/auth
+
+En las docs hay boton para pegar el token (esquema bearer registrado).
+
+
+================================================================================
+7. PRUEBAS QUE DEBEN PASAR
+================================================================================
+
+7.1 Registro
+
+    curl -s -X POST http://localhost:3002/auth/register \
+      -H "Content-Type: application/json" \
+      -d "{\"name\":\"Aidee\",\"email\":\"aidee@test.com\",\"password\":\"Test1234\"}"
+
+    Esperado: 201 con { token, user }.
+    Revisen que en la respuesta NO venga el campo password por ningun lado.
+
+7.2 Login
+
+    curl -s -X POST http://localhost:3002/auth/login \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"aidee@test.com\",\"password\":\"Test1234\"}"
+
+    Esperado: 200 con { token, user }. Guarden ese token.
+
+7.3 El token sirve en otro microservicio (aqui se ve si el guard y el
+    gateway funcionan de verdad)
+
+    curl -s http://localhost:3001/events -H "Authorization: Bearer <TOKEN>"
+
+7.4 Datos del usuario del token
+
+    curl -s http://localhost:3002/auth/me -H "Authorization: Bearer <TOKEN>"
+
+
+================================================================================
+8. PRUEBAS QUE DEBEN **FALLAR** (si pasan, hay un bug)
+================================================================================
+
+8.1 Registrar el mismo correo dos veces
+    -> 409 Conflict, "El correo ya está registrado"
+    -> Si sale 500, avisenme: era el bug que arregle en esta rama.
+
+8.2 Login con contraseña incorrecta
+    -> 401 "Credenciales inválidas"
+
+8.3 Login con un correo que no existe
+    -> 401 con EXACTAMENTE EL MISMO mensaje que el anterior.
+    -> Si el mensaje es distinto, se puede averiguar que correos estan
+       registrados. Eso es un hallazgo, reportenlo.
+
+8.4 Endpoint protegido sin header Authorization
+    -> 401
+
+8.5 Token manipulado (cambien un caracter del payload)
+    -> 401
+
+8.6 Entrar directo a la URL del callback, sin haber pasado por /auth/google
+    http://localhost:3002/auth/google/callback?code=loquesea
+    -> 400 "Google OAuth state is required"
+    -> Es la proteccion contra CSRF del flujo OAuth. Debe rechazarlo.
+
+8.7 Repetir el callback con un state ya usado
+    -> 401 "Google OAuth state is invalid or expired"
+    -> El state sirve una sola vez.
+
+
+================================================================================
+9. PRUEBAS UNITARIAS (estas NO necesitan Docker ni base de datos)
+================================================================================
+
+    cd apps/backend/auth-service
+    pnpm test
+
+Deben pasar 27 pruebas. Cubren: contraseña guardada con bcrypt y nunca en
+texto plano, que password no se selecciona de vuelta, correo duplicado que
+devuelve 409, login correcto, contraseña mala, correo inexistente con el mismo
+mensaje, cuenta de OAuth sin contraseña, vinculacion por correo sin duplicar
+usuario, correo de Google no verificado, state de un solo uso, rol equivocado
+que devuelve 403 y falta de token que devuelve 401.
+
+En toda la rama son 80 pruebas entre los 5 servicios, todas con mocks de
+Prisma y Redis. Ninguna necesita Docker.
+
+Verificar que compila:
+
+    pnpm exec tsc --noEmit -p tsconfig.json
+
+
+================================================================================
+10. SI ALGO FALLA
+================================================================================
+
+"Cannot find module '@prisma/client-runtime-utils'"
+    Falta el pnpm-workspace.yaml o se instalo sin el. Borren node_modules y
+    hagan pnpm install otra vez.
+
+"PrismaClient needs to be constructed with a non-empty, valid PrismaClientOptions"
+    El schema no lleva url en el datasource: hay que pasar el driver adapter.
+    Si sale en un script nuevo, copien como lo hace src/prisma/prisma.service.ts.
+
+"Environment variable not found: DATABASE_URL"
+    Falta el .env, o lo corrieron desde otra carpeta.
+
+401 en otro microservicio con un token que si funciona en auth
+    El JWT_SECRET no coincide entre los .env. Es la causa mas comun.
+
+400 "Google OAuth is not configured"
+    Faltan GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_CALLBACK_URL.
+
+La migracion falla por columnas NOT NULL
+    La base auth_db ya tenia usuarios. En desarrollo: prisma migrate reset.
+
+
+================================================================================
+11. PARA DECIDIR ENTRE TODOS
+================================================================================
+
+  - Si quieren un rol Administrador. Hoy se siembran solo tres: CLIENT,
+    ORGANIZER y VALIDATOR.
+  - Confirmar que dejamos permissions y role_permissions para despues, y que
+    por ahora basta con el rol.
+  - Definir la matriz de que endpoint pide que rol, para poder aplicar
+    @Roles() en el siguiente PR.
+  - Donde guarda el token el frontend y que hacemos en el callback de Google:
+    hoy devuelve el JWT en JSON. Si el front prefiere un redirect con el token,
+    hay que cambiarlo.
+
+================================================================================

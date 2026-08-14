@@ -1,31 +1,36 @@
-import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'; // ← NUEVO
-import { apiReference } from '@scalar/nestjs-api-reference';       // ← NUEVO
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT ?? 3005;
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
 
-  // ← NUEVO: generar documento OpenAPI
+  // transform: los query params llegan como string y los DTO de paginación
+  // dependen de @Type(() => Number) y de sus valores por defecto.
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
   const config = new DocumentBuilder()
     .setTitle('Tickets Service')
-    .setDescription('API de tickets con PostgreSQL + Redis')
+    .setDescription('Tickets API with PostgreSQL + Redis and QR validation')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'bearer',
+    )
     .build();
 
-  // ← NUEVO: evita error de tipos duplicados con pnpm
-  type NestApp = Parameters<typeof SwaggerModule.createDocument>[0];
-  const nestApp = app as NestApp;
-
-  const document = SwaggerModule.createDocument(nestApp, config);
-  SwaggerModule.setup('swagger/tickets', nestApp, document, {
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('swagger/tickets', app, document, {
     jsonDocumentUrl: 'api-json/tickets',
   });
 
-  // ← NUEVO: Scalar en /docs/tickets
   app.use(
     '/docs/tickets',
     apiReference({
@@ -33,15 +38,15 @@ async function bootstrap() {
     }),
   );
 
-  // CORS: solo aceptamos el origen del api-gateway (allowlist).
   app.enableCors({
     origin: [process.env.GATEWAY_URL ?? 'http://localhost:3001'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 
   await app.listen(port);
-  console.log(`tickets-service escuchando en http://localhost:${port}`);
-  console.log(`Scalar docs en http://localhost:${port}/docs/tickets`);
-  console.log(`OpenAPI JSON en http://localhost:${port}/api-json/tickets`);
+  console.log(`tickets-service listening on http://localhost:${port}`);
+  console.log(`Scalar docs at http://localhost:${port}/docs/tickets`);
+  console.log(`OpenAPI JSON at http://localhost:${port}/api-json/tickets`);
 }
-bootstrap();
+
+void bootstrap();

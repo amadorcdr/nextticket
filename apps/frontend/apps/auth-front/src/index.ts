@@ -2,3 +2,8 @@
 // el host consume un named export normal de paquete:
 //   import { InventoryModule } from '@nimbus/inventory-front';
 export { AuthModule } from './AuthModule';
+export { SignIn } from './components/SignIn';
+export { SignUp } from './components/SignUp';
+export { ActivateAccount } from './components/ActivateAccount';
+export { ForgotPassword } from './components/ForgotPassword';
+export { ResetPassword } from './components/ResetPassword';

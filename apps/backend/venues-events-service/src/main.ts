@@ -7,13 +7,23 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT ?? 3003;
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  // transform: los query params llegan como string y los DTO de paginación
+  // dependen de @Type(() => Number) y de sus valores por defecto.
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   // ← NUEVO: generar documento OpenAPI
   const config = new DocumentBuilder()
     .setTitle('Venues & Events Service')
     .setDescription('API de recintos y eventos con PostgreSQL + Redis')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'bearer',
+    )
     .build();
 
   // ← NUEVO: evita error de tipos duplicados con pnpm
