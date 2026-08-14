@@ -7,6 +7,13 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Estado del flujo de registro/activación: PENDING = creado pero sin
+/// contraseña propia todavía, ACTIVE = ya activó su cuenta (o vino de OAuth).
+enum AccountStatus {
+  PENDING
+  ACTIVE
+}
+
 model User {
   id            String   @id @default(uuid())
   createdAt     DateTime @default(now())
@@ -17,6 +24,7 @@ model User {
   name          String
   email         String   @unique
   password      String?
+  accountStatus AccountStatus @default(ACTIVE)
   roleId        String
   provider      String   @default("LOCAL")
   providerId    String?  @unique

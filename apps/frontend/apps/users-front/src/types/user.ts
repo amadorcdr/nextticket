@@ -26,12 +26,15 @@ const ROLE_BY_BACKEND_NAME: Record<BackendRoleName, AdminUserRole> = {
     ADMIN: "admin",
 };
 
+export type AccountStatus = "PENDING" | "ACTIVE";
+
 /** Forma real que devuelve GET /users del auth-service. */
 export interface ApiUser {
     id: string;
     name: string;
     email: string;
     status: boolean;
+    accountStatus: AccountStatus;
     createdAt: string;
     role: { id: string; name: BackendRoleName };
 }
@@ -42,6 +45,7 @@ export interface AdminUser {
     email: string;
     role: AdminUserRole;
     status: boolean;
+    accountStatus: AccountStatus;
     createdAt: string;
 }
 
@@ -52,6 +56,7 @@ export function toAdminUser(apiUser: ApiUser): AdminUser {
         email: apiUser.email,
         role: ROLE_BY_BACKEND_NAME[apiUser.role.name] ?? "usuario",
         status: apiUser.status,
+        accountStatus: apiUser.accountStatus,
         createdAt: apiUser.createdAt,
     };
 }

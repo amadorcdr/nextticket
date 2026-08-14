@@ -11,7 +11,7 @@ import {
 } from "@nextticket-frontend/commons";
 import { CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
 import { InputField, authCardClassName } from "./AuthCardUI";
-import { AccountDisabledError, InvalidCredentialsError, login } from "../api";
+import { AccountDisabledError, InvalidCredentialsError, login, register } from "../api";
 
 const WELCOME_LABEL_BY_ROLE: Record<SessionRole, string> = {
   usuario: "cliente",
@@ -110,9 +110,12 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
           }
         />
         <div className="flex justify-end -mt-1">
-          <a href="#" className="text-muted text-[11px] hover:text-foreground transition-colors">
+          <Router.Link
+            to="/forgot-password"
+            className="text-muted text-[11px] hover:text-foreground transition-colors"
+          >
             ¿Olvidaste tu contraseña?
-          </a>
+          </Router.Link>
         </div>
         <Button type="submit" fullWidth isDisabled={loading}>
           <Icon.LogIn />
@@ -140,10 +143,46 @@ function RegisterFace({ onFlip }: { onFlip: () => void }) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // El modelo del backend solo tiene "name": se combinan aquí para no
+      // perder el campo Apellidos que ya traía este formulario.
+      const fullName = [nombre.trim(), apellidos.trim()].filter(Boolean).join(" ");
+      const result = await register(fullName, email);
+      setDone(result.email);
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : "No se pudo completar el registro. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className={`w-full rounded-[24px] p-5 ${authCardClassName}`}>
+        <BackToHome />
+        <div className="flex flex-col items-center text-center gap-3 py-4">
+          <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
+            <Icon.MailCheck className="size-6 text-success" />
+          </div>
+          <h1 className="text-foreground font-bold text-lg tracking-tight">Revisa tu correo</h1>
+          <p className="text-muted text-xs">
+            Enviamos un enlace de activación a <span className="text-foreground font-medium">{done}</span>. Ábrelo
+            para establecer tu contraseña y activar tu cuenta.
+          </p>
+          <Button size="sm" variant="secondary" onPress={onFlip}>
+            Volver a iniciar sesión
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full rounded-[24px] p-5 ${authCardClassName}`}>
@@ -154,7 +193,7 @@ function RegisterFace({ onFlip }: { onFlip: () => void }) {
         <p className="text-muted text-xs">Únete y empieza a vivir los mejores eventos</p>
       </div>
 
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <InputField
             id="signup-nombre"
@@ -182,45 +221,12 @@ function RegisterFace({ onFlip }: { onFlip: () => void }) {
           onChange={setEmail}
           icon={<Icon.Mail className="w-4 h-4" />}
         />
-        <InputField
-          id="signup-password"
-          label="Contraseña"
-          type={showPassword ? "text" : "password"}
-          placeholder="••••••••"
-          value={password}
-          onChange={setPassword}
-          icon={<Icon.Lock className="w-4 h-4" />}
-          rightSlot={
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="text-muted hover:text-foreground transition-colors"
-            >
-              {showPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-            </button>
-          }
-        />
-        <InputField
-          id="signup-confirm-password"
-          label="Confirmar contraseña"
-          type={showConfirmPassword ? "text" : "password"}
-          placeholder="••••••••"
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          icon={<Icon.Lock className="w-4 h-4" />}
-          rightSlot={
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword((v) => !v)}
-              className="text-muted hover:text-foreground transition-colors"
-            >
-              {showConfirmPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-            </button>
-          }
-        />
-        <Button type="submit" fullWidth>
+        <p className="text-muted text-[11px] -mt-1">
+          Te enviaremos un correo para que establezcas tu contraseña y actives tu cuenta.
+        </p>
+        <Button type="submit" fullWidth isDisabled={loading}>
           <Icon.UserPlus />
-          Crear cuenta
+          {loading ? "Creando cuenta..." : "Crear cuenta"}
         </Button>
       </form>
 

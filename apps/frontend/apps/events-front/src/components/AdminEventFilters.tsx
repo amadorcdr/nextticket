@@ -23,7 +23,7 @@ export function AdminEventFilters({ search, onSearchChange, statusFilter, onStat
                     <SearchField.SearchIcon>
                         <Icon.Search />
                     </SearchField.SearchIcon>
-                    <SearchField.Input placeholder="Buscar eventos..." />
+                    <SearchField.Input placeholder="Buscar eventos..." autoComplete="off" />
                     <SearchField.ClearButton>
                         <Icon.X />
                     </SearchField.ClearButton>

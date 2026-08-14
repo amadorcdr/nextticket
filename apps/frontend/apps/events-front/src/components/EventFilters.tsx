@@ -49,7 +49,7 @@ export function EventFilters({
                     <SearchField.SearchIcon>
                         <Icon.Search />
                     </SearchField.SearchIcon>
-                    <SearchField.Input placeholder="Buscar evento..." />
+                    <SearchField.Input placeholder="Buscar evento..." autoComplete="off" />
                     <SearchField.ClearButton>
                         <Icon.X />
                     </SearchField.ClearButton>
