@@ -89,6 +89,49 @@ export class EventSeatService {
     });
   }
 
+  /**
+   * Uso interno: purchases-service llama esto justo después de confirmar una
+   * compra, para que el asiento deje de figurar como AVAILABLE de una vez
+   * por todas (el hold en Redis es temporal; esto es la venta definitiva).
+   * Idempotente: un asiento que ya está SOLD se ignora sin error, para que
+   * reintentar la llamada nunca decremente la capacidad dos veces.
+   */
+  async markSoldForPurchase(eventId: string, eventSeatIds: string[]) {
+    await this.findEvent(eventId);
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const seats = await transaction.eventSeat.findMany({
+        where: { id: { in: eventSeatIds }, eventZone: { eventId } },
+      });
+
+      let updated = 0;
+      for (const seat of seats) {
+        if (seat.status === EventSeatStatus.SOLD) continue;
+
+        await transaction.eventSeat.update({
+          where: { id: seat.id },
+          data: { status: EventSeatStatus.SOLD },
+        });
+
+        if (seat.status === EventSeatStatus.AVAILABLE) {
+          await transaction.eventZone.update({
+            where: { id: seat.eventZoneId },
+            data: { availableCapacity: { decrement: 1 } },
+          });
+        }
+        updated++;
+      }
+
+      return { updated, requested: eventSeatIds.length };
+    });
+
+    if (result.updated > 0) {
+      await this.invalidateEventCache(eventId);
+    }
+
+    return result;
+  }
+
   async update(
     eventId: string,
     seatId: string,

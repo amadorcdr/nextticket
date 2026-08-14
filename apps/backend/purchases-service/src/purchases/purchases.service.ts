@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -44,6 +45,8 @@ type PaymentDecision = {
 
 @Injectable()
 export class PurchasesService {
+  private readonly logger = new Logger(PurchasesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -134,7 +137,7 @@ export class PurchasesService {
     userId: string,
   ) {
     const eventSeatIds = dto.eventSeatIds as string[];
-    await this.assertSeatsAreVendible(dto.eventId, dto.eventZoneId, eventSeatIds);
+    await this.assertSeatsAreVendible(dto.eventId, eventSeatIds, dto.eventZoneId);
 
     const startedAt = new Date();
     const expiresAt = new Date(startedAt.getTime() + SEAT_HOLD_TTL_SECONDS * 1000);
@@ -197,14 +200,19 @@ export class PurchasesService {
 
   /**
    * Nunca confía en los eventSeatId que manda el cliente: verifica contra
-   * venues-events-service que cada asiento exista, pertenezca a la zona del
-   * evento indicado y esté realmente AVAILABLE antes de bloquear nada.
+   * venues-events-service que cada asiento exista y esté realmente AVAILABLE.
+   * `eventZoneId` es opcional: al crear un hold se exige que además
+   * pertenezca a esa zona (un hold es de una sola zona); al confirmar una
+   * compra los asientos pueden venir de varias zonas (un hold por zona), así
+   * que ahí solo importa existencia + disponibilidad.
    */
   private async assertSeatsAreVendible(
     eventId: string,
-    eventZoneId: string,
     eventSeatIds: string[],
+    eventZoneId?: string,
   ) {
+    if (eventSeatIds.length === 0) return;
+
     const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
     const ids = eventSeatIds.join(',');
 
@@ -234,7 +242,7 @@ export class PurchasesService {
       if (!seat) {
         throw new NotFoundException(`El asiento ${seatId} no existe en este evento`);
       }
-      if (seat.eventZoneId !== eventZoneId) {
+      if (eventZoneId && seat.eventZoneId !== eventZoneId) {
         throw new BadRequestException(
           `El asiento ${seatId} no pertenece a la zona indicada`,
         );
@@ -244,6 +252,84 @@ export class PurchasesService {
           `El asiento ${seatId} no está disponible (status=${seat.status})`,
         );
       }
+    }
+  }
+
+  /**
+   * El precio nunca se toma de lo que manda el Cliente: se vuelve a
+   * consultar el evento real en venues-events-service y se usa
+   * eventZone.eventPrice como precio unitario autoritativo por zona.
+   */
+  private async resolveAuthoritativePrices(
+    eventId: string,
+    zoneIds: string[],
+  ): Promise<Map<string, number>> {
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/events/${eventId}`);
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar el evento (venues-events-service no responde)',
+      );
+    }
+    if (response.status === 404) {
+      throw new NotFoundException(`Event ${eventId} no existe`);
+    }
+    if (!response.ok) {
+      throw new NotFoundException('No se pudo verificar el evento');
+    }
+
+    const event = (await response.json()) as {
+      zones: Array<{ id: string; eventPrice: string | number }>;
+    };
+    const priceByZone = new Map(
+      event.zones.map((zone) => [zone.id, Number(zone.eventPrice)]),
+    );
+
+    for (const zoneId of zoneIds) {
+      if (!priceByZone.has(zoneId)) {
+        throw new BadRequestException(
+          `La zona ${zoneId} no pertenece a este evento`,
+        );
+      }
+    }
+
+    return priceByZone;
+  }
+
+  /**
+   * Best-effort, igual que issueTicketsForPurchase: el pago ya se aprobó y
+   * la compra ya quedó CONFIRMED, así que un fallo aquí no debe tumbar la
+   * respuesta — pero SÍ debe quedar registrado, porque mientras no corra
+   * esto el asiento sigue viéndose AVAILABLE en venues-events-service.
+   */
+  private async markSeatsSold(eventId: string, eventSeatIds: string[]) {
+    if (eventSeatIds.length === 0) return;
+
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/events/${eventId}/seats/internal/mark-sold`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Service-Token': internalToken,
+          },
+          body: JSON.stringify({ eventSeatIds }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`venues-events-service respondió ${response.status}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `No se pudieron marcar como vendidos los asientos [${eventSeatIds.join(', ')}] del evento ${eventId}: ${String(error)}`,
+      );
     }
   }
 
@@ -319,7 +405,21 @@ export class PurchasesService {
     await this.expireElapsedBlocks();
     await this.assertBlocksCanBeConverted(dto, userId);
 
-    const totals = this.calculateTotals(dto.details);
+    const seatIds = dto.details
+      .map((detail) => detail.eventSeatId)
+      .filter((id): id is string => Boolean(id));
+    await this.assertSeatsAreVendible(dto.eventId, seatIds);
+
+    const zoneIds = [...new Set(dto.details.map((detail) => detail.eventZoneId))];
+    const priceByZone = await this.resolveAuthoritativePrices(dto.eventId, zoneIds);
+    // El unitPrice que mandó el cliente se descarta: el precio real de la
+    // zona es la única fuente de verdad (sección 21 del TODO de checkout).
+    const authoritativeDetails = dto.details.map((detail) => ({
+      ...detail,
+      unitPrice: priceByZone.get(detail.eventZoneId)!,
+    }));
+
+    const totals = this.calculateTotals(authoritativeDetails);
     const paymentDecision = this.simulatePayment(dto.payment);
 
     const purchase = await this.prisma.$transaction(async (tx) => {
@@ -339,7 +439,7 @@ export class PurchasesService {
           total: totals.total,
           status: paymentDecision.approved ? 'CONFIRMED' : 'CANCELED',
           details: {
-            create: dto.details.map((detail) =>
+            create: authoritativeDetails.map((detail) =>
               this.toPurchaseDetailCreateInput(detail),
             ),
           },
@@ -389,14 +489,78 @@ export class PurchasesService {
       };
     }
 
+    await this.markSeatsSold(dto.eventId, seatIds);
+    const tickets = await this.issueTicketsForPurchase(purchase);
+
     return {
       ...purchase,
+      tickets,
       paymentResult: {
         approved: true,
         status: paymentDecision.status,
         message: 'Simulated payment approved',
       },
     };
+  }
+
+  /**
+   * Un ticket por PurchaseDetail, emitido por tickets-service a nombre del
+   * comprador real (purchase.userId). El pago simulado ya se marcó como
+   * aprobado y la compra ya quedó CONFIRMED en esta misma llamada — no hay
+   * forma de "deshacer" eso si la emisión falla, así que es best-effort:
+   * se intenta emitir cada ticket, los que fallan quedan registrados en el
+   * log (nunca silenciosos) y la compra igual se devuelve. issueForPurchase
+   * es idempotente del lado de tickets-service, así que reintentar esta
+   * llamada más adelante (p. ej. desde un job de reconciliación) es seguro.
+   */
+  private async issueTicketsForPurchase(purchase: {
+    id: string;
+    userId: string;
+    details: { id: string; eventZoneId: string; eventSeatId: string | null }[];
+  }) {
+    const baseUrl = process.env.TICKETS_SERVICE_URL ?? 'http://localhost:3005';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    const results = await Promise.allSettled(
+      purchase.details.map(async (detail) => {
+        const response = await fetch(
+          `${baseUrl}/tickets/internal/issue-for-purchase`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Service-Token': internalToken,
+            },
+            body: JSON.stringify({
+              purchaseId: purchase.id,
+              purchaseDetailId: detail.id,
+              currentHolderId: purchase.userId,
+              eventZoneId: detail.eventZoneId,
+              eventSeatId: detail.eventSeatId ?? undefined,
+            }),
+          },
+        );
+        if (!response.ok) {
+          throw new Error(
+            `tickets-service respondió ${response.status} para purchaseDetail=${detail.id}`,
+          );
+        }
+        return response.json();
+      }),
+    );
+
+    const tickets: unknown[] = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        tickets.push(result.value);
+      } else {
+        this.logger.error(
+          `No se pudo emitir el ticket para purchase=${purchase.id} purchaseDetail=${purchase.details[index].id}: ${String(result.reason)}`,
+        );
+      }
+    });
+
+    return tickets;
   }
 
   async findAll(

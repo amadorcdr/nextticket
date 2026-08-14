@@ -36,6 +36,8 @@ export interface HoloCardDisplayData {
 
 	/** Ticket Folio */
 	folio?: string;
+	/** URL del PNG real del QR (object URL de un blob autenticado). Si falta, se usa el placeholder. */
+	qrImageUrl?: string;
 
 	/** Background image URL */
 	backgroundImage?: string;
@@ -103,6 +105,7 @@ export const HoloCard = ({
 		venueState,
 		venueCountry,
 		folio,
+		qrImageUrl,
 		status,
 		backgroundImage = defaultBackground,
 		badge,
@@ -358,7 +361,7 @@ export const HoloCard = ({
 				{/* QR Code */}
 				<div className="relative bg-white rounded-[10px] shadow-overlay my-auto">
 					<img
-						src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3vJp2ChGnyf5NI1EcAqIEEX3EdhJUW0CKmiif3ESluQ&s=10"
+						src={qrImageUrl ?? "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3vJp2ChGnyf5NI1EcAqIEEX3EdhJUW0CKmiif3ESluQ&s=10"}
 						alt="QR Code"
 						className="size-44 rounded-[10px] object-contain"
 					/>
