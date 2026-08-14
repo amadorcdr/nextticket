@@ -10,6 +10,7 @@ export * from "./providers/CartProvider";
 export * from "./providers/SessionProvider";
 export * from "./providers/RequireRole";
 export * from "./providers/api";
+export * from "./utils/holdStorage";
 export * from "./components/atoms/Plasma";
 export * from "./components/atoms/SideRays";
 export * as Tanstack from "@tanstack/react-table";

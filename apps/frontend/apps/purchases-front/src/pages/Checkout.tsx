@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+    ApiError,
     Button,
     Description,
     Icon,
@@ -8,8 +9,12 @@ import {
     Router,
     Separator,
     TextField,
+    clearStoredHold,
+    getStoredHold,
+    useApi,
     useCart,
 } from "@nextticket-frontend/commons";
+import type { ApiPurchaseResult } from "../types";
 
 function formatPrice(value: number) {
     return new Intl.NumberFormat("es-MX", {
@@ -19,13 +24,50 @@ function formatPrice(value: number) {
     }).format(value);
 }
 
-/** Duración del pago simulado, para que se vea el estado de carga. */
-const FAKE_PAYMENT_MS = 1200;
+function formatCountdown(ms: number) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/** "12/30" -> {month: 12, year: 2030}. Devuelve null si no se puede parsear. */
+function parseExpiry(value: string): { month: number; year: number } | null {
+    const match = /^(\d{1,2})\s*\/\s*(\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    const month = Number(match[1]);
+    const year = 2000 + Number(match[2]);
+    if (month < 1 || month > 12) return null;
+    return { month, year };
+}
 
 export function Checkout() {
     const navigate = Router.useNavigate();
-    const { event, seats, subtotal, serviceFee, total } = useCart();
+    const api = useApi();
+    const { event, seats, subtotal, serviceFee, total, clear } = useCart();
+
+    const hold = event ? getStoredHold(event.id) : null;
+
     const [isProcessing, setIsProcessing] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [remainingMs, setRemainingMs] = useState<number>(() =>
+        hold ? new Date(hold.expiresAt).getTime() - Date.now() : 0,
+    );
+
+    // Cuenta regresiva del hold: si llega a 0 antes de pagar, los asientos ya
+    // se liberaron en el backend y no tiene caso dejar el botón de pago activo.
+    useEffect(() => {
+        if (!hold) return;
+
+        const interval = window.setInterval(() => {
+            setRemainingMs(new Date(hold.expiresAt).getTime() - Date.now());
+        }, 1000);
+
+        return () => window.clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hold?.expiresAt]);
+
+    const expired = hold !== null && remainingMs <= 0;
 
     // Sin asientos no hay nada que cobrar: mandamos de vuelta al catálogo.
     if (!event || seats.length === 0) {
@@ -44,14 +86,87 @@ export function Checkout() {
         );
     }
 
-    const handleSubmit = (formEvent: React.FormEvent) => {
+    // Hay asientos en el carrito pero no un hold vigente para ellos (llegó
+    // directo a /checkout, o el hold ya expiró): no se puede cobrar sin uno.
+    if (!hold || expired) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+                <Icon.TimerOff className="size-8 text-muted" />
+                <h4>{expired ? "Se acabó tu tiempo para pagar" : "Tu selección ya no está vigente"}</h4>
+                <p className="text-muted md:text-sm text-xs max-w-sm">
+                    {expired
+                        ? "Tus asientos se liberaron. Vuelve a elegirlos para intentarlo de nuevo."
+                        : "No encontramos un bloqueo activo para estos asientos. Vuelve a elegirlos."}
+                </p>
+                <Button
+                    variant="secondary"
+                    onPress={() => {
+                        clearStoredHold(event.id);
+                        clear();
+                        navigate(`/event/${event.id}/asientos`);
+                    }}
+                >
+                    <Icon.ArrowLeft />
+                    Elegir asientos de nuevo
+                </Button>
+            </div>
+        );
+    }
+
+    const handleSubmit = (formEvent: React.FormEvent<HTMLFormElement>) => {
         formEvent.preventDefault();
+        setSubmitError(null);
+
+        const formData = new FormData(formEvent.currentTarget);
+        const cardNumber = String(formData.get("cardNumber") ?? "").replace(/\s+/g, "");
+        const cardholderName = String(formData.get("cardholder") ?? "").trim();
+        const cvv = String(formData.get("cvv") ?? "").trim();
+        const expiry = parseExpiry(String(formData.get("expiry") ?? ""));
+
+        const details = seats.map((seat) => {
+            const held = hold.seatMap[seat.id];
+            return {
+                eventZoneId: held?.eventZoneId ?? "",
+                eventSeatId: held?.eventSeatId ?? undefined,
+                unitPrice: held?.unitPrice ?? seat.price,
+            };
+        });
+
+        if (details.some((detail) => !detail.eventZoneId)) {
+            setSubmitError("No pudimos identificar la zona de uno de tus asientos. Vuelve a elegirlos.");
+            return;
+        }
+
         setIsProcessing(true);
 
-        // Pago simulado: no hay pasarela todavía.
-        window.setTimeout(() => {
-            navigate("/checkout/confirmacion");
-        }, FAKE_PAYMENT_MS);
+        api
+            .post<ApiPurchaseResult>("/purchases", {
+                eventId: event.id,
+                temporaryBlockIds: hold.blockIds,
+                details,
+                payment: {
+                    paymentMethod: "CREDIT_CARD",
+                    cardholderName: cardholderName || undefined,
+                    cardNumber: cardNumber || undefined,
+                    expirationMonth: expiry?.month,
+                    expirationYear: expiry?.year,
+                    cvv: cvv || undefined,
+                },
+            })
+            .then((result) => {
+                if (!result.paymentResult.approved) {
+                    setSubmitError(result.paymentResult.message || "Tu pago fue rechazado, intenta con otra tarjeta.");
+                    return;
+                }
+
+                clearStoredHold(event.id);
+                clear();
+                navigate("/checkout/confirmacion", { state: result });
+            })
+            .catch((err) => {
+                setSubmitError(err instanceof ApiError ? err.message : "No se pudo completar la compra");
+            })
+            .finally(() => setIsProcessing(false));
     };
 
     return (
@@ -65,11 +180,15 @@ export function Checkout() {
                 >
                     <Icon.ArrowLeft />
                 </Button>
-                <div>
+                <div className="flex-1 min-w-0">
                     <h2>Checkout</h2>
                     <p className="text-muted md:text-sm text-xs">
                         Revisa tu compra y confirma
                     </p>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-warning/10 px-3 py-1.5 shrink-0">
+                    <Icon.Clock className="size-3.5 text-warning" />
+                    <span className="text-xs font-medium text-warning">{formatCountdown(remainingMs)}</span>
                 </div>
             </div>
 
@@ -123,7 +242,7 @@ export function Checkout() {
                         <div>
                             <h4>Pago</h4>
                             <Description>
-                                Cobro simulado: no se procesa ningún cargo real
+                                Pago simulado: usa la tarjeta de prueba o cambia el número para probar un rechazo
                             </Description>
                         </div>
 
@@ -155,6 +274,10 @@ export function Checkout() {
                                 <Input />
                             </TextField>
                         </div>
+
+                        {submitError && (
+                            <p className="text-danger text-xs">{submitError}</p>
+                        )}
                     </div>
                 </form>
 
@@ -187,7 +310,9 @@ export function Checkout() {
                                 >
                                     <div className="min-w-0">
                                         <p className="md:text-sm text-xs">
-                                            Fila {seat.row} · Asiento {seat.number}
+                                            {seat.row === "GA"
+                                                ? `Admisión general #${seat.number}`
+                                                : `Fila ${seat.row} · Asiento ${seat.number}`}
                                         </p>
                                         <p className="text-xs text-muted truncate">{seat.zone}</p>
                                     </div>

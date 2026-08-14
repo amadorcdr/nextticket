@@ -245,51 +245,165 @@ describe('PurchasesService', () => {
     });
   });
 
-  it('creates a confirmed purchase with details and approved payment', async () => {
-    prisma.temporaryBlock.updateMany.mockResolvedValue({ count: 0 });
-    prisma.$transaction.mockImplementation(async (callback) =>
-      callback({
-        $queryRaw: jest.fn().mockResolvedValue([{ nextval: BigInt(1000) }]),
-        purchase: {
-          create: jest.fn().mockResolvedValue({
-            id: 'purchase-id',
-            total: '100.00',
-            payments: [{ status: 'APPROVED' }],
-          }),
-        },
-      }),
-    );
+  describe('create — confirmed purchase', () => {
+    let fetchSpy: jest.SpyInstance;
+    let purchaseCreateMock: jest.Mock;
 
-    const result = await service.create(
-      {
-        eventId: '550e8400-e29b-41d4-a716-446655440010',
+    beforeEach(() => {
+      purchaseCreateMock = jest.fn().mockResolvedValue({
+        id: 'purchase-id',
+        userId: USER_ID,
+        total: '100.00',
+        payments: [{ status: 'APPROVED' }],
         details: [
           {
+            id: 'detail-1',
             eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
-            unitPrice: 100,
-            discountAmount: 10,
-            taxAmount: 14.4,
+            eventSeatId: null,
           },
         ],
-        payment: {
-          paymentMethod: SimulatedPaymentMethod.CREDIT_CARD,
-          cardholderName: 'QA APPROVED',
-          cardNumber: '4242424242424242',
-          expirationMonth: 12,
-          expirationYear: 2030,
-          cvv: '123',
-        },
-      },
-      USER_ID,
-    );
+      });
+      prisma.temporaryBlock.updateMany.mockResolvedValue({ count: 0 });
+      prisma.$transaction.mockImplementation(async (callback) =>
+        callback({
+          $queryRaw: jest.fn().mockResolvedValue([{ nextval: BigInt(1000) }]),
+          purchase: { create: purchaseCreateMock },
+        }),
+      );
+    });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        paymentResult: expect.objectContaining({ approved: true }),
-      }),
-    );
-    expect(prisma.$transaction).toHaveBeenCalled();
-    expect(redis.del).toHaveBeenCalledWith('purchases:list');
+    afterEach(() => {
+      fetchSpy?.mockRestore();
+    });
+
+    const CREATE_DTO = {
+      eventId: '550e8400-e29b-41d4-a716-446655440010',
+      details: [
+        {
+          eventZoneId: '550e8400-e29b-41d4-a716-446655440001',
+          unitPrice: 100,
+          discountAmount: 10,
+          taxAmount: 14.4,
+        },
+      ],
+      payment: {
+        paymentMethod: SimulatedPaymentMethod.CREDIT_CARD,
+        cardholderName: 'QA APPROVED',
+        cardNumber: '4242424242424242',
+        expirationMonth: 12,
+        expirationYear: 2030,
+        cvv: '123',
+      },
+    };
+
+    const mockEventWithZonePrice = (price: number) =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          zones: [
+            { id: '550e8400-e29b-41d4-a716-446655440001', eventPrice: String(price) },
+          ],
+        }),
+      }) as Response;
+
+    it('confirms the purchase and issues one ticket per detail via tickets-service', async () => {
+      fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/tickets/internal/issue-for-purchase')) {
+          return { ok: true, status: 201, json: async () => ({ id: 'ticket-1', folio: 'TK-ABC123' }) } as Response;
+        }
+        return mockEventWithZonePrice(100);
+      });
+
+      const result = await service.create(CREATE_DTO, USER_ID);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          paymentResult: expect.objectContaining({ approved: true }),
+          tickets: [{ id: 'ticket-1', folio: 'TK-ABC123' }],
+        }),
+      );
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(redis.del).toHaveBeenCalledWith('purchases:list');
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('/tickets/internal/issue-for-purchase'),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Internal-Service-Token': expect.any(String),
+          }),
+        }),
+      );
+    });
+
+    it('does not fail the purchase when ticket issuance fails, but returns no tickets', async () => {
+      fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/tickets/internal/issue-for-purchase')) {
+          return { ok: false, status: 500 } as Response;
+        }
+        return mockEventWithZonePrice(100);
+      });
+
+      const result = await service.create(CREATE_DTO, USER_ID);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          paymentResult: expect.objectContaining({ approved: true }),
+          tickets: [],
+        }),
+      );
+    });
+
+    it('uses the authoritative zone price from venues-events-service, not the client-sent unitPrice', async () => {
+      fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/tickets/internal/issue-for-purchase')) {
+          return { ok: true, status: 201, json: async () => ({ id: 'ticket-1' }) } as Response;
+        }
+        return mockEventWithZonePrice(9999); // precio real muy distinto al que manda el cliente (100)
+      });
+
+      await service.create(CREATE_DTO, USER_ID);
+
+      expect(purchaseCreateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            details: {
+              create: [expect.objectContaining({ unitPrice: 9999 })],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('rejects confirming the purchase when a seat is no longer AVAILABLE (revalidación final anti-sobreventa)', async () => {
+      const seatId = '550e8400-e29b-41d4-a716-446655440002';
+      fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/seats/by-event-seat-ids')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              { id: seatId, eventZoneId: '550e8400-e29b-41d4-a716-446655440001', status: 'SOLD' },
+            ],
+          } as Response;
+        }
+        return mockEventWithZonePrice(100);
+      });
+
+      const dtoWithSeat = {
+        ...CREATE_DTO,
+        details: [{ ...CREATE_DTO.details[0], eventSeatId: seatId }],
+      };
+
+      await expect(service.create(dtoWithSeat, USER_ID)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 
   it('refuses to update a purchase that belongs to somebody else', async () => {
@@ -337,6 +451,16 @@ describe('PurchasesService', () => {
   });
 
   it('stores a canceled purchase when simulated card is declined', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        zones: [
+          { id: '550e8400-e29b-41d4-a716-446655440001', eventPrice: '100' },
+        ],
+      }),
+    } as Response);
+
     prisma.temporaryBlock.updateMany.mockResolvedValue({ count: 0 });
     prisma.$transaction.mockImplementation(async (callback) =>
       callback({
@@ -375,6 +499,7 @@ describe('PurchasesService', () => {
         paymentResult: expect.objectContaining({ approved: false }),
       }),
     );
+    fetchSpy.mockRestore();
   });
 
   describe('getStats', () => {

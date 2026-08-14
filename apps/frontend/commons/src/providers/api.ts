@@ -56,3 +56,22 @@ export function useApi() {
         del: <T,>(path: string) => request<T>(path, { method: "DELETE" }),
     };
 }
+
+/**
+ * Descarga un recurso binario protegido (ej. la imagen PNG del QR de un
+ * boleto) y lo expone como object URL. Un <img src> normal no puede mandar
+ * el header Authorization, así que esto hace el fetch a mano y arma el blob.
+ * Quien la use debe revocar la URL (`URL.revokeObjectURL`) al desmontar.
+ */
+export async function fetchAuthenticatedBlobUrl(path: string, token: string | undefined): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+        throw new ApiError(response.status, "No se pudo cargar el código QR");
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+}

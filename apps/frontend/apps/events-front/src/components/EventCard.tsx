@@ -8,10 +8,9 @@ type EventCardProps = Readonly<{
 /** El color sale de los tokens del tema, no de hex fijos como en el diseño anterior. */
 const STATUS_META: Record<
     ClientEventStatus,
-    { label: string; color: "success" | "warning" | "danger" }
+    { label: string; color: "success" | "danger" }
 > = {
     available: { label: "Disponible", color: "success" },
-    soon: { label: "Próximamente", color: "warning" },
     "sold-out": { label: "Agotado", color: "danger" },
 };
 

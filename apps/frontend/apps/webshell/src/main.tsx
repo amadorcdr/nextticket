@@ -15,6 +15,8 @@ import {
 import {
     Checkout,
     CheckoutConfirmation,
+    VirtualQueue,
+    MyPurchases,
 } from "@nextticket-frontend/purchases-front";
 import { ValidatorModule } from "@nextticket-frontend/validator-front";
 import { UsersModule } from "@nextticket-frontend/users-front";
@@ -61,6 +63,10 @@ createRoot(document.getElementById('root')!).render(
 
                         <Router.Route element={<RequireRole />}>
                             <Router.Route
+                                path="event/:eventId/fila"
+                                element={<VirtualQueue />}
+                            />
+                            <Router.Route
                                 path="event/:eventId/asientos"
                                 element={<SeatSelection />}
                             />
@@ -70,6 +76,7 @@ createRoot(document.getElementById('root')!).render(
                                 element={<CheckoutConfirmation />}
                             />
                             <Router.Route path="mis-boletos" element={<TicketsModule />} />
+                            <Router.Route path="mis-compras" element={<MyPurchases />} />
                         </Router.Route>
                     </Router.Route>
 
