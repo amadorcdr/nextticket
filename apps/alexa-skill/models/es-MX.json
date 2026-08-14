@@ -1,0 +1,473 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "next ticket",
+      "modelConfiguration": {
+        "fallbackIntentSensitivity": {
+          "level": "LOW"
+        }
+      },
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": [
+            "qué puedo hacer",
+            "qué puedo preguntarte",
+            "cuáles son mis opciones",
+            "no sé qué decir",
+            "explícame cómo funciona"
+          ]
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": [
+            "vuelve al menú",
+            "regresa al inicio",
+            "menú principal",
+            "empecemos de nuevo",
+            "vamos al inicio"
+          ]
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": [
+            "repite",
+            "repítelo",
+            "puedes repetir",
+            "no te escuché",
+            "dilo otra vez"
+          ]
+        },
+        {
+          "name": "CaptureInputIntent",
+          "slots": [
+            {
+              "name": "userInput",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "mi palabra clave es {userInput}",
+            "la palabra clave es {userInput}",
+            "mi clave es {userInput}",
+            "mi semilla es {userInput}",
+            "entrar con {userInput}",
+            "identifícame con {userInput}",
+            "soy {userInput}"
+          ]
+        },
+        {
+          "name": "LogoutIntent",
+          "samples": [
+            "cerrar sesión",
+            "cierra mi sesión",
+            "quiero salir de mi cuenta",
+            "cambiar de usuario",
+            "quiero entrar con otra cuenta",
+            "sal de mi cuenta"
+          ]
+        },
+        {
+          "name": "GetActiveEventsIntent",
+          "samples": [
+            "dime mis eventos activos",
+            "cuáles son mis eventos activos",
+            "qué eventos tengo",
+            "muéstrame mis eventos",
+            "lista mis eventos",
+            "qué eventos estoy organizando",
+            "mis eventos publicados"
+          ]
+        },
+        {
+          "name": "GetTicketsSoldIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuántos boletos se han vendido de {eventName}",
+            "cómo van las ventas de {eventName}",
+            "dime las ventas de {eventName}",
+            "cuántos boletos vendí en {eventName}",
+            "ventas del evento {eventName}",
+            "cuántos boletos lleva vendidos {eventName}",
+            "cómo van los boletos vendidos",
+            "dime las ventas"
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "qué zonas tiene {eventName}",
+            "dime las zonas de {eventName}",
+            "cuáles son las zonas de {eventName}",
+            "lista las zonas de {eventName}",
+            "muéstrame las zonas de {eventName}",
+            "qué secciones tiene {eventName}",
+            "qué zonas hay disponibles",
+            "dime las zonas"
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "samples": [
+                "la zona {zoneName}",
+                "en {zoneName}",
+                "{zoneName}"
+              ]
+            }
+          ],
+          "samples": [
+            "hay lugares en la zona {zoneName} de {eventName}",
+            "cuántos lugares quedan en {zoneName} de {eventName}",
+            "hay disponibilidad en {zoneName}",
+            "quedan boletos en la zona {zoneName}",
+            "cuántos asientos hay en {zoneName} de {eventName}",
+            "disponibilidad de la zona {zoneName}",
+            "hay lugares disponibles",
+            "queda disponibilidad"
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuándo es {eventName}",
+            "dónde es {eventName}",
+            "dame información de {eventName}",
+            "háblame del evento {eventName}",
+            "detalles de {eventName}",
+            "a qué hora es {eventName}",
+            "en qué lugar es {eventName}",
+            "cuándo es el evento"
+          ]
+        },
+        {
+          "name": "GetTopRevenueEventIntent",
+          "samples": [
+            "cuál es el evento más taquillero",
+            "qué evento ha recaudado más",
+            "cuál evento genera más ingresos",
+            "dime el evento con más recaudación",
+            "cuál es el evento que más vende",
+            "ranking de eventos por ingresos"
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "samples": [
+                "el mes de {monthName}",
+                "en {monthName}",
+                "{monthName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuánto se recaudó en {monthName}",
+            "cuáles fueron los ingresos de {monthName}",
+            "dime la recaudación de {monthName}",
+            "cuánto dinero se generó en {monthName}",
+            "ingresos totales de {monthName}",
+            "cuánto vendimos en {monthName}",
+            "cuánto se ha recaudado"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "EventType",
+          "values": [
+            {
+              "id": "placeholder_1",
+              "name": {
+                "value": "Rock Revolution Tour",
+                "synonyms": ["rock revolution", "el tour de rock", "rock"]
+              }
+            },
+            {
+              "id": "placeholder_2",
+              "name": {
+                "value": "Neon Nights Festival",
+                "synonyms": ["neon nights", "el festival neon", "neon"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ZoneType",
+          "values": [
+            {
+              "id": "vip",
+              "name": {
+                "value": "VIP",
+                "synonyms": ["vip", "zona vip", "la vip", "preferencial"]
+              }
+            },
+            {
+              "id": "general",
+              "name": {
+                "value": "General",
+                "synonyms": ["general", "zona general", "la general", "general única"]
+              }
+            },
+            {
+              "id": "preferente",
+              "name": {
+                "value": "Preferente",
+                "synonyms": ["preferente", "zona preferente", "la preferente"]
+              }
+            },
+            {
+              "id": "platino",
+              "name": {
+                "value": "Platino",
+                "synonyms": ["platino", "zona platino", "la platino"]
+              }
+            },
+            {
+              "id": "palcos",
+              "name": {
+                "value": "Palcos",
+                "synonyms": ["palcos", "palco", "zona de palcos"]
+              }
+            },
+            {
+              "id": "gradas",
+              "name": {
+                "value": "Gradas",
+                "synonyms": ["gradas", "grada", "zona de gradas"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "dialog": {
+      "delegationStrategy": "SKILL_RESPONSE",
+      "intents": [
+        {
+          "name": "GetTicketsSoldIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Tickets"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Zones"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Availability"
+              }
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.ZoneName"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Info"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.MonthName"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "prompts": [
+      {
+        "id": "Elicit.Slot.EventName.Tickets",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas consultar los boletos vendidos?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento del que quieres saber las ventas."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Zones",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento quieres conocer las zonas?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento y te digo sus zonas."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Availability",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas consultar la disponibilidad?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento para revisar los lugares."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Info",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas la información?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento del que quieres los detalles."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.ZoneName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿En qué zona deseas consultar la disponibilidad?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime la zona, por ejemplo VIP o general."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.MonthName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué mes deseas consultar los ingresos?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del mes, por ejemplo mayo."
+          }
+        ]
+      }
+    ]
+  }
+}
