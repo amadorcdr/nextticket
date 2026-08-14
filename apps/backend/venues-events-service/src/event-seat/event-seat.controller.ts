@@ -63,6 +63,28 @@ export class EventSeatController {
     );
   }
 
+  @Get('by-event-seat-ids')
+  @ApiOperation({
+    summary:
+      'Consultar varios asientos del evento por el id de su EventSeat (uso interno de otros servicios, p. ej. validar un hold antes de crearlo)',
+  })
+  @ApiQuery({
+    name: 'ids',
+    description: 'EventSeat.id separados por coma',
+    example: '550e8400-e29b-41d4-a716-446655440002,550e8400-e29b-41d4-a716-446655440003',
+  })
+  findByEventSeatIds(
+    @Param('eventId', new ParseUUIDPipe())
+    eventId: string,
+    @Query('ids') ids?: string,
+  ) {
+    const eventSeatIds = (ids ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return this.eventSeat.findByEventSeatIds(eventId, eventSeatIds);
+  }
+
   @Get(':seatId')
   @ApiOperation({
     summary: 'Consultar el estado de un asiento en el evento',

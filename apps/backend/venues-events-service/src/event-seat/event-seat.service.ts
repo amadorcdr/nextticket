@@ -70,6 +70,25 @@ export class EventSeatService {
     return this.findEventSeat(eventId, seatId);
   }
 
+  /**
+   * Consulta por EventSeat.id (no por el id físico del asiento). La usa
+   * purchases-service para validar, antes de crear un hold, que cada
+   * asiento exista, pertenezca al evento y esté realmente vendible — nunca
+   * confía únicamente en los ids que manda el cliente.
+   */
+  async findByEventSeatIds(eventId: string, eventSeatIds: string[]) {
+    if (eventSeatIds.length === 0) return [];
+
+    await this.findEvent(eventId);
+
+    return this.prisma.eventSeat.findMany({
+      where: { id: { in: eventSeatIds }, eventZone: { eventId } },
+      include: {
+        seat: { select: { id: true, row: true, number: true, type: true } },
+      },
+    });
+  }
+
   async update(
     eventId: string,
     seatId: string,

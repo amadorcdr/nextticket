@@ -14,6 +14,19 @@ interface BlockEventPayload {
   eventSeatId: string | null;
 }
 
+interface QueueAdmittedPayload {
+  queueEntryId: string;
+  eventId: string;
+  userId: string;
+  admissionExpiresAt: Date;
+}
+
+interface QueueExpiredPayload {
+  queueEntryId: string;
+  eventId: string;
+  userId: string;
+}
+
 // Clients join a room per event zone so they only receive lock updates for
 // the zone/seat map they're currently viewing, not a global broadcast of
 // every temporary block in the system.
@@ -52,6 +65,16 @@ export class PurchasesGateway
     void client.leave(this.roomName(eventZoneId));
   }
 
+  @SubscribeMessage('joinEventQueue')
+  joinEventQueue(client: Socket, eventId: string) {
+    void client.join(this.queueRoomName(eventId));
+  }
+
+  @SubscribeMessage('leaveEventQueue')
+  leaveEventQueue(client: Socket, eventId: string) {
+    void client.leave(this.queueRoomName(eventId));
+  }
+
   emitBlockLocked(payload: BlockEventPayload) {
     this.server.to(this.roomName(payload.eventZoneId)).emit('block.locked', payload);
   }
@@ -68,7 +91,19 @@ export class PurchasesGateway
     this.server.to(this.roomName(payload.eventZoneId)).emit('block.converted', payload);
   }
 
+  emitQueueAdmitted(payload: QueueAdmittedPayload) {
+    this.server.to(this.queueRoomName(payload.eventId)).emit('queue.admitted', payload);
+  }
+
+  emitQueueExpired(payload: QueueExpiredPayload) {
+    this.server.to(this.queueRoomName(payload.eventId)).emit('queue.expired', payload);
+  }
+
   private roomName(eventZoneId: string) {
     return `event-zone:${eventZoneId}`;
+  }
+
+  private queueRoomName(eventId: string) {
+    return `event-queue:${eventId}`;
   }
 }
