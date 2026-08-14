@@ -76,16 +76,7 @@ export function VenuesModule() {
           <div className="flex flex-row items-center justify-between md:gap-4 gap-2">
             <div>
               <h2>Recintos</h2>
-              <p className="text-muted md:text-sm text-xs flex flex-wrap gap-x-2 gap-y-1">
-                {["ACTIVE", "INACTIVE"].map((id) => {
-                  const status = statuses.find((s) => s.id === id);
-                  return status ? (
-                    <span key={id}>
-                      <span className="text-foreground font-medium">{status.count}</span> {status.label.toLowerCase()}
-                    </span>
-                  ) : null;
-                })}
-              </p>
+              <p className="text-muted text-xs mt-0.5">Consulta y administra los recintos registrados en la plataforma.</p>
             </div>
             <Button className="shrink-0" onPress={() => navigate("canvas")}>
               <Icon.HousePlus />
@@ -110,7 +101,7 @@ export function VenuesModule() {
 
 
             <Popover>
-              <Button isIconOnly variant="ghost" className="shrink-0">
+              <Button size="sm" isIconOnly variant="ghost" className="shrink-0">
                 <Icon.Settings2 />
               </Button>
               <Popover.Content className="w-80 p-4" placement="bottom end">
@@ -155,7 +146,7 @@ export function VenuesModule() {
                 }
               }}
             >
-              <Select.Trigger>
+              <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
                 <div className="flex items-center gap-2">
                   <Icon.ArrowUpDown className="size-4 text-muted shrink-0" />
                   <Select.Value>
@@ -208,7 +199,7 @@ export function VenuesModule() {
               value={statusFilter}
               onChange={(keys) => setStatusFilter(Array.from(keys) as Key[])}
             >
-              <Select.Trigger>
+              <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
                 <div className="flex items-center gap-2">
                   <Icon.SquaresSubtract className="shrink-0" />
                   <Select.Value>
@@ -254,7 +245,7 @@ export function VenuesModule() {
               value={stateFilter}
               onChange={(keys) => setStateFilter(Array.from(keys) as Key[])}
             >
-              <Select.Trigger>
+              <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
                 <div className="flex items-center gap-2">
                   <Icon.MapPinned className="shrink-0" />
                   <Select.Value>

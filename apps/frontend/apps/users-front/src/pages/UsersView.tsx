@@ -6,7 +6,7 @@ import { UserFormModal, type UserFormMode, type UserFormValues } from "../compon
 import { ModalDeleteUser } from "../components/ModalDeleteUser";
 import { ROLE_ID_BY_ROLE, toAdminUser, type AdminUser, type AdminUserRole, type ApiUser } from "../types/user";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 // El backend no soporta busqueda/filtro por rol en la query todavia (solo
 // page/limit): se trae una sola pagina grande y se filtra en el cliente.
 const FETCH_LIMIT = 100;

@@ -17,8 +17,13 @@ import {
     type UpcomingEventSummary,
 } from "../types/dashboard";
 
-const RECENT_LIMIT = 5;
-const ACTIVITY_LIMIT = 6;
+// Cuántos eventos próximos se traen (alimenta tanto "Eventos Próximos" como
+// "Resumen de Ventas" — comparten el mismo fetch).
+const UPCOMING_EVENTS_LIMIT = 4;
+// Tope final de "Actividad Reciente". Los fetches de usuarios/compras piden
+// esta misma cantidad cada uno, para que el pool combinado siempre alcance
+// para llenar el tope tras mezclarlos y ordenarlos por fecha.
+const ACTIVITY_LIMIT = 7;
 
 interface Paginated<T> {
     data: T[];
@@ -51,11 +56,12 @@ export function useDashboardData() {
             api.get<ApiEventsStats>("/events/stats"),
             api.get<ApiTicketsStats>("/tickets/stats"),
             api.get<ApiPurchasesStats>("/purchases/stats"),
-            api.get<Paginated<ApiUserSummary>>(`/users?page=1&limit=${RECENT_LIMIT}`),
-            api.get<Paginated<ApiEvent>>(`/events?upcoming=true&limit=${RECENT_LIMIT}`),
-            api.get<Paginated<ApiPurchase>>(`/purchases?page=1&limit=${RECENT_LIMIT}`),
+            api.get<Paginated<ApiUserSummary>>(`/users?page=1&limit=${ACTIVITY_LIMIT}`),
+            api.get<{ meta: { total: number } }>("/venues?page=1&limit=1"),
+            api.get<Paginated<ApiEvent>>(`/events?upcoming=true&limit=${UPCOMING_EVENTS_LIMIT}`),
+            api.get<Paginated<ApiPurchase>>(`/purchases?page=1&limit=${ACTIVITY_LIMIT}`),
         ])
-            .then(async ([eventsStats, ticketsStats, purchasesStats, usersRes, upcomingRes, purchasesRes]) => {
+            .then(async ([eventsStats, ticketsStats, purchasesStats, usersRes, venuesRes, upcomingRes, purchasesRes]) => {
                 const ticketCountByZone = new Map(ticketsStats.byEventZone.map((z) => [z.eventZoneId, z.count]));
 
                 const upcomingEvents = upcomingRes.data.map((event) => toUpcomingEventSummary(event, ticketCountByZone));
@@ -101,6 +107,7 @@ export function useDashboardData() {
                     activeEvents: eventsStats.activeEvents,
                     upcomingEvents: eventsStats.upcomingEvents,
                     totalUsers: usersRes.meta.total,
+                    totalVenues: venuesRes.meta.total,
                     ticketsSold: ticketsStats.totalSold,
                     totalRevenue: purchasesStats.totalRevenue,
                     recentPurchasesCount: purchasesStats.recentPurchasesCount,

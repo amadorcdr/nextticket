@@ -78,6 +78,7 @@ export interface DashboardMetrics {
     activeEvents: number;
     upcomingEvents: number;
     totalUsers: number;
+    totalVenues: number;
     ticketsSold: number;
     totalRevenue: number;
     recentPurchasesCount: number;
