@@ -91,6 +91,11 @@ export function VenuesTable({
     if (stateFilter && stateFilter.length > 0) {
       result = result.filter(v => {
         const normalizedState = v.state === "CDMX" ? "Ciudad de México" : v.state;
+        // Un recinto sin estado registrado (o con uno que no está en el
+        // catálogo de 32 estados) no tiene forma de "seleccionarse" en este
+        // filtro — si lo excluyéramos, desaparecería de la lista sin que el
+        // usuario pueda traerlo de vuelta, aunque siga contando en "activos".
+        if (!normalizedState) return true;
         return stateFilter.includes(normalizedState);
       });
     }

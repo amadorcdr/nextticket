@@ -1,28 +1,22 @@
-import { Table } from "@nextticket-frontend/commons";
+import { useEffect, useMemo, useState } from "react";
+import { ApiError, Button, Table, useApi, useSession } from "@nextticket-frontend/commons";
+import { toOrganizerEventRow, type ApiEvent, type ApiTicketsEventZoneStats, type OrganizerEventRow } from "../api";
 
-interface EventRow {
-  name: string;
-  venue: string;
-  date: string;
-  sold: number;
-  total: number;
-  pct: number;
-  status: "Activo" | "Draft";
+// El backend no soporta busqueda por texto en la query todavia (solo
+// page/limit): se trae una sola pagina grande, mismo patron que MyEvents.
+const FETCH_LIMIT = 100;
+const TOP_EVENTS_LIMIT = 5;
+const UPCOMING_LIMIT = 5;
+
+interface Paginated<T> {
+  data: T[];
 }
 
-const EVENTS: EventRow[] = [
-  { name: "Rock Revolution Tour", venue: "Arena Stadium", date: "15 Nov, 2024", sold: 1200, total: 1500, pct: 80, status: "Activo" },
-  { name: "Standup Night Live", venue: "Teatro Rex", date: "22 Nov, 2024", sold: 450, total: 500, pct: 90, status: "Activo" },
-  { name: "Electronic Beach Party", venue: "Playa del Sol", date: "05 Dic, 2024", sold: 0, total: 2000, pct: 0, status: "Draft" },
-];
+const EMPTY_TICKET_STATS: ApiTicketsEventZoneStats = { total: 0, sold: 0, validated: 0, unvalidated: 0, canceled: 0, byEventZone: [] };
 
-const SALES_BY_EVENT = [
-  { label: "Rock Revolution Tour", proj: 70, rev: 85 },
-  { label: "Standup Night Live", proj: 90, rev: 60 },
-  { label: "Techno Fest", proj: 50, rev: 95 },
-  { label: "Art Expo", proj: 65, rev: 45 },
-  { label: "Gala Dinner", proj: 80, rev: 75 },
-];
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value);
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -33,8 +27,98 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+interface ApiPurchasesStats {
+  totalRevenue: number;
+}
+
+/*
+ * purchases-service ya deja a un ORGANIZER pedir /purchases/stats?eventId=
+ * de un evento propio (verifica dueño contra venues-events-service), así
+ * que "Ventas Totales" y el "Top Evento" ya son ingreso real, no estimado.
+ * Como ese endpoint solo acepta UN eventId a la vez (no hay variante en
+ * lote), se pide uno por evento en paralelo — están linear pero razonable
+ * para la cantidad de eventos que maneja un organizador.
+ */
 export function OrganizerDashboard() {
-  const topEvent = EVENTS[0];
+  const api = useApi();
+  const { user } = useSession();
+
+  const [rows, setRows] = useState<OrganizerEventRow[]>([]);
+  const [revenueByEventId, setRevenueByEventId] = useState<Map<string, number>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+
+    if (!user?.id) {
+      setLoading(false);
+      setError("Tu sesión no tiene un id de usuario válido. Cierra sesión y vuelve a iniciarla.");
+      return;
+    }
+
+    api
+      .get<Paginated<ApiEvent>>(`/events?organizerId=${user.id}&limit=${FETCH_LIMIT}`)
+      .then(async (eventsRes) => {
+        const zoneIds = eventsRes.data.flatMap((ev) => ev.zones.map((z) => z.id));
+
+        const [ticketStats, revenueEntries] = await Promise.all([
+          zoneIds.length > 0
+            ? api.get<ApiTicketsEventZoneStats>(`/tickets/stats/by-event-zones?eventZoneIds=${encodeURIComponent(zoneIds.join(","))}`)
+            : Promise.resolve(EMPTY_TICKET_STATS),
+          Promise.all(
+            eventsRes.data.map((ev) =>
+              api
+                .get<ApiPurchasesStats>(`/purchases/stats?eventId=${ev.id}`)
+                .then((stats): [string, number] => [ev.id, stats.totalRevenue])
+                .catch((): [string, number] => [ev.id, 0]),
+            ),
+          ),
+        ]);
+
+        const zoneMap = new Map(ticketStats.byEventZone.map((z) => [z.eventZoneId, z.sold]));
+        setRevenueByEventId(new Map(revenueEntries));
+        setRows(eventsRes.data.map((ev) => toOrganizerEventRow(ev, zoneMap)));
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar tus eventos"))
+      .finally(() => setLoading(false));
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [user?.id]);
+
+  const totalEvents = rows.length;
+  const activeEvents = rows.filter((r) => r.status === "Activo").length;
+  const ticketsSold = rows.reduce((sum, r) => sum + r.sold, 0);
+  const totalRevenue = [...revenueByEventId.values()].reduce((sum, v) => sum + v, 0);
+
+  const salesByEvent = useMemo(
+    () =>
+      rows
+        .filter((r) => r.total > 0)
+        .map((r) => ({ id: r.id, name: r.name, pct: Math.round((r.sold / r.total) * 100) }))
+        .sort((a, b) => b.pct - a.pct)
+        .slice(0, TOP_EVENTS_LIMIT),
+    [rows],
+  );
+
+  const topEvent = useMemo(() => {
+    let best: { row: OrganizerEventRow; revenue: number } | null = null;
+    for (const row of rows) {
+      const revenue = revenueByEventId.get(row.id) ?? 0;
+      if (!best || revenue > best.revenue) best = { row, revenue };
+    }
+    return best;
+  }, [rows, revenueByEventId]);
+
+  const upcomingEvents = useMemo(() => {
+    const now = Date.now();
+    return rows
+      .filter((r) => r.status === "Activo" && new Date(r.startsAt).getTime() > now)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .slice(0, UPCOMING_LIMIT);
+  }, [rows]);
 
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-500">
@@ -44,102 +128,139 @@ export function OrganizerDashboard() {
         <p className="text-muted text-xs mt-0.5">Monitorea el rendimiento de tus producciones en tiempo real.</p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <StatCard label="Total Eventos" value="12" />
-        <StatCard label="Eventos Activos" value="8" />
-        <StatCard label="Boletos Vendidos" value="2,450" />
-        <StatCard label="Ventas Totales" value="$120,400" />
-      </div>
+      {loading && <p className="text-muted text-xs py-8 text-center">Cargando resumen...</p>}
 
-      {/* Ventas por evento + Top evento */}
-      <div className="grid md:grid-cols-2 gap-2">
-        <div className="bg-surface border border-border rounded-[10px] p-3">
-          <p className="text-foreground font-semibold text-xs mb-2">Ventas por Evento</p>
-          <div className="flex flex-col gap-2">
-            {SALES_BY_EVENT.map(({ label, proj, rev }) => (
-              <div key={label} className="flex flex-col gap-1">
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-muted">{label}</span>
-                  <span className="text-foreground font-medium">{rev}%</span>
-                </div>
-                <div className="h-1 rounded-full bg-default overflow-hidden relative">
-                  <div className="h-full rounded-full bg-muted/40 absolute inset-y-0 left-0" style={{ width: `${proj}%` }} />
-                  <div className="h-full rounded-full bg-accent absolute inset-y-0 left-0" style={{ width: `${rev}%` }} />
-                </div>
-              </div>
-            ))}
+      {!loading && error && (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-muted text-xs text-center">{error}</p>
+          <Button size="sm" onPress={load}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      {!loading && !error && rows.length === 0 && (
+        <p className="text-muted text-xs py-8 text-center">Todavía no tienes eventos. Crea el primero en "Mis Eventos".</p>
+      )}
+
+      {!loading && !error && rows.length > 0 && (
+        <>
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <StatCard label="Total Eventos" value={totalEvents.toLocaleString()} />
+            <StatCard label="Eventos Activos" value={activeEvents.toLocaleString()} />
+            <StatCard label="Boletos Vendidos" value={ticketsSold.toLocaleString()} />
+            <StatCard label="Ventas Totales" value={formatCurrency(totalRevenue)} />
           </div>
-        </div>
 
-        <div className="bg-surface border border-border rounded-[10px] p-3 flex flex-col justify-center">
-          <p className="text-muted text-[11px] font-semibold uppercase tracking-wide">Top Evento (Revenue)</p>
-          <p className="text-foreground text-sm font-semibold mt-1">{topEvent.name}</p>
-          <p className="text-foreground text-xl font-bold my-1">${(topEvent.sold * 20).toLocaleString()}</p>
-          <p className="text-muted text-xs">
-            {topEvent.venue} · {topEvent.date}
-          </p>
-        </div>
-      </div>
+          {/* Ventas por evento + Top evento */}
+          <div className="grid md:grid-cols-2 gap-2">
+            <div className="bg-surface border border-border rounded-[10px] p-3">
+              <p className="text-foreground font-semibold text-xs mb-2">Ventas por Evento</p>
+              {salesByEvent.length === 0 ? (
+                <p className="text-muted text-xs py-4 text-center">Todavía no hay zonas configuradas en tus eventos.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {salesByEvent.map(({ id, name, pct }) => (
+                    <div key={id} className="flex flex-col gap-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted truncate">{name}</span>
+                        <span className="text-foreground font-medium">{pct}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-default overflow-hidden">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-      {/* Próximos eventos */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-foreground font-semibold text-xs">Próximos Eventos</p>
-        <Table>
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Próximos eventos" className="min-w-160 text-xs">
-              <Table.Header>
-                <Table.Column isRowHeader id="name" minWidth={200} className="text-center">
-                  Evento
-                </Table.Column>
-                <Table.Column id="date" minWidth={110} className="text-center">
-                  Fecha
-                </Table.Column>
-                <Table.Column id="sold" minWidth={160} className="text-center">
-                  Boletos Vendidos
-                </Table.Column>
-                <Table.Column id="status" minWidth={100} className="text-center">
-                  Estado
-                </Table.Column>
-              </Table.Header>
-              <Table.Body items={EVENTS}>
-                {(ev) => (
-                  <Table.Row>
-                    <Table.Cell className="text-center">
-                      <div>
-                        <p className="text-foreground text-xs font-medium">{ev.name}</p>
-                        <p className="text-muted text-[11px]">{ev.venue}</p>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-center">
-                      <span className="text-xs">{ev.date}</span>
-                    </Table.Cell>
-                    <Table.Cell className="text-center">
-                      <div className="flex flex-col gap-1 w-36 mx-auto">
-                        <div className="flex justify-between text-[11px]">
-                          <span className="text-muted font-mono">
-                            {ev.sold.toLocaleString()} / {ev.total.toLocaleString()}
-                          </span>
-                          <span className="text-foreground font-medium">{ev.pct}%</span>
-                        </div>
-                        <div className="h-1 rounded-full bg-default overflow-hidden">
-                          <div className="h-full rounded-full bg-accent" style={{ width: `${ev.pct}%` }} />
-                        </div>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-center">
-                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${ev.status === "Activo" ? "text-success" : "text-muted"}`}>
-                        <span className={`size-1.5 rounded-full ${ev.status === "Activo" ? "bg-success" : "bg-muted"}`} />
-                        {ev.status}
-                      </span>
-                    </Table.Cell>
-                  </Table.Row>
-                )}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </div>
+            <div className="bg-surface border border-border rounded-[10px] p-3 flex flex-col justify-center">
+              <p className="text-muted text-[11px] font-semibold uppercase tracking-wide">Top Evento (Ventas)</p>
+              {topEvent ? (
+                <>
+                  <p className="text-foreground text-sm font-semibold mt-1">{topEvent.row.name}</p>
+                  <p className="text-foreground text-xl font-bold my-1">{formatCurrency(topEvent.revenue)}</p>
+                  <p className="text-muted text-xs">
+                    {topEvent.row.venue} · {topEvent.row.date}
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted text-xs">Sin datos todavía.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Próximos eventos */}
+          <div className="flex flex-col gap-1.5">
+            <p className="text-foreground font-semibold text-xs">Próximos Eventos</p>
+            {upcomingEvents.length === 0 ? (
+              <p className="text-muted text-xs py-4 text-center bg-surface border border-border rounded-[10px]">
+                No tienes eventos activos próximos.
+              </p>
+            ) : (
+              <Table>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label="Próximos eventos" className="min-w-160 text-xs">
+                    <Table.Header>
+                      <Table.Column isRowHeader id="name" minWidth={200} className="text-center">
+                        Evento
+                      </Table.Column>
+                      <Table.Column id="date" minWidth={110} className="text-center">
+                        Fecha
+                      </Table.Column>
+                      <Table.Column id="sold" minWidth={160} className="text-center">
+                        Boletos Vendidos
+                      </Table.Column>
+                      <Table.Column id="status" minWidth={100} className="text-center">
+                        Estado
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body items={upcomingEvents}>
+                      {(ev) => {
+                        const pct = ev.total > 0 ? Math.round((ev.sold / ev.total) * 100) : 0;
+                        return (
+                          <Table.Row>
+                            <Table.Cell className="text-center">
+                              <div>
+                                <p className="text-foreground text-xs font-medium">{ev.name}</p>
+                                <p className="text-muted text-[11px]">{ev.venue}</p>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <span className="text-xs">{ev.date}</span>
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <div className="flex flex-col gap-1 w-36 mx-auto">
+                                <div className="flex justify-between text-[11px]">
+                                  <span className="text-muted font-mono">
+                                    {ev.sold.toLocaleString()} / {ev.total.toLocaleString()}
+                                  </span>
+                                  <span className="text-foreground font-medium">{pct}%</span>
+                                </div>
+                                <div className="h-1 rounded-full bg-default overflow-hidden">
+                                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell className="text-center">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-success">
+                                <span className="size-1.5 rounded-full bg-success" />
+                                {ev.status}
+                              </span>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      }}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

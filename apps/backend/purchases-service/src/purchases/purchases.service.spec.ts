@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +13,7 @@ import { PurchasesGateway } from './purchases.gateway';
 import { PurchasesService } from './purchases.service';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+const ADMIN_USER = { sub: USER_ID, email: 'admin@test.com', role: 'ADMIN' as const };
 
 describe('PurchasesService', () => {
   let service: PurchasesService;
@@ -261,7 +263,7 @@ describe('PurchasesService', () => {
       prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '3420500.00' } });
       prisma.purchase.count.mockResolvedValueOnce(37);
 
-      await expect(service.getStats()).resolves.toEqual({
+      await expect(service.getStats(ADMIN_USER)).resolves.toEqual({
         totalRevenue: 3420500,
         recentPurchasesCount: 37,
       });
@@ -279,7 +281,7 @@ describe('PurchasesService', () => {
       prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: null } });
       prisma.purchase.count.mockResolvedValueOnce(0);
 
-      await expect(service.getStats()).resolves.toEqual({
+      await expect(service.getStats(ADMIN_USER)).resolves.toEqual({
         totalRevenue: 0,
         recentPurchasesCount: 0,
       });
@@ -291,7 +293,7 @@ describe('PurchasesService', () => {
         recentPurchasesCount: 1,
       });
 
-      await expect(service.getStats()).resolves.toEqual({
+      await expect(service.getStats(ADMIN_USER)).resolves.toEqual({
         totalRevenue: 999,
         recentPurchasesCount: 1,
       });
@@ -309,7 +311,7 @@ describe('PurchasesService', () => {
         { eventZoneId: 'zone-2', _sum: { finalPrice: '500.00', taxAmount: '80.00' } },
       ]);
 
-      await expect(service.getStats(eventId)).resolves.toEqual({
+      await expect(service.getStats(ADMIN_USER, eventId)).resolves.toEqual({
         totalRevenue: 1500,
         recentPurchasesCount: 3,
         byEventZone: [
@@ -353,6 +355,87 @@ describe('PurchasesService', () => {
           where: { eventId: '550e8400-e29b-41d4-a716-446655440010' },
         }),
       );
+    });
+  });
+
+  describe('ORGANIZER access to their own event (assertOrganizerOwnsEvent)', () => {
+    const EVENT_ID = '550e8400-e29b-41d4-a716-446655440010';
+    const ORGANIZER_ID = '550e8400-e29b-41d4-a716-446655440099';
+    const ORGANIZER = { sub: ORGANIZER_ID, email: 'org@test.com', role: 'ORGANIZER' as const };
+
+    let fetchSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      fetchSpy = jest.spyOn(global, 'fetch');
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    it('getStats rejects an ORGANIZER that does not send eventId', async () => {
+      await expect(service.getStats(ORGANIZER)).rejects.toThrow(ForbiddenException);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('getStats rejects an ORGANIZER querying an event that is not theirs', async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organizerId: 'someone-else' }),
+      } as Response);
+
+      await expect(service.getStats(ORGANIZER, EVENT_ID)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('getStats allows an ORGANIZER querying their own event', async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organizerId: ORGANIZER_ID }),
+      } as Response);
+      redis.get.mockResolvedValueOnce(null);
+      prisma.purchase.aggregate.mockResolvedValueOnce({ _sum: { total: '100.00' } });
+      prisma.purchase.count.mockResolvedValueOnce(1);
+      prisma.purchaseDetail.groupBy.mockResolvedValueOnce([]);
+
+      await expect(service.getStats(ORGANIZER, EVENT_ID)).resolves.toEqual(
+        expect.objectContaining({ totalRevenue: 100 }),
+      );
+    });
+
+    it('getStats reports the event as not found when venues-events-service 404s', async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) } as Response);
+
+      await expect(service.getStats(ORGANIZER, EVENT_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('findAll lets an ORGANIZER see every purchase of their own event, not just their own', async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organizerId: ORGANIZER_ID }),
+      } as Response);
+      prisma.$transaction.mockResolvedValueOnce([[], 0]);
+
+      await service.findAll({ page: 1, limit: 20 }, ORGANIZER, EVENT_ID);
+
+      expect(prisma.purchase.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { eventId: EVENT_ID } }),
+      );
+    });
+
+    it('findAll rejects an ORGANIZER trying to list purchases of an event that is not theirs', async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ organizerId: 'someone-else' }),
+      } as Response);
+
+      await expect(service.findAll({ page: 1, limit: 20 }, ORGANIZER, EVENT_ID)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.purchase.findMany).not.toHaveBeenCalled();
     });
   });
 });

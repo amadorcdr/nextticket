@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseBoolPipe,
   ParseEnumPipe,
@@ -10,16 +12,24 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { EventStatus } from '@prisma/client';
+import type { Response } from 'express';
+import { existsSync } from 'fs';
+import { basename, join } from 'path';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -32,6 +42,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { EventsStatsResponseDto } from './dto/events-stats-response.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { EVENT_IMAGES_DIR, eventImageMulterOptions } from './event-image.storage';
 import { EventsService } from './events.service';
 
 @ApiTags('events')
@@ -111,6 +122,51 @@ export class EventsController {
   })
   getStats(): Promise<EventsStatsResponseDto> {
     return this.events.getStats();
+  }
+
+  // Tiene que declararse antes que ':id': si no, Nest intenta resolver
+  // "images" como si fuera el :id del evento (mismo motivo por el que
+  // 'stats', arriba, también va antes).
+  @Get('images/:filename')
+  @ApiOperation({
+    summary: 'Servir una imagen de evento previamente subida',
+  })
+  @ApiParam({ name: 'filename', example: '3b1f7f5e-....jpg' })
+  getImage(@Param('filename') filename: string, @Res() res: Response) {
+    // basename() descarta cualquier "../" que venga en el parámetro: sin
+    // esto, alguien podría pedir archivos fuera de la carpeta de imágenes.
+    const safeName = basename(filename);
+    const filePath = join(EVENT_IMAGES_DIR, safeName);
+
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('Imagen no encontrada');
+    }
+
+    res.sendFile(filePath);
+  }
+
+  @Post(':id/image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Subir la imagen de portada de un evento (JPEG/PNG/WEBP/GIF, máx. 5MB)',
+  })
+  @ApiParam({
+    name: 'id',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @UseInterceptors(FileInterceptor('image', eventImageMulterOptions))
+  uploadImage(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Falta el archivo de imagen (campo "image")');
+    }
+    return this.events.setImage(id, file.filename, user.sub);
   }
 
   @Get(':id')

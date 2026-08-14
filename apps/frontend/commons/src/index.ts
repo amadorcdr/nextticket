@@ -21,4 +21,15 @@ export * from "./components/atoms/HeroParticles";
 export * from "./components/atoms/Logo";
 export { default as PhysicalEditor, createEmptyPhysicalVenue } from "./components/editor/physical-editor";
 export { default as CommercialEditor } from "./components/editor/commercial-editor";
-export type { PhysicalVenueState, Floor, Section, Seat, CanvasElementModel, GeometryPoint } from "./components/editor/types";
+export type {
+    PhysicalVenueState,
+    Floor,
+    Section,
+    Seat,
+    CanvasElementModel,
+    GeometryPoint,
+    CommercialEventState,
+    EventZone,
+    EventZonePriceTier,
+    EventSeat,
+} from "./components/editor/types";

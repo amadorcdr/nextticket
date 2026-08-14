@@ -15,9 +15,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "pixi.js";
-import { Button } from "@heroui/react";
-import { ChevronDown, ChevronUp, Download, Loader2, Maximize, Minus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
-import type { Id, Pt, PhysicalVenueState, CommercialEventState, EventZone, EventZonePriceTier, EventSeat } from "./types";
+import { Button, toast } from "@heroui/react";
+import { ChevronDown, ChevronUp, Download, Loader2, Maximize, Minus, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import type { Id, Pt, PhysicalVenueState, CommercialEventState, EventZone, EventZonePriceTier, EventSeat, VenueEditorFile } from "./types";
 import { uid, sectionIsNumbered } from "./types";
 import { sectionColorFor } from "./constants";
 import { useHistory } from "./history";
@@ -25,7 +25,7 @@ import { usePixiStage, type PixiLayers, type StagePointerInfo } from "./canvas-e
 import { drawGrid, drawRuler, renderSections, renderCanvasElements, renderSeats, hexToInt } from "./rendering";
 import { computeZoneCapacity, computeVenueBounds, hitTestAt, drawMarquee, computeSelectionOBB, drawSelectionBBox } from "./selection";
 import { useKeyboardShortcuts } from "./keyboard";
-import { downloadJSON, exportVenueEditorFile } from "./serialization";
+import { downloadJSON, exportVenueEditorFile, readJSONFile } from "./serialization";
 import { NumField, TextField, ColorField, SelectField, CheckField, DateTimeField } from "./controls";
 
 const selectClassName =
@@ -69,6 +69,7 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
   );
   useEffect(() => { onChange?.(commercial); }, [commercial, onChange]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeZoneId, setActiveZoneId] = useState<Id | null>(null);
   const [activeFloorIdState, setActiveFloorIdState] = useState<Id>("");
   const activeFloorId = physical.floors.some((f) => f.id === activeFloorIdState) ? activeFloorIdState : (physical.floors[0]?.id ?? "");
@@ -203,6 +204,54 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
   };
   const patchZone = (id: Id, patch: Partial<EventZone>) =>
     setCommercial((prev) => ({ ...prev, zones: prev.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)) }));
+
+  /*
+   * Importa solo la parte "commercial" de un archivo exportado (o armado a
+   * mano): las zonas de venta y a qué secciones apuntan. El "physical" del
+   * archivo se ignora a propósito — el recinto en pantalla es el real del
+   * evento (viene del backend), no algo que el organizador deba poder
+   * reemplazar. Cualquier sectionId que no exista en ESTE recinto se
+   * descarta con aviso, para no dejar zonas apuntando a secciones fantasma.
+   */
+  const handleImportJSON = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readJSONFile<VenueEditorFile>(file);
+      if (!data.commercial) {
+        toast.danger("El archivo no contiene una sección \"commercial\" (zonas de venta).");
+        return;
+      }
+      const validSectionIds = new Set(physical.sections.map((s) => s.id));
+      let droppedSections = 0;
+      const zones: EventZone[] = data.commercial.zones.map((z) => {
+        const sectionIds = z.sectionIds.filter((id) => validSectionIds.has(id));
+        droppedSections += z.sectionIds.length - sectionIds.length;
+        return { ...z, eventId: commercial.eventId, sectionIds, availableCapacity: 0 };
+      });
+      const zonesWithCapacity = zones.map((z) => ({ ...z, availableCapacity: computeZoneCapacity(z, physical) }));
+      const eventSeats = generateEventSeats(zonesWithCapacity, physical, data.commercial.eventSeats);
+
+      setCommercial({
+        eventId: commercial.eventId,
+        eventName: data.commercial.eventName || commercial.eventName,
+        zones: zonesWithCapacity,
+        priceTiers: data.commercial.priceTiers.map((t) => ({ ...t })),
+        eventSeats,
+      });
+      setActiveZoneId(null);
+
+      if (droppedSections > 0) {
+        toast.danger(`Se importó, pero ${droppedSections} sección(es) del archivo no existen en este recinto y se omitieron.`);
+      } else {
+        toast.success("Zonas importadas");
+      }
+    } catch {
+      toast.danger("Archivo JSON inválido.");
+    } finally {
+      e.target.value = "";
+    }
+  }, [physical, commercial.eventId, commercial.eventName, setCommercial]);
 
   const addPriceTier = (zoneId: Id) => {
     const count = commercial.priceTiers.filter((t) => t.eventZoneId === zoneId).length;
@@ -345,6 +394,10 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
           >
             <Download className="size-4" />
           </Button>
+          <Button size="sm" variant="ghost" isIconOnly title="Importar JSON de zonas" onPress={() => fileInputRef.current?.click()}>
+            <Upload className="size-4" />
+          </Button>
+          <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
         </div>
 
         <div className="flex flex-col gap-1.5">

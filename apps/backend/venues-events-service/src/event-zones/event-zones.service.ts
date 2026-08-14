@@ -572,6 +572,45 @@ export class EventZonesService {
     return updated;
   }
 
+  async removePriceTier(eventId: string, zoneId: string, tierId: string) {
+    await this.findOne(eventId, zoneId);
+    const event = await this.findEvent(eventId);
+
+    this.validateEventEditable(event.status);
+
+    const tier = await this.prisma.eventZonePriceTier.findFirst({
+      where: {
+        id: tierId,
+        eventZoneId: zoneId,
+      },
+    });
+
+    if (!tier) {
+      throw new NotFoundException(`PriceTier ${tierId} no existe`);
+    }
+
+    // sortOrder 0 es la etapa "Regular" que create()/update() generan y
+    // mantienen junto con eventPrice: borrarla por aquí dejaría la zona sin
+    // su etapa base.
+    if (tier.sortOrder === 0) {
+      throw new ConflictException(
+        'No se puede eliminar la etapa de precio base de la zona (sortOrder 0)',
+      );
+    }
+
+    await this.prisma.eventZonePriceTier.delete({
+      where: {
+        id: tierId,
+      },
+    });
+
+    await this.invalidateEventCache(eventId);
+
+    return {
+      deleted: true,
+    };
+  }
+
   async remove(eventId: string, zoneId: string) {
     const zone = await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);

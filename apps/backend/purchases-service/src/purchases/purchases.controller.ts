@@ -86,7 +86,8 @@ export class PurchasesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Listar compras propias, paginadas (el ADMIN ve todas)',
+    summary:
+      'Listar compras propias, paginadas (el ADMIN ve todas; el ORGANIZER que manda eventId de su propio evento ve todas las de ese evento)',
   })
   @ApiQuery({
     name: 'eventId',
@@ -103,20 +104,22 @@ export class PurchasesController {
 
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AUTH_ROLES.ADMIN)
+  @Roles(AUTH_ROLES.ADMIN, AUTH_ROLES.ORGANIZER)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Métricas agregadas de compras para el Dashboard de Administrador o para un evento',
+    summary:
+      'Métricas agregadas de compras para el Dashboard de Administrador, o de un evento propio para un ORGANIZER',
   })
   @ApiQuery({
     name: 'eventId',
     required: false,
-    description: 'Si se indica, agrega las métricas solo de ese evento',
+    description: 'Si se indica, agrega las métricas solo de ese evento. Obligatorio para ORGANIZER.',
   })
   getStats(
+    @CurrentUser() user: AuthenticatedUser,
     @Query('eventId', new ParseUUIDPipe({ optional: true })) eventId?: string,
   ): Promise<PurchasesStatsResponseDto> {
-    return this.purchases.getStats(eventId);
+    return this.purchases.getStats(user, eventId);
   }
 
   @Get(':id')
