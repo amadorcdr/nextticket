@@ -107,6 +107,20 @@ describe('UsersService', () => {
     });
   });
 
+  describe('setPassword', () => {
+    it('hashes the password with bcrypt but does not touch accountStatus', async () => {
+      prisma.user.update.mockResolvedValue({ id: 'user-id' });
+
+      await service.setPassword('user-id', PASSWORD);
+
+      const [{ data }] = prisma.user.update.mock.calls[0];
+      expect(data.password).not.toBe(PASSWORD);
+      expect(data.password.startsWith('$2')).toBe(true);
+      await expect(compare(PASSWORD, data.password)).resolves.toBe(true);
+      expect(data).not.toHaveProperty('accountStatus');
+    });
+  });
+
   describe('upsertOAuthUser', () => {
     it('links an OAuth login to the existing account with the same email', async () => {
       prisma.user.findUnique.mockResolvedValue({

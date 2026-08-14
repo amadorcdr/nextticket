@@ -170,6 +170,25 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Cambia la contraseña de una cuenta ya ACTIVE (recuperación de
+   * contraseña). A diferencia de setPasswordAndActivate, no toca
+   * accountStatus: activar una cuenta y recuperar su contraseña son
+   * procesos distintos aunque ambos terminen hasheando una contraseña.
+   */
+  async setPassword(id: string, password: string) {
+    const hashed = await hash(password, 10);
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { password: hashed },
+      select: USER_PUBLIC_SELECT,
+    });
+
+    await this.redis.del(LIST_CACHE_KEY);
+    return user;
+  }
+
   async upsertOAuthUser(input: {
     name: string;
     email: string;

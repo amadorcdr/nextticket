@@ -127,3 +127,59 @@ export async function resendActivation(email: string): Promise<{ message: string
 
   return response.json();
 }
+
+/**
+ * Recuperación de contraseña: mismo flujo para los 4 roles, la cuenta se
+ * identifica solo por correo. La respuesta es siempre el mismo mensaje
+ * genérico, exista o no la cuenta — no hay nada que distinguir aquí.
+ */
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(response, "No se pudo procesar la solicitud. Intenta de nuevo más tarde."),
+    );
+  }
+
+  return response.json();
+}
+
+export async function resetPassword(
+  token: string,
+  password: string,
+  passwordConfirmation: string,
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password, passwordConfirmation }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(response, "No se pudo restablecer la contraseña. Intenta de nuevo más tarde."),
+    );
+  }
+
+  return response.json();
+}
+
+/** El usuario dice "yo no pedí esto": invalida el token sin cambiar nada. */
+export async function discardPasswordReset(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/reset-password/discard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "No se pudo descartar la solicitud."));
+  }
+
+  return response.json();
+}

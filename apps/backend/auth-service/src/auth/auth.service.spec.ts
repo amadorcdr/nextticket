@@ -7,6 +7,7 @@ import { decode } from 'jsonwebtoken';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { ActivationService } from '../activation/activation.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import { AuthService } from './auth.service';
 import { AUTH_PROVIDERS } from './auth.constants';
 
@@ -23,6 +24,7 @@ describe('AuthService', () => {
     findByEmailForAuth: jest.fn(),
     findPublicById: jest.fn(),
     setPasswordAndActivate: jest.fn(),
+    setPassword: jest.fn(),
     upsertOAuthUser: jest.fn(),
   };
 
@@ -49,6 +51,13 @@ describe('AuthService', () => {
     consumeToken: jest.fn(),
   };
 
+  const passwordReset = {
+    issueAndSendReset: jest.fn(),
+    consumeToken: jest.fn(),
+    discardToken: jest.fn(),
+    notifyPasswordChanged: jest.fn(),
+  };
+
   const publicUser = {
     id: USER_ID,
     name: 'Aidee',
@@ -70,6 +79,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: config },
         { provide: RedisService, useValue: redis },
         { provide: ActivationService, useValue: activation },
+        { provide: PasswordResetService, useValue: passwordReset },
       ],
     }).compile();
 
@@ -181,6 +191,127 @@ describe('AuthService', () => {
           confirmPassword: PASSWORD,
         } as never),
       ).rejects.toThrow('El enlace de activación no es válido o ha expirado.');
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('sends a reset email for an active local account and still answers generically', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'ACTIVE',
+        provider: 'LOCAL',
+      });
+
+      const result = await service.forgotPassword('aidee@test.com');
+
+      expect(passwordReset.issueAndSendReset).toHaveBeenCalledWith(
+        expect.objectContaining({ id: USER_ID }),
+      );
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('answers the SAME generic message for an unknown email, without sending anything', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue(null);
+
+      const result = await service.forgotPassword('nadie@test.com');
+
+      expect(passwordReset.issueAndSendReset).not.toHaveBeenCalled();
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('does not send a reset link for an account still PENDING activation', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'PENDING',
+        provider: 'LOCAL',
+      });
+
+      const result = await service.forgotPassword('aidee@test.com');
+
+      expect(passwordReset.issueAndSendReset).not.toHaveBeenCalled();
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('does not send a reset link for a Google-only account (no local password to reset)', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'ACTIVE',
+        provider: 'GOOGLE',
+      });
+
+      const result = await service.forgotPassword('aidee@test.com');
+
+      expect(passwordReset.issueAndSendReset).not.toHaveBeenCalled();
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('gives the exact same response for eligible and non-eligible accounts', async () => {
+      usersService.findByEmailForAuth.mockResolvedValue(null);
+      const forUnknown = await service.forgotPassword('nadie@test.com');
+
+      usersService.findByEmailForAuth.mockResolvedValue({
+        ...publicUser,
+        accountStatus: 'ACTIVE',
+        provider: 'LOCAL',
+      });
+      const forKnown = await service.forgotPassword('aidee@test.com');
+
+      expect(forUnknown.message).toBe(forKnown.message);
+    });
+  });
+
+  describe('discardPasswordReset', () => {
+    it('delegates straight to PasswordResetService and answers generically', async () => {
+      const result = await service.discardPasswordReset('some-token');
+
+      expect(passwordReset.discardToken).toHaveBeenCalledWith('some-token');
+      expect(result.message).toEqual(expect.any(String));
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('rejects mismatched passwords before touching the token', async () => {
+      await expect(
+        service.resetPassword({
+          token: 'abc',
+          password: PASSWORD,
+          passwordConfirmation: 'otra-cosa',
+        } as never),
+      ).rejects.toThrow('Las contraseñas no coinciden');
+
+      expect(passwordReset.consumeToken).not.toHaveBeenCalled();
+    });
+
+    it('sets the new password, notifies the user and invalidates the token', async () => {
+      passwordReset.consumeToken.mockResolvedValue({ userId: USER_ID });
+      usersService.setPassword.mockResolvedValue(publicUser);
+
+      const result = await service.resetPassword({
+        token: 'abc',
+        password: PASSWORD,
+        passwordConfirmation: PASSWORD,
+      } as never);
+
+      expect(passwordReset.consumeToken).toHaveBeenCalledWith('abc');
+      expect(usersService.setPassword).toHaveBeenCalledWith(USER_ID, PASSWORD);
+      expect(passwordReset.notifyPasswordChanged).toHaveBeenCalledWith(publicUser);
+      expect(result.message).toEqual(expect.any(String));
+    });
+
+    it('propagates an invalid/expired/already-used token as-is', async () => {
+      passwordReset.consumeToken.mockRejectedValue(
+        new Error('El enlace de recuperación no es válido o ha expirado.'),
+      );
+
+      await expect(
+        service.resetPassword({
+          token: 'abc',
+          password: PASSWORD,
+          passwordConfirmation: PASSWORD,
+        } as never),
+      ).rejects.toThrow('El enlace de recuperación no es válido o ha expirado.');
+
+      expect(usersService.setPassword).not.toHaveBeenCalled();
     });
   });
 

@@ -5,3 +5,5 @@ export { AuthModule } from './AuthModule';
 export { SignIn } from './components/SignIn';
 export { SignUp } from './components/SignUp';
 export { ActivateAccount } from './components/ActivateAccount';
+export { ForgotPassword } from './components/ForgotPassword';
+export { ResetPassword } from './components/ResetPassword';

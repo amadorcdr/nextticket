@@ -13,9 +13,11 @@ import { sign, type SignOptions } from 'jsonwebtoken';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { ActivationService } from '../activation/activation.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ActivateAccountDto } from './dto/activate-account.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AUTH_PROVIDERS } from './auth.constants';
 
 type JwtUser = {
@@ -42,6 +44,7 @@ export class AuthService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
     private readonly activation: ActivationService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   async onModuleInit() {
@@ -90,6 +93,47 @@ export class AuthService implements OnModuleInit {
 
     await this.usersService.setPasswordAndActivate(userId, dto.password);
     return { message: 'Tu cuenta ha sido activada correctamente.' };
+  }
+
+  /**
+   * Recuperación de contraseña — mismo flujo para los 4 roles, la cuenta se
+   * identifica solo por correo. Respuesta siempre genérica: no revela si el
+   * correo existe, si está pendiente de activación o si es una cuenta de
+   * Google sin contraseña local (ninguna de esas recibe el enlace).
+   */
+  async forgotPassword(email: string) {
+    const user = await this.usersService.findByEmailForAuth(email);
+    const eligible =
+      !!user && user.accountStatus === 'ACTIVE' && user.provider === AUTH_PROVIDERS.LOCAL;
+
+    if (eligible) {
+      await this.passwordReset.issueAndSendReset(user);
+    }
+
+    return {
+      message:
+        'Si existe una cuenta asociada a ese correo, recibirás un enlace para restablecer tu contraseña.',
+    };
+  }
+
+  /** El usuario dice "yo no pedí esto": invalida el token sin tocar nada más. */
+  async discardPasswordReset(token: string) {
+    await this.passwordReset.discardToken(token);
+    return { message: 'Solicitud de recuperación descartada.' };
+  }
+
+  /** Único punto de recuperación: mismo camino para Cliente, Organizador, Validador y Admin. */
+  async resetPassword(dto: ResetPasswordDto) {
+    if (dto.password !== dto.passwordConfirmation) {
+      throw new BadRequestException('Las contraseñas no coinciden');
+    }
+
+    const { userId } = await this.passwordReset.consumeToken(dto.token);
+    const user = await this.usersService.setPassword(userId, dto.password);
+
+    await this.passwordReset.notifyPasswordChanged(user);
+
+    return { message: 'Tu contraseña se actualizó correctamente.' };
   }
 
   async login(dto: LoginDto) {

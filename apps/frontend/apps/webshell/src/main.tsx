@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { Router, ThemeProvider, CartProvider, SessionProvider, ToastProvider, RequireRole } from '@nextticket-frontend/commons';
 
 import { App } from './App';
-import { AuthModule, SignIn, SignUp, ActivateAccount } from "@nextticket-frontend/auth-front";
+import { AuthModule, SignIn, SignUp, ActivateAccount, ForgotPassword, ResetPassword } from "@nextticket-frontend/auth-front";
 import { PurchasesModule } from "@nextticket-frontend/purchases-front";
 import { TicketsModule, EventSalesSummary } from "@nextticket-frontend/tickets-front";
 import { VenuesModule, VenueEditView, VenueCanvasCreate, VenueCanvasEdit } from "@nextticket-frontend/venues-front";
@@ -77,6 +77,8 @@ createRoot(document.getElementById('root')!).render(
                         <Router.Route path="sign-in" element={<SignIn />} />
                         <Router.Route path="sign-up" element={<SignUp />} />
                         <Router.Route path="activate-account" element={<ActivateAccount />} />
+                        <Router.Route path="forgot-password" element={<ForgotPassword />} />
+                        <Router.Route path="reset-password" element={<ResetPassword />} />
                     </Router.Route>
 
                     {/* Panel administrativo: recintos, usuarios, eventos y tickets a nivel

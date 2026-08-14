@@ -109,9 +109,12 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
           }
         />
         <div className="flex justify-end -mt-1">
-          <a href="#" className="text-muted text-[11px] hover:text-foreground transition-colors">
+          <Router.Link
+            to="/forgot-password"
+            className="text-muted text-[11px] hover:text-foreground transition-colors"
+          >
             ¿Olvidaste tu contraseña?
-          </a>
+          </Router.Link>
         </div>
         <Button type="submit" fullWidth isDisabled={loading}>
           <Icon.LogIn />
