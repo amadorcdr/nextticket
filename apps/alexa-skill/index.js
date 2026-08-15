@@ -40,7 +40,7 @@ const axios = require("axios");
  *
  * SIN diagonal al final.  Ejemplo: "https://a1b2-c3d4.ngrok-free.app"
  */
-const API_URL_FIJA = "";
+const API_URL_FIJA = "https://tummy-graves-slate.ngrok-free.dev";
 
 const BASE_URL = (process.env.API_BASE_URL || API_URL_FIJA).replace(/\/+$/, "");
 
@@ -684,6 +684,35 @@ function startLogin(handlerInput) {
   patchSession(handlerInput, { awaitingSeed: true });
 }
 
+/**
+ * Pide la palabra clave DEJANDO A ALEXA ESPERANDO una respuesta libre.
+ *
+ * Sin esto no funciona: un slot AMAZON.SearchQuery no se puede capturar con un
+ * sample que sea solo "{userInput}" — Alexa exige palabras portadoras alrededor
+ * ("mi palabra clave es ..."). Así que si el usuario contesta "jaguar morado" a
+ * secas, no coincide con nada y cae en FallbackIntent, dando la sensación de
+ * que la skill ignora la respuesta.
+ *
+ * Al elicitar el slot explícitamente, Alexa mete TODO lo que se diga a
+ * continuación dentro de userInput, sin necesidad de frase portadora.
+ */
+function askForSeed(handlerInput, speech) {
+  const t = handlerInput.t;
+  startLogin(handlerInput);
+
+  return handlerInput.responseBuilder
+    .speak(speech)
+    .reprompt(t("ASK_SEED"))
+    .addElicitSlotDirective("userInput", {
+      name: "CaptureInputIntent",
+      confirmationStatus: "NONE",
+      slots: {
+        userInput: { name: "userInput", confirmationStatus: "NONE" },
+      },
+    })
+    .getResponse();
+}
+
 /** Guarda el token que devolvió la semilla: se reutiliza en las próximas visitas. */
 function loginUser(handlerInput, token, user) {
   patchSession(handlerInput, {
@@ -739,11 +768,7 @@ function withAuth(handlerName, allowedRoles, handleFn) {
     const session = getSession(handlerInput);
 
     if (!isLoggedIn(session)) {
-      startLogin(handlerInput);
-      return handlerInput.responseBuilder
-        .speak(t("LOGIN_REQUIRED"))
-        .reprompt(t("ASK_SEED"))
-        .getResponse();
+      return askForSeed(handlerInput, t("LOGIN_REQUIRED"));
     }
 
     if (Array.isArray(allowedRoles) && !allowedRoles.includes(session.userRole)) {
@@ -975,13 +1000,8 @@ const LaunchRequestHandler = {
       }
     }
 
-    startLogin(handlerInput);
     const speech = session.sessionExpired ? t("SESSION_EXPIRED") : t("GREETING_NEW");
-
-    return handlerInput.responseBuilder
-      .speak(speech)
-      .reprompt(t("ASK_SEED"))
-      .getResponse();
+    return askForSeed(handlerInput, speech);
   }),
 };
 
@@ -1008,10 +1028,7 @@ const CaptureSeedHandler = {
     } catch (error) {
       // 401 = semilla incorrecta: es un caso de negocio, no una falla técnica.
       if (error instanceof ApiError && error.code === API_ERRORS.UNAUTHORIZED) {
-        return handlerInput.responseBuilder
-          .speak(t("SEED_NOT_FOUND"))
-          .reprompt(t("ASK_SEED"))
-          .getResponse();
+        return askForSeed(handlerInput, t("SEED_NOT_FOUND"));
       }
       throw error; // el resto lo explica safeHandle
     }
@@ -1042,11 +1059,7 @@ const CaptureInputOutOfContextHandler = {
         .getResponse();
     }
 
-    startLogin(handlerInput);
-    return handlerInput.responseBuilder
-      .speak(t("GREETING_NEW"))
-      .reprompt(t("ASK_SEED"))
-      .getResponse();
+    return askForSeed(handlerInput, t("GREETING_NEW"));
   }),
 };
 
@@ -1054,10 +1067,7 @@ const LogoutIntentHandler = {
   canHandle: canHandleIntent("LogoutIntent"),
   handle: safeHandle("LogoutIntent", (handlerInput) => {
     logoutUser(handlerInput);
-    return handlerInput.responseBuilder
-      .speak(handlerInput.t("LOGOUT"))
-      .reprompt(handlerInput.t("ASK_SEED"))
-      .getResponse();
+    return askForSeed(handlerInput, handlerInput.t("LOGOUT"));
   }),
 };
 
@@ -1092,11 +1102,7 @@ const InProgressDialogHandler = {
 
     // Sin sesión no tiene sentido llenar slots: se corta aquí.
     if (!isLoggedIn(session)) {
-      startLogin(handlerInput);
-      return handlerInput.responseBuilder
-        .speak(handlerInput.t("LOGIN_REQUIRED"))
-        .reprompt(handlerInput.t("ASK_SEED"))
-        .getResponse();
+      return askForSeed(handlerInput, handlerInput.t("LOGIN_REQUIRED"));
     }
 
     const intent = handlerInput.requestEnvelope.request.intent;
@@ -1444,10 +1450,7 @@ const HelpIntentHandler = {
     const session = getSession(handlerInput);
 
     if (!isLoggedIn(session)) {
-      return handlerInput.responseBuilder
-        .speak(t("HELP_ANONYMOUS"))
-        .reprompt(t("ASK_SEED"))
-        .getResponse();
+      return askForSeed(handlerInput, t("HELP_ANONYMOUS"));
     }
 
     return handlerInput.responseBuilder
@@ -1484,10 +1487,7 @@ const FallbackIntentHandler = {
     const session = getSession(handlerInput);
 
     if (!isLoggedIn(session)) {
-      return handlerInput.responseBuilder
-        .speak(t("FALLBACK_LOGIN", t("ASK_SEED")))
-        .reprompt(t("ASK_SEED"))
-        .getResponse();
+      return askForSeed(handlerInput, t("FALLBACK_LOGIN", t("ASK_SEED")));
     }
 
     return handlerInput.responseBuilder
