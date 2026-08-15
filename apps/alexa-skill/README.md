@@ -16,18 +16,50 @@ seed-alexa.sh         da de alta las palabras clave de los usuarios de prueba
 
 ---
 
-## 1. El backend ya está listo
+## 1. Preparar el backend
 
-`POST /auth/alexa/seed` y el filtro `?from=&to=` de `/purchases/stats` ya están
-aplicados en `develop`. Solo falta correr la migración:
+El endpoint `POST /auth/alexa/seed` y el filtro `?from=&to=` de
+`/purchases/stats` ya están en `develop`. Con Docker arriba:
 
 ```bash
-cd apps/backend/auth-service && pnpm exec prisma migrate dev --name add_alexa_seed
+docker compose up -d
 ```
+
+Aplicar las migraciones pendientes de los tres servicios que la skill usa:
+
+```bash
+cd apps/backend/auth-service && pnpm exec prisma migrate deploy
+```
+
+```bash
+cd apps/backend/purchases-service && pnpm exec prisma migrate deploy
+```
+
+> `migrate dev` no sirve en una terminal sin TTY: es interactivo y aborta.
+> `migrate deploy` hace lo mismo sin preguntar y no es destructivo.
 
 ---
 
-## 2. Dar de alta las palabras clave
+## 2. Datos de prueba
+
+Sin eventos publicados la skill no tiene nada que responder. El sembrador crea
+5 eventos PUBLISHED con zonas, a nombre de `organizador@test.com`:
+
+```bash
+cd apps/backend/venues-events-service && ./node_modules/.bin/ts-node src/seed/seed-dev-data.ts
+```
+
+> Ojo: está declarado bajo `prisma.seed` en el `package.json`, no en `scripts`.
+> Por eso `pnpm run seed` falla con "Missing script", y `prisma db seed`
+> también, porque busca un `ts-node` global que no existe. Hay que invocar el
+> binario local, como arriba.
+
+Y si `venues-events-service` no compila con errores de `multer`, le faltan
+dependencias nuevas: `pnpm install` dentro de ese servicio.
+
+---
+
+## 3. Dar de alta las palabras clave
 
 ```bash
 ./apps/alexa-skill/seed-alexa.sh
@@ -46,7 +78,7 @@ dice *"jaguar morado"* y tanto la skill como el backend lo convierten a
 
 ---
 
-## 3. Exponer la API con ngrok
+## 4. Exponer la API con ngrok
 
 ```bash
 docker compose up -d
@@ -61,7 +93,7 @@ ngrok http 3001
 
 ---
 
-## 4. Subir la skill al Developer Console
+## 5. Subir la skill al Developer Console
 
 **Modelo de interacción**
 1. Build → JSON Editor
@@ -71,8 +103,16 @@ ngrok http 3001
 **Código**
 1. Code → pega `index.js` completo
 2. Abre `package.json` y pega el de este repo (agrega `axios`)
-3. En la línea `const API_URL_FIJA = ""` pega la URL de ngrok
-4. **Save** y **Deploy**
+3. En la línea `const API_URL_FIJA` pega **tu** URL de ngrok
+4. **Save** y **Deploy** — guardar no publica nada, hay que desplegar
+
+> El repo trae una URL de ngrok escrita de una sesión de pruebas. Es temporal y
+> ya estará muerta: cámbiala por la tuya. No es un secreto, las URLs gratuitas
+> de ngrok son públicas y efímeras.
+
+**Cuál de los dos botones:** si tocaste `models/es-MX.json` hay que hacer
+**Build Model**; si tocaste `index.js`, **Deploy**. Son pestañas distintas y se
+olvida fácil: un cambio de código sin Deploy deja la skill como estaba.
 
 **Sobre la URL:** las skills Alexa-Hosted **no permiten agregar variables de
 entorno propias** — esa Lambda la administra Amazon. Por eso la URL va como
@@ -84,7 +124,7 @@ fábrica en Alexa-Hosted: no hay que tocarlas.
 
 ---
 
-## 5. Probar
+## 6. Probar
 
 ### Sin desplegar nada
 
@@ -107,15 +147,38 @@ al principio):
 
 ```
 abre next ticket
-mi palabra clave es jaguar morado
-dime mis eventos activos
-qué zonas tiene rock revolution
-hay lugares en vip
+jaguar morado
+cuáles son mis eventos
+cómo van las ventas de rock en vivo
+qué zonas tiene
+hay lugares en la zona vip
 ```
+
+Como cliente, para ver el catálogo:
+
+```
+cerrar sesión
+roble sereno
+qué eventos hay
+cuándo es el evento
+rock en vivo
+```
+
+Y para demostrar el control por rol, con la sesión de cliente:
+
+```
+cuál es el evento más taquillero
+```
+
+Debe negarlo explicando que esa consulta es de administradores.
+
+> Para cambiar de usuario di **`cerrar sesión`** y luego la palabra a secas.
+> No escribas frases libres tipo "entrar como admin": el sample abierto
+> `{userInput}` las interpreta como intento de palabra clave.
 
 ---
 
-## 6. Cómo cumple cada requisito
+## 7. Cómo cumple cada requisito
 
 | Requisito | Dónde está |
 |---|---|
@@ -137,7 +200,7 @@ hay lugares en vip
 
 ---
 
-## 7. Ver los errores en CloudWatch
+## 8. Ver los errores en CloudWatch
 
 Todos los errores llevan la misma marca:
 
@@ -153,7 +216,7 @@ servidor de Next Ticket"* y en CloudWatch aparece un `code=NETWORK`.
 
 ---
 
-## 8. Detalles que conviene saber
+## 9. Detalles que conviene saber
 
 **Los eventos ya no están quemados.** El modelo trae dos de ejemplo solo para
 poder compilar. Al iniciar sesión, la skill manda una directiva
