@@ -479,6 +479,45 @@ function stripSsml(ssml) {
 }
 
 /**
+ * Formas alternativas de nombrar un evento, para que Alexa lo reconozca aunque
+ * el usuario no diga el título completo.
+ *
+ * Los nombres reales traen ruido que nadie dice en voz alta: un prefijo de
+ * entorno ("DEV - Rock en Vivo") y un subtítulo tras los dos puntos
+ * ("Rock en Vivo: Noches Eléctricas"). Tomar las primeras palabras a ciegas
+ * daba "DEV" para TODOS los eventos: sinónimos idénticos y ambiguos que no
+ * distinguían nada.
+ */
+function buildEventSynonyms(name) {
+  const limpio = String(name)
+    // Prefijo de entorno o categoría: "DEV - ", "PROD — ", …
+    .replace(/^[A-Za-z0-9]{1,6}\s*[-–—]\s*/, "")
+    .trim();
+
+  // Parte principal, antes del subtítulo.
+  const principal = limpio.split(/[:–—]/)[0].trim();
+
+  const candidatos = [
+    limpio,
+    principal,
+    // Las primeras palabras significativas de la parte principal.
+    principal.split(/\s+/).slice(0, 3).join(" "),
+    principal.split(/\s+/).slice(0, 2).join(" "),
+  ];
+
+  const vistos = new Set([String(name).toLowerCase()]);
+
+  return candidatos.filter((s) => {
+    const clave = s.toLowerCase();
+    // Se descartan los vacíos, los repetidos y los de una sola palabra corta
+    // ("de", "la"), que provocarían falsos positivos.
+    if (!s || s.length < 4 || vistos.has(clave)) return false;
+    vistos.add(clave);
+    return true;
+  });
+}
+
+/**
  * Entidades dinámicas: reemplaza el catálogo EventType en tiempo de ejecución
  * con los eventos que devuelve la API. Sin esto, Alexa solo reconocería los
  * eventos hardcodeados en el modelo de interacción.
@@ -494,12 +533,7 @@ function buildEventEntitiesDirective(events) {
           id: event.id,
           name: {
             value: event.name,
-            // Sinónimos automáticos: las primeras palabras del nombre, que es
-            // como la gente suele referirse a un evento.
-            synonyms: [
-              event.name.split(" ").slice(0, 2).join(" "),
-              event.name.split(" ")[0],
-            ].filter((s) => s && s.toLowerCase() !== event.name.toLowerCase()),
+            synonyms: buildEventSynonyms(event.name),
           },
         })),
       },
