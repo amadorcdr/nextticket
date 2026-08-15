@@ -567,9 +567,12 @@ const es = {
   ROLE_PLURAL_CUSTOMER: "clientes",
 
   // ── Menús ──
-  MENU_ORGANIZER: "Como organizador puedes preguntarme por tus eventos activos, los boletos vendidos de un evento, las zonas que tiene, la disponibilidad de una zona o los datos de un evento. ¿Qué deseas consultar?",
-  MENU_ADMIN: "Como administrador puedes preguntarme cuál es el evento más taquillero, cuánto ingresó la plataforma en un mes, o las zonas, la disponibilidad y los datos de cualquier evento. ¿Qué deseas consultar?",
-  MENU_CUSTOMER: "Puedes preguntarme qué zonas tiene un evento, si hay lugares en una zona, o cuándo y dónde es un evento. ¿Qué deseas consultar?",
+  // Los menús dan frases LITERALES que el usuario puede repetir. Antes describían
+  // las consultas en abstracto ("puedes preguntarme qué zonas tiene un evento")
+  // y la gente lo repetía tal cual, sin nombrar ningún evento: caía en Fallback.
+  MENU_ORGANIZER: "Puedes decir: cuáles son mis eventos; cómo van las ventas; qué zonas tiene; o hay lugares disponibles. ¿Qué deseas consultar?",
+  MENU_ADMIN: "Puedes decir: qué eventos hay; cuál es el evento más taquillero; cuánto se recaudó en agosto; o qué zonas tiene. ¿Qué deseas consultar?",
+  MENU_CUSTOMER: "Puedes decir: qué eventos hay; qué zonas tiene; hay lugares disponibles; o cuándo es el evento. ¿Qué deseas consultar?",
   WHAT_TO_QUERY: "¿Qué deseas consultar?",
   ANYTHING_ELSE: "¿Hay algo más que quieras consultar?",
 
@@ -596,6 +599,16 @@ const es = {
   NO_ACTIVE_EVENTS: "No tienes eventos activos en este momento. %s",
   ACTIVE_EVENTS_ONE: "Tienes 1 evento activo: %s. ¿Quieres saber cómo van sus ventas?",
   ACTIVE_EVENTS_MANY: "Tienes %s eventos activos: %s. ¿De cuál quieres más detalles?",
+
+  // Catálogo para quien no organiza: no son "sus" eventos, son los que hay.
+  NO_EVENTS_AVAILABLE: "Ahora mismo no hay eventos publicados. %s",
+  EVENTS_AVAILABLE_ONE: "Hay 1 evento disponible: %s. ¿Quieres saber sus zonas o su disponibilidad?",
+  EVENTS_AVAILABLE_MANY: "Hay %s eventos disponibles: %s. ¿De cuál quieres más detalles?",
+  EVENT_LIST_ITEM: "%s, en %s el %s",
+
+  // Se pregunta por un evento SIEMPRE ofreciendo la lista: si el usuario no
+  // sabe qué hay, preguntarle "¿de qué evento?" lo deja sin salida.
+  ASK_WHICH_EVENT: "%s Los eventos disponibles son: %s. ¿Cuál te interesa?",
   ACTIVE_EVENT_ITEM: "%s, en %s el %s",
 
   TICKETS_SOLD: "El evento %s ha vendido %s de %s boletos, es decir un %s por ciento de ocupación. Aún quedan %s %s. %s",
@@ -959,6 +972,30 @@ async function resolveEvent(handlerInput, session) {
   return { event: null, rawValue: null, remembered: false };
 }
 
+/**
+ * Pregunta por un evento MOSTRANDO los que hay. Preguntar "¿de qué evento?" a
+ * secas deja atascado a quien no conoce el catálogo: contesta cualquier cosa
+ * ("todos") y vuelve a la misma pregunta, en bucle.
+ */
+async function askWhichEvent(handlerInput, session, promptKey) {
+  const t = handlerInput.t;
+  const events = await repo.getPublishedEvents(session.token);
+
+  if (events.length === 0) {
+    return handlerInput.responseBuilder
+      .speak(t("NO_EVENTS_AT_ALL", t("WHAT_TO_QUERY")))
+      .reprompt(t("WHAT_TO_QUERY"))
+      .getResponse();
+  }
+
+  return handlerInput.responseBuilder
+    .speak(t("ASK_WHICH_EVENT", t(promptKey), joinList(events.map((e) => e.name))))
+    .reprompt(t("ASK_EVENT_SHORT"))
+    .addElicitSlotDirective("eventName")
+    .addDirective(buildEventEntitiesDirective(events))
+    .getResponse();
+}
+
 async function eventNotFound(handlerInput, session, rawValue) {
   const t = handlerInput.t;
   const events = await repo.getPublishedEvents(session.token);
@@ -1161,38 +1198,65 @@ const InProgressDialogHandler = {
 // 9c. HANDLERS — consultas de negocio
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ─── 1. Eventos activos (ORGANIZER) ──────────────────────────────────────────
+// ─── 1. Listar eventos (todos los roles, con alcance distinto) ───────────────
 
+/**
+ * Un organizador pregunta por SUS eventos; un cliente por los que hay a la
+ * venta. Es la misma pregunta con distinto alcance, así que la resuelve un
+ * solo intent en vez de negarle el catálogo a quien no organiza: un cliente
+ * que no sabe qué eventos existen no puede preguntar por ninguno.
+ */
 const GetActiveEventsIntentHandler = {
   canHandle: canHandleIntent("GetActiveEventsIntent"),
-  handle: withAuth("GetActiveEvents", [ROLES.ORGANIZER], async (handlerInput, session) => {
-    const t = handlerInput.t;
-    const events = await repo.getPublishedEvents(session.token, session.userId);
+  handle: withAuth(
+    "GetActiveEvents",
+    [ROLES.ORGANIZER, ROLES.ADMIN, ROLES.CUSTOMER],
+    async (handlerInput, session) => {
+      const t = handlerInput.t;
+      const esOrganizador = session.userRole === ROLES.ORGANIZER;
 
-    if (events.length === 0) {
+      // Solo el organizador filtra por dueño; los demás ven el catálogo.
+      const events = await repo.getPublishedEvents(
+        session.token,
+        esOrganizador ? session.userId : undefined,
+      );
+
+      if (events.length === 0) {
+        return handlerInput.responseBuilder
+          .speak(
+            esOrganizador
+              ? t("NO_ACTIVE_EVENTS", menuForRole(t, session.userRole))
+              : t("NO_EVENTS_AVAILABLE", menuForRole(t, session.userRole)),
+          )
+          .reprompt(t("WHAT_TO_QUERY"))
+          .getResponse();
+      }
+
+      const items = events.map((event) =>
+        t("EVENT_LIST_ITEM", event.name, event.venue.name, formatDate(event.startsAt, handlerInput.locale)),
+      );
+
+      // Con un solo evento se recuerda: lo siguiente que pregunte ya tiene contexto.
+      if (events.length === 1) rememberEvent(handlerInput, events[0]);
+
+      let speech;
+      if (esOrganizador) {
+        speech = events.length === 1
+          ? t("ACTIVE_EVENTS_ONE", items[0])
+          : t("ACTIVE_EVENTS_MANY", events.length, joinList(items));
+      } else {
+        speech = events.length === 1
+          ? t("EVENTS_AVAILABLE_ONE", items[0])
+          : t("EVENTS_AVAILABLE_MANY", events.length, joinList(items));
+      }
+
       return handlerInput.responseBuilder
-        .speak(t("NO_ACTIVE_EVENTS", menuForRole(t, session.userRole)))
+        .speak(speech)
         .reprompt(t("WHAT_TO_QUERY"))
+        .addDirective(buildEventEntitiesDirective(events))
         .getResponse();
-    }
-
-    const items = events.map((event) =>
-      t("ACTIVE_EVENT_ITEM", event.name, event.venue.name, formatDate(event.startsAt, handlerInput.locale)),
-    );
-
-    if (events.length === 1) rememberEvent(handlerInput, events[0]);
-
-    const speech =
-      events.length === 1
-        ? t("ACTIVE_EVENTS_ONE", items[0])
-        : t("ACTIVE_EVENTS_MANY", events.length, joinList(items));
-
-    return handlerInput.responseBuilder
-      .speak(speech)
-      .reprompt(t("WHAT_TO_QUERY"))
-      .addDirective(buildEventEntitiesDirective(events))
-      .getResponse();
-  }),
+    },
+  ),
 };
 
 // ─── 2. Boletos vendidos (ORGANIZER + ADMIN) ─────────────────────────────────
@@ -1204,11 +1268,7 @@ const GetTicketsSoldIntentHandler = {
     const resolved = await resolveEvent(handlerInput, session);
 
     if (!resolved.rawValue) {
-      return handlerInput.responseBuilder
-        .speak(t("ASK_EVENT_TICKETS"))
-        .reprompt(t("ASK_EVENT_SHORT"))
-        .addElicitSlotDirective("eventName")
-        .getResponse();
+      return askWhichEvent(handlerInput, session, "ASK_EVENT_TICKETS");
     }
 
     if (!resolved.event) return eventNotFound(handlerInput, session, resolved.rawValue);
@@ -1248,11 +1308,7 @@ const GetZonesIntentHandler = {
     const resolved = await resolveEvent(handlerInput, session);
 
     if (!resolved.rawValue) {
-      return handlerInput.responseBuilder
-        .speak(t("ASK_EVENT_ZONES"))
-        .reprompt(t("ASK_EVENT_SHORT"))
-        .addElicitSlotDirective("eventName")
-        .getResponse();
+      return askWhichEvent(handlerInput, session, "ASK_EVENT_ZONES");
     }
 
     if (!resolved.event) return eventNotFound(handlerInput, session, resolved.rawValue);
@@ -1295,11 +1351,7 @@ const GetSeatAvailabilityIntentHandler = {
     const zoneValue = getSlotValue(getSlots(handlerInput), "zoneName");
 
     if (!resolved.rawValue) {
-      return handlerInput.responseBuilder
-        .speak(t("ASK_EVENT_AVAILABILITY"))
-        .reprompt(t("ASK_EVENT_SHORT"))
-        .addElicitSlotDirective("eventName")
-        .getResponse();
+      return askWhichEvent(handlerInput, session, "ASK_EVENT_AVAILABILITY");
     }
 
     if (!resolved.event) return eventNotFound(handlerInput, session, resolved.rawValue);
@@ -1354,11 +1406,7 @@ const GetEventInfoIntentHandler = {
     const resolved = await resolveEvent(handlerInput, session);
 
     if (!resolved.rawValue) {
-      return handlerInput.responseBuilder
-        .speak(t("ASK_EVENT_INFO"))
-        .reprompt(t("ASK_EVENT_SHORT"))
-        .addElicitSlotDirective("eventName")
-        .getResponse();
+      return askWhichEvent(handlerInput, session, "ASK_EVENT_INFO");
     }
 
     if (!resolved.event) return eventNotFound(handlerInput, session, resolved.rawValue);
