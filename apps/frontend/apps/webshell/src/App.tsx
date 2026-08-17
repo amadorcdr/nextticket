@@ -3,32 +3,9 @@ import { Button, Icon, Router, Tooltip, Panel, ProfileModal, useBreakpoint, Scro
 
 const NAV_LINKS = [
     { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
-    { to: "/venues", icon: Icon.Home, label: "Recintos", count: undefined as number | undefined },
-    { to: "/events", icon: Icon.Calendar, label: "Eventos", count: 5 },
     { to: "/users", icon: Icon.Users, label: "Usuarios", count: undefined as number | undefined },
-];
-
-const VENUES = [
-    { to: "/venues/auditorio-nacional", label: "Auditorio Nacional", capacity: "10,000" },
-    { to: "/venues/foro-sol", label: "Foro Sol", capacity: "65,000" },
-    { to: "/venues/estadio-azteca", label: "Estadio Azteca", capacity: "83,000" },
-    { to: "/venues/arena-cdmx", label: "Arena CDMX", capacity: "22,300" },
-    { to: "/venues/palacio-de-los-deportes", label: "Palacio de los Deportes", capacity: "20,000" },
-    { to: "/venues/arena-monterrey", label: "Arena Monterrey", capacity: "17,599" },
-    { to: "/venues/auditorio-telmex", label: "Auditorio Telmex", capacity: "11,500" },
-    { to: "/venues/estadio-akron", label: "Estadio Akron", capacity: "46,232" },
-    { to: "/venues/estadio-bbva", label: "Estadio BBVA", capacity: "53,500" },
-    { to: "/venues/pepsi-center", label: "Pepsi Center WTC", capacity: "8,000" },
-    { to: "/venues/teatro-metropolitan", label: "Teatro Metropólitan", capacity: "3,165" },
-    { to: "/venues/auditorio-citibanamex", label: "Auditorio Citibanamex", capacity: "8,000" },
-    { to: "/venues/arena-vfg", label: "Arena VFG", capacity: "15,000" },
-    { to: "/venues/estadio-olimpico", label: "Estadio Olímpico Univ.", capacity: "72,000" },
-    { to: "/venues/autodromo", label: "Autódromo H. Rodríguez", capacity: "110,000" },
-    { to: "/venues/parque-fundidora", label: "Parque Fundidora", capacity: "90,000" },
-    { to: "/venues/foro-del-lago", label: "Foro del Lago", capacity: "2,500" },
-    { to: "/venues/teatro-diana", label: "Teatro Diana", capacity: "2,345" },
-    { to: "/venues/pabellon-m", label: "Auditorio Pabellón M", capacity: "4,277" },
-    { to: "/venues/estadio-cuauhtemoc", label: "Estadio Cuauhtémoc", capacity: "51,500" },
+    { to: "/venues", icon: Icon.Home, label: "Recintos", count: undefined as number | undefined },
+    { to: "/events", icon: Icon.Calendar, label: "Eventos", count: undefined as number | undefined },
 ];
 
 export function App() {
@@ -57,6 +34,7 @@ export function App() {
 
     const [usersCount, setUsersCount] = useState<number | undefined>(undefined);
     const [venuesCount, setVenuesCount] = useState<number | undefined>(undefined);
+    const [eventsCount, setEventsCount] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         api
@@ -71,6 +49,12 @@ export function App() {
             .catch(() => {
                 // Si falla, el chip de Recintos simplemente no se muestra.
             });
+        api
+            .get<{ meta: { total: number } }>("/events?page=1&limit=1")
+            .then((res) => setEventsCount(res.meta.total))
+            .catch(() => {
+                // Si falla, el chip de Eventos simplemente no se muestra.
+            });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -79,13 +63,13 @@ export function App() {
             NAV_LINKS.map((link) => {
                 if (link.to === "/users") return { ...link, count: usersCount };
                 if (link.to === "/venues") return { ...link, count: venuesCount };
+                if (link.to === "/events") return { ...link, count: eventsCount };
                 return link;
             }),
-        [usersCount, venuesCount],
+        [usersCount, venuesCount, eventsCount],
     );
 
     const activeNavKey = navLinks.find(link => location.pathname.startsWith(link.to))?.to || "none";
-    const activeVenueKey = VENUES.find(v => location.pathname.startsWith(v.to))?.to || "none";
 
     const navContent = (
         <>
@@ -127,39 +111,6 @@ export function App() {
                             </Tabs.List>
                         </Tabs.ListContainer>
                     </Tabs>
-                </div>
-                <div className="flex-1 flex flex-col gap-2 min-h-0 overflow-hidden">
-                    <Description className="px-4 shrink-0">Tus recintos</Description>
-                    <ScrollShadow className="flex-1 overflow-auto relative">
-                        <Tabs
-                            aria-label="Navegación de recintos"
-                            variant="secondary"
-                            orientation="vertical"
-                            selectedKey={activeVenueKey}
-                        >
-                            <Tabs.ListContainer className="border-none w-full">
-                                <Tabs.List className="w-full">
-                                    {VENUES.map(({ to, label, capacity }) => (
-                                        <Tabs.Tab
-                                            key={to}
-                                            id={to}
-                                            href={to}
-                                            className="flex justify-between w-full gap-2"
-                                            render={({ href, ...domProps }: any) => <Router.Link to={href} {...domProps} />}
-                                        >
-                                            <div className="flex items-center flex-1 min-w-0 text-left">
-                                                <span className="truncate">{label}</span>
-                                            </div>
-                                            <Chip variant="soft" color="default">
-                                                {capacity}
-                                            </Chip>
-                                            <Tabs.Indicator className="rounded-full" />
-                                        </Tabs.Tab>
-                                    ))}
-                                </Tabs.List>
-                            </Tabs.ListContainer>
-                        </Tabs>
-                    </ScrollShadow>
                 </div>
             </div>
             <div className="flex flex-col gap-2 p-4 shrink-0">
@@ -211,29 +162,6 @@ export function App() {
                         <div className="flex-1 min-w-0" />
                     </div>
                     <div className="flex items-center md:gap-2 gap-1 shrink-0">
-
-                        <Tooltip>
-                            <Tooltip.Trigger>
-
-
-
-                                <Badge.Anchor>
-
-
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        isIconOnly
-                                    >
-                                        <Icon.Bell />
-                                    </Button>
-                                    <Badge variant="soft" size="sm" color="default">
-                                        25
-                                    </Badge>
-                                </Badge.Anchor>
-                            </Tooltip.Trigger>
-                            <Tooltip.Content>Notificaciones</Tooltip.Content>
-                        </Tooltip>
                         <Tooltip>
                             <Tooltip.Trigger>
                                 <Button

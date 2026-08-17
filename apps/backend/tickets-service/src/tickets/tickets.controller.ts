@@ -17,12 +17,14 @@ import type { Response } from 'express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { InternalServiceGuard } from '../auth/internal-service.guard';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ParseQrHashPipe } from '../ticket-validations/pipes/parse-qr-hash.pipe';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { IssueTicketForPurchaseDto } from './dto/issue-ticket-for-purchase.dto';
 import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
 import { TicketsEventZoneStatsResponseDto } from './dto/tickets-event-zone-stats-response.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
@@ -47,6 +49,16 @@ export class TicketsController {
   @ApiOperation({ summary: 'Issue a new ticket and generate QR hash' })
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: AuthenticatedUser) {
     return this.tickets.create(dto, user.sub);
+  }
+
+  @Post('internal/issue-for-purchase')
+  @UseGuards(InternalServiceGuard)
+  @ApiOperation({
+    summary:
+      'Uso interno: emite un ticket para un PurchaseDetail de una compra confirmada. Solo lo llama purchases-service (header X-Internal-Service-Token, no JWT de usuario). Idempotente.',
+  })
+  issueForPurchase(@Body() dto: IssueTicketForPurchaseDto) {
+    return this.tickets.issueForPurchase(dto);
   }
 
   @Get()

@@ -1,15 +1,19 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TemporaryBlock } from '@prisma/client';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { buildAdmissionKey } from '../event-queue/admission-key.util';
 import { PurchasesGateway } from './purchases.gateway';
 import {
   CreatePurchaseDto,
@@ -19,6 +23,7 @@ import {
 } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
 import { PurchaseZoneRevenueDto, PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
+import { PurchasesStatsQueryDto } from './dto/purchases-stats-query.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -30,7 +35,7 @@ import {
 
 const LIST_CACHE_KEY = 'purchases:list';
 const STATS_CACHE_KEY = 'purchases:stats';
-const BLOCK_TTL_SECONDS = 8 * 60;
+const SEAT_HOLD_TTL_SECONDS = Number(process.env.SEAT_HOLD_TTL_SECONDS ?? 8 * 60);
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type PaymentDecision = {
@@ -41,6 +46,8 @@ type PaymentDecision = {
 
 @Injectable()
 export class PurchasesService {
+  private readonly logger = new Logger(PurchasesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -48,21 +55,38 @@ export class PurchasesService {
   ) {}
 
   async createTemporaryBlock(dto: CreateTemporaryBlockDto, userId: string) {
-    if (dto.eventSeatId && dto.quantity && dto.quantity > 1) {
-      throw new BadRequestException(
-        'quantity must be 1 when blocking a specific seat',
+    await this.assertHasActiveAdmission(dto.eventId, userId);
+
+    if (dto.eventSeatIds?.length) {
+      return this.createReservedSeatBlocks(dto, userId);
+    }
+    return this.createGeneralAdmissionBlock(dto, userId);
+  }
+
+  /** Módulo 8 → Módulo 7: sin turno vigente en la fila virtual no hay hold. */
+  private async assertHasActiveAdmission(eventId: string, userId: string) {
+    const admission = await this.redis.get(buildAdmissionKey(eventId, userId));
+    if (!admission) {
+      throw new ForbiddenException(
+        'Debes tener un turno vigente en la fila virtual de este evento para bloquear asientos',
       );
     }
+  }
 
-    const quantity = dto.eventSeatId ? 1 : (dto.quantity ?? 1);
+  private async createGeneralAdmissionBlock(
+    dto: CreateTemporaryBlockDto,
+    userId: string,
+  ) {
+    const quantity = dto.quantity ?? 1;
     const startedAt = new Date();
-    const expiresAt = new Date(startedAt.getTime() + BLOCK_TTL_SECONDS * 1000);
-    const lockKey = this.buildBlockKey(dto.eventZoneId, dto.eventSeatId);
+    const expiresAt = new Date(startedAt.getTime() + SEAT_HOLD_TTL_SECONDS * 1000);
+    const holdGroupId = randomUUID();
+    const lockKey = this.buildBlockKey(dto.eventZoneId);
 
     const lockPayload = {
       userId,
       eventZoneId: dto.eventZoneId,
-      eventSeatId: dto.eventSeatId ?? null,
+      eventSeatId: null,
       quantity,
       lockedAt: startedAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
@@ -71,11 +95,11 @@ export class PurchasesService {
     const acquired = await this.redis.setIfAbsent(
       lockKey,
       lockPayload,
-      BLOCK_TTL_SECONDS,
+      SEAT_HOLD_TTL_SECONDS,
     );
     if (!acquired) {
       throw new ConflictException(
-        'Seat or zone is already temporarily blocked',
+        'La zona ya tiene un bloqueo de admisión general activo',
       );
     }
 
@@ -84,10 +108,10 @@ export class PurchasesService {
         data: {
           userId,
           eventZoneId: dto.eventZoneId,
-          eventSeatId: dto.eventSeatId,
           quantity,
           startedAt,
           expiresAt,
+          holdGroupId,
         },
       });
 
@@ -97,11 +121,237 @@ export class PurchasesService {
         eventSeatId: block.eventSeatId,
       });
 
-      return block;
+      return this.toHoldResponse(holdGroupId, dto, [block], expiresAt);
     } catch (error) {
       await this.redis.del(lockKey);
       throw error;
     }
+  }
+
+  /**
+   * Bloquea uno o varios asientos reservados de forma atómica: si CUALQUIERA
+   * ya está bloqueado, vendido o no es vendible, no se bloquea NINGUNO
+   * (evita quedar con A1/A2 apartados y A3 sin apartar).
+   */
+  private async createReservedSeatBlocks(
+    dto: CreateTemporaryBlockDto,
+    userId: string,
+  ) {
+    const eventSeatIds = dto.eventSeatIds as string[];
+    await this.assertSeatsAreVendible(dto.eventId, eventSeatIds, dto.eventZoneId);
+
+    const startedAt = new Date();
+    const expiresAt = new Date(startedAt.getTime() + SEAT_HOLD_TTL_SECONDS * 1000);
+    const holdGroupId = randomUUID();
+
+    const keys = eventSeatIds.map((seatId) =>
+      this.buildBlockKey(dto.eventZoneId, seatId),
+    );
+    const payloads = eventSeatIds.map((seatId) => ({
+      userId,
+      eventZoneId: dto.eventZoneId,
+      eventSeatId: seatId,
+      quantity: 1,
+      lockedAt: startedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    }));
+
+    const acquired = await this.redis.acquireMultiLock(
+      keys,
+      SEAT_HOLD_TTL_SECONDS,
+      payloads,
+    );
+    if (!acquired) {
+      throw new ConflictException(
+        'Uno o más asientos ya están bloqueados o vendidos; no se bloqueó ninguno',
+      );
+    }
+
+    try {
+      const blocks = await this.prisma.$transaction(
+        eventSeatIds.map((seatId) =>
+          this.prisma.temporaryBlock.create({
+            data: {
+              userId,
+              eventZoneId: dto.eventZoneId,
+              eventSeatId: seatId,
+              quantity: 1,
+              startedAt,
+              expiresAt,
+              holdGroupId,
+            },
+          }),
+        ),
+      );
+
+      for (const block of blocks) {
+        this.gateway.emitBlockLocked({
+          blockId: block.id,
+          eventZoneId: block.eventZoneId,
+          eventSeatId: block.eventSeatId,
+        });
+      }
+
+      return this.toHoldResponse(holdGroupId, dto, blocks, expiresAt);
+    } catch (error) {
+      await this.redis.delMany(keys);
+      throw error;
+    }
+  }
+
+  /**
+   * Nunca confía en los eventSeatId que manda el cliente: verifica contra
+   * venues-events-service que cada asiento exista y esté realmente AVAILABLE.
+   * `eventZoneId` es opcional: al crear un hold se exige que además
+   * pertenezca a esa zona (un hold es de una sola zona); al confirmar una
+   * compra los asientos pueden venir de varias zonas (un hold por zona), así
+   * que ahí solo importa existencia + disponibilidad.
+   */
+  private async assertSeatsAreVendible(
+    eventId: string,
+    eventSeatIds: string[],
+    eventZoneId?: string,
+  ) {
+    if (eventSeatIds.length === 0) return;
+
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+    const ids = eventSeatIds.join(',');
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${baseUrl}/events/${eventId}/seats/by-event-seat-ids?ids=${encodeURIComponent(ids)}`,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudieron verificar los asientos (venues-events-service no responde)',
+      );
+    }
+    if (!response.ok) {
+      throw new BadRequestException('No se pudieron verificar los asientos solicitados');
+    }
+
+    const seats = (await response.json()) as Array<{
+      id: string;
+      eventZoneId: string;
+      status: string;
+    }>;
+    const byId = new Map(seats.map((seat) => [seat.id, seat]));
+
+    for (const seatId of eventSeatIds) {
+      const seat = byId.get(seatId);
+      if (!seat) {
+        throw new NotFoundException(`El asiento ${seatId} no existe en este evento`);
+      }
+      if (eventZoneId && seat.eventZoneId !== eventZoneId) {
+        throw new BadRequestException(
+          `El asiento ${seatId} no pertenece a la zona indicada`,
+        );
+      }
+      if (seat.status !== 'AVAILABLE') {
+        throw new ConflictException(
+          `El asiento ${seatId} no está disponible (status=${seat.status})`,
+        );
+      }
+    }
+  }
+
+  /**
+   * El precio nunca se toma de lo que manda el Cliente: se vuelve a
+   * consultar el evento real en venues-events-service y se usa
+   * eventZone.eventPrice como precio unitario autoritativo por zona.
+   */
+  private async resolveAuthoritativePrices(
+    eventId: string,
+    zoneIds: string[],
+  ): Promise<Map<string, number>> {
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/events/${eventId}`);
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar el evento (venues-events-service no responde)',
+      );
+    }
+    if (response.status === 404) {
+      throw new NotFoundException(`Event ${eventId} no existe`);
+    }
+    if (!response.ok) {
+      throw new NotFoundException('No se pudo verificar el evento');
+    }
+
+    const event = (await response.json()) as {
+      zones: Array<{ id: string; eventPrice: string | number }>;
+    };
+    const priceByZone = new Map(
+      event.zones.map((zone) => [zone.id, Number(zone.eventPrice)]),
+    );
+
+    for (const zoneId of zoneIds) {
+      if (!priceByZone.has(zoneId)) {
+        throw new BadRequestException(
+          `La zona ${zoneId} no pertenece a este evento`,
+        );
+      }
+    }
+
+    return priceByZone;
+  }
+
+  /**
+   * Best-effort, igual que issueTicketsForPurchase: el pago ya se aprobó y
+   * la compra ya quedó CONFIRMED, así que un fallo aquí no debe tumbar la
+   * respuesta — pero SÍ debe quedar registrado, porque mientras no corra
+   * esto el asiento sigue viéndose AVAILABLE en venues-events-service.
+   */
+  private async markSeatsSold(eventId: string, eventSeatIds: string[]) {
+    if (eventSeatIds.length === 0) return;
+
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/events/${eventId}/seats/internal/mark-sold`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Service-Token': internalToken,
+          },
+          body: JSON.stringify({ eventSeatIds }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`venues-events-service respondió ${response.status}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `No se pudieron marcar como vendidos los asientos [${eventSeatIds.join(', ')}] del evento ${eventId}: ${String(error)}`,
+      );
+    }
+  }
+
+  private toHoldResponse(
+    holdGroupId: string,
+    dto: CreateTemporaryBlockDto,
+    blocks: TemporaryBlock[],
+    expiresAt: Date,
+  ) {
+    return {
+      holdId: holdGroupId,
+      eventId: dto.eventId,
+      eventZoneId: dto.eventZoneId,
+      status: 'HELD' as const,
+      expiresAt,
+      blocks: blocks.map((block) => ({
+        blockId: block.id,
+        eventSeatId: block.eventSeatId,
+        quantity: block.quantity,
+      })),
+    };
   }
 
   async findActiveBlocksByUser(userId: string) {
@@ -156,7 +406,21 @@ export class PurchasesService {
     await this.expireElapsedBlocks();
     await this.assertBlocksCanBeConverted(dto, userId);
 
-    const totals = this.calculateTotals(dto.details);
+    const seatIds = dto.details
+      .map((detail) => detail.eventSeatId)
+      .filter((id): id is string => Boolean(id));
+    await this.assertSeatsAreVendible(dto.eventId, seatIds);
+
+    const zoneIds = [...new Set(dto.details.map((detail) => detail.eventZoneId))];
+    const priceByZone = await this.resolveAuthoritativePrices(dto.eventId, zoneIds);
+    // El unitPrice que mandó el cliente se descarta: el precio real de la
+    // zona es la única fuente de verdad (sección 21 del TODO de checkout).
+    const authoritativeDetails = dto.details.map((detail) => ({
+      ...detail,
+      unitPrice: priceByZone.get(detail.eventZoneId)!,
+    }));
+
+    const totals = this.calculateTotals(authoritativeDetails);
     const paymentDecision = this.simulatePayment(dto.payment);
 
     const purchase = await this.prisma.$transaction(async (tx) => {
@@ -176,7 +440,7 @@ export class PurchasesService {
           total: totals.total,
           status: paymentDecision.approved ? 'CONFIRMED' : 'CANCELED',
           details: {
-            create: dto.details.map((detail) =>
+            create: authoritativeDetails.map((detail) =>
               this.toPurchaseDetailCreateInput(detail),
             ),
           },
@@ -226,14 +490,78 @@ export class PurchasesService {
       };
     }
 
+    await this.markSeatsSold(dto.eventId, seatIds);
+    const tickets = await this.issueTicketsForPurchase(purchase);
+
     return {
       ...purchase,
+      tickets,
       paymentResult: {
         approved: true,
         status: paymentDecision.status,
         message: 'Simulated payment approved',
       },
     };
+  }
+
+  /**
+   * Un ticket por PurchaseDetail, emitido por tickets-service a nombre del
+   * comprador real (purchase.userId). El pago simulado ya se marcó como
+   * aprobado y la compra ya quedó CONFIRMED en esta misma llamada — no hay
+   * forma de "deshacer" eso si la emisión falla, así que es best-effort:
+   * se intenta emitir cada ticket, los que fallan quedan registrados en el
+   * log (nunca silenciosos) y la compra igual se devuelve. issueForPurchase
+   * es idempotente del lado de tickets-service, así que reintentar esta
+   * llamada más adelante (p. ej. desde un job de reconciliación) es seguro.
+   */
+  private async issueTicketsForPurchase(purchase: {
+    id: string;
+    userId: string;
+    details: { id: string; eventZoneId: string; eventSeatId: string | null }[];
+  }) {
+    const baseUrl = process.env.TICKETS_SERVICE_URL ?? 'http://localhost:3005';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    const results = await Promise.allSettled(
+      purchase.details.map(async (detail) => {
+        const response = await fetch(
+          `${baseUrl}/tickets/internal/issue-for-purchase`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Service-Token': internalToken,
+            },
+            body: JSON.stringify({
+              purchaseId: purchase.id,
+              purchaseDetailId: detail.id,
+              currentHolderId: purchase.userId,
+              eventZoneId: detail.eventZoneId,
+              eventSeatId: detail.eventSeatId ?? undefined,
+            }),
+          },
+        );
+        if (!response.ok) {
+          throw new Error(
+            `tickets-service respondió ${response.status} para purchaseDetail=${detail.id}`,
+          );
+        }
+        return response.json();
+      }),
+    );
+
+    const tickets: unknown[] = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        tickets.push(result.value);
+      } else {
+        this.logger.error(
+          `No se pudo emitir el ticket para purchase=${purchase.id} purchaseDetail=${purchase.details[index].id}: ${String(result.reason)}`,
+        );
+      }
+    });
+
+    return tickets;
   }
 
   async findAll(
@@ -293,8 +621,10 @@ export class PurchasesService {
 
   async getStats(
     requester: AuthenticatedUser,
-    eventId?: string,
+    query: PurchasesStatsQueryDto = {},
   ): Promise<PurchasesStatsResponseDto> {
+    const { eventId, from, to } = query;
+
     if (requester.role !== AUTH_ROLES.ADMIN) {
       // Un ORGANIZER solo puede pedir las métricas de UN evento (el suyo),
       // nunca las globales de la plataforma.
@@ -306,19 +636,37 @@ export class PurchasesService {
       await this.assertOrganizerOwnsEvent(eventId, requester.sub);
     }
 
+    const hasPeriod = Boolean(from || to);
+
+    // Las consultas por periodo son puntuales y cada rango daría un resultado
+    // distinto: cachearlas bajo la clave global devolvería el acumulado.
     const cacheKey = eventId ? this.eventStatsCacheKey(eventId) : STATS_CACHE_KEY;
-    const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
-    if (cached) return cached;
+    if (!hasPeriod) {
+      const cached = await this.redis.get<PurchasesStatsResponseDto>(cacheKey);
+      if (cached) return cached;
+    }
+
+    const periodFilter = hasPeriod
+      ? {
+          createdAt: {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to ? { lte: new Date(to) } : {}),
+          },
+        }
+      : {};
 
     const since = new Date(Date.now() - RECENT_WINDOW_MS);
     const revenueWhere = {
       status: 'CONFIRMED' as const,
       ...(eventId ? { eventId } : {}),
+      ...periodFilter,
     };
-    const recentWhere = {
-      createdAt: { gte: since },
-      ...(eventId ? { eventId } : {}),
-    };
+    // Con periodo explícito, "recientes" pasa a significar "del periodo":
+    // preguntar por mayo y recibir el conteo de las últimas 24 h no tendría
+    // sentido para quien consulta.
+    const recentWhere = hasPeriod
+      ? { ...(eventId ? { eventId } : {}), ...periodFilter }
+      : { createdAt: { gte: since }, ...(eventId ? { eventId } : {}) };
 
     const [revenueAggregate, recentPurchasesCount, zoneRevenue] =
       await Promise.all([
@@ -330,8 +678,11 @@ export class PurchasesService {
         eventId
           ? this.prisma.purchaseDetail.groupBy({
               by: ['eventZoneId'],
-              where: { purchase: { eventId, status: 'CONFIRMED' } },
+              where: {
+                purchase: { eventId, status: 'CONFIRMED', ...periodFilter },
+              },
               _sum: { finalPrice: true, taxAmount: true },
+              _count: { _all: true },
             })
           : Promise.resolve(null),
       ]);
@@ -341,6 +692,9 @@ export class PurchasesService {
           eventZoneId: zone.eventZoneId,
           revenue:
             Number(zone._sum.finalPrice ?? 0) + Number(zone._sum.taxAmount ?? 0),
+          // Cada PurchaseDetail es un boleto, así que contarlos es contar
+          // los boletos vendidos de la zona.
+          ticketsSold: zone._count._all,
         }))
       : undefined;
 
@@ -348,9 +702,14 @@ export class PurchasesService {
       totalRevenue: Number(revenueAggregate._sum.total ?? 0),
       recentPurchasesCount,
       ...(byEventZone ? { byEventZone } : {}),
+      from: from ?? null,
+      to: to ?? null,
     };
 
-    await this.redis.set(cacheKey, stats, 30);
+    if (!hasPeriod) {
+      await this.redis.set(cacheKey, stats, 30);
+    }
+
     return stats;
   }
 

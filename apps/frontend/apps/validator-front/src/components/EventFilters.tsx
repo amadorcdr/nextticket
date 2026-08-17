@@ -2,17 +2,18 @@ import { Chip, Tabs } from "@nextticket-frontend/commons";
 import {
     EVENT_FILTERS,
     filterEventsByDate,
-    VALIDATOR_EVENTS,
+    type ValidatorEvent,
     type ValidatorEventFilter,
-} from "../mocks/validatorEvents";
+} from "../types/validatorEvents";
 
 interface EventFiltersProps {
+    events: ValidatorEvent[];
     value: ValidatorEventFilter;
     onChange: (filter: ValidatorEventFilter) => void;
 }
 
 /** Filtros por fecha: Hoy, Mañana y Próximos. El filtrado ocurre en memoria. */
-export function EventFilters({ value, onChange }: EventFiltersProps) {
+export function EventFilters({ events, value, onChange }: EventFiltersProps) {
     return (
         <Tabs
             aria-label="Filtrar eventos por fecha"
@@ -27,7 +28,7 @@ export function EventFilters({ value, onChange }: EventFiltersProps) {
                         <Tabs.Tab key={id} id={id} className="flex items-center gap-2">
                             <span>{label}</span>
                             <Chip variant="soft" color="default" size="sm">
-                                {filterEventsByDate(VALIDATOR_EVENTS, id).length}
+                                {filterEventsByDate(events, id).length}
                             </Chip>
                             <Tabs.Indicator className="rounded-full" />
                         </Tabs.Tab>

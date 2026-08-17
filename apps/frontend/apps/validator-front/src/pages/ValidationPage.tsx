@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Button, Card, EmptyState, Icon, Router, Separator, Tabs } from "@nextticket-frontend/commons";
+import { Alert, Button, Card, EmptyState, Icon, Router, Separator, Tabs } from "@nextticket-frontend/commons";
 import { EventSummaryCard } from "../components/EventSummaryCard";
 import { FolioValidationForm } from "../components/FolioValidationForm";
 import { QrValidationPanel } from "../components/QrValidationPanel";
 import { ValidationResultCard } from "../components/ValidationResultCard";
 import { useSelectedEvent } from "../context/SelectedEventContext";
-import type { ValidationResult } from "../mocks/validatorTickets";
+import type { ValidationResult } from "../types/validatorTickets";
 
 type ValidationMethod = "qr" | "folio";
 
@@ -36,6 +36,7 @@ export function ValidationPage() {
     const [method, setMethod] = useState<ValidationMethod>("qr");
     const [isProcessing, setIsProcessing] = useState(false);
     const [result, setResult] = useState<ValidationResult | null>(null);
+    const [serviceError, setServiceError] = useState<string | null>(null);
 
     function handleChangeEvent() {
         clearEvent();
@@ -45,6 +46,17 @@ export function ValidationPage() {
     function handleMethodChange(next: ValidationMethod) {
         setMethod(next);
         setResult(null);
+        setServiceError(null);
+    }
+
+    function handleValidate(next: ValidationResult) {
+        setServiceError(null);
+        setResult(next);
+    }
+
+    function handleServiceError(message: string) {
+        setResult(null);
+        setServiceError(message);
     }
 
     if (!selectedEvent) {
@@ -94,24 +106,38 @@ export function ValidationPage() {
 
                         <Tabs.Panel id="qr" className="pt-4">
                             <QrValidationPanel
+                                event={selectedEvent}
                                 isProcessing={isProcessing}
                                 onProcessingChange={setIsProcessing}
-                                onValidate={setResult}
+                                onValidate={handleValidate}
+                                onServiceError={handleServiceError}
                             />
                         </Tabs.Panel>
 
                         <Tabs.Panel id="folio" className="pt-4">
                             <FolioValidationForm
+                                event={selectedEvent}
                                 isProcessing={isProcessing}
                                 onProcessingChange={setIsProcessing}
-                                onValidate={setResult}
+                                onValidate={handleValidate}
+                                onServiceError={handleServiceError}
                             />
                         </Tabs.Panel>
                     </Tabs>
 
                     <Separator />
 
-                    {result ? (
+                    {serviceError ? (
+                        <Alert status="danger">
+                            <Alert.Indicator>
+                                <Icon.WifiOff />
+                            </Alert.Indicator>
+                            <Alert.Content>
+                                <Alert.Title>Error de servicio</Alert.Title>
+                                <Alert.Description>{serviceError}</Alert.Description>
+                            </Alert.Content>
+                        </Alert>
+                    ) : result ? (
                         <ValidationResultCard
                             result={result}
                             onValidateAnother={() => setResult(null)}

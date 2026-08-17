@@ -1,6 +1,7 @@
 allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': true
+  msgpackr-extract: false
   prisma: true
   unrs-resolver: true
 # pnpm 11 ya no lee estos ajustes desde .npmrc; deben vivir aqui.

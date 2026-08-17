@@ -1,14 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+    ApiError,
     Button,
     Chip,
     Description,
     Icon,
     Router,
     Separator,
+    useApi,
     useCart,
 } from "@nextticket-frontend/commons";
-import { getEventDetail } from "../mocks/eventDetail";
+import { toClientEventDetail, type ApiEvent } from "../api";
+import type { ClientEventDetail } from "../types/client";
 
 function formatPrice(value: number, currency: string) {
     return new Intl.NumberFormat("es-MX", {
@@ -21,9 +24,35 @@ function formatPrice(value: number, currency: string) {
 export function EventDetail() {
     const { eventId } = Router.useParams();
     const navigate = Router.useNavigate();
+    const api = useApi();
     const { setEvent } = useCart();
 
-    const event = eventId ? getEventDetail(eventId) : undefined;
+    const [event, setEventDetail] = useState<ClientEventDetail | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [notFound, setNotFound] = useState(false);
+
+    const load = () => {
+        if (!eventId) return;
+
+        setLoading(true);
+        setError(null);
+        setNotFound(false);
+
+        api.get<ApiEvent>(`/events/${eventId}`)
+            .then((res) => setEventDetail(toClientEventDetail(res)))
+            .catch((err) => {
+                if (err instanceof ApiError && err.status === 404) {
+                    setNotFound(true);
+                    return;
+                }
+                setError(err instanceof ApiError ? err.message : "No se pudo cargar el evento");
+            })
+            .finally(() => setLoading(false));
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(load, [eventId]);
 
     useEffect(() => {
         if (!event) return;
@@ -41,7 +70,11 @@ export function EventDetail() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [event?.id]);
 
-    if (!event) {
+    if (loading) {
+        return <p className="text-muted text-xs py-16 text-center">Cargando evento...</p>;
+    }
+
+    if (notFound || (!loading && !error && !event)) {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
                 <Icon.CalendarX className="size-8 text-muted" />
@@ -57,8 +90,22 @@ export function EventDetail() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+                <Icon.CircleAlert className="size-8 text-muted" />
+                <p className="text-muted md:text-sm text-xs">{error}</p>
+                <Button size="sm" onPress={load}>
+                    Reintentar
+                </Button>
+            </div>
+        );
+    }
+
+    if (!event) return null;
+
     const isSoldOut = event.status === "sold-out";
-    const minPrice = Math.min(...event.zones.map((zone) => zone.price));
+    const minPrice = event.zones.length > 0 ? Math.min(...event.zones.map((zone) => zone.price)) : 0;
 
     return (
         <div className="flex flex-col gap-6 pb-6">
@@ -92,20 +139,9 @@ export function EventDetail() {
                 <div className="flex flex-col gap-6 min-w-0">
                     <section className="flex flex-col gap-3">
                         <h3>Sobre el evento</h3>
-                        <p className="text-muted">{event.description}</p>
-                        <p className="text-muted">{event.about}</p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                            {event.highlights.map((highlight) => (
-                                <div
-                                    key={highlight}
-                                    className="flex items-center gap-2 rounded-[10px] bg-surface-secondary px-3 py-2"
-                                >
-                                    <Icon.Check className="size-4 shrink-0 text-success" />
-                                    <span className="md:text-sm text-xs">{highlight}</span>
-                                </div>
-                            ))}
-                        </div>
+                        <p className="text-muted">
+                            {event.description || "Este evento todavía no tiene una descripción."}
+                        </p>
                     </section>
 
                     <Separator />
@@ -117,21 +153,17 @@ export function EventDetail() {
                                 <Icon.Building2 className="size-4 text-muted" />
                                 <h4>{event.venueInfo.name}</h4>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <Description>Dirección</Description>
                                     <p className="md:text-sm text-xs">
-                                        {event.venueInfo.address}
+                                        {event.venueInfo.address || "Sin dirección registrada"}
                                     </p>
                                 </div>
                                 <div>
-                                    <Description>Zona</Description>
-                                    <p className="md:text-sm text-xs">{event.venueInfo.area}</p>
-                                </div>
-                                <div>
-                                    <Description>Cómo llegar</Description>
+                                    <Description>Aforo total</Description>
                                     <p className="md:text-sm text-xs">
-                                        {event.venueInfo.access}
+                                        {event.venueInfo.totalCapacity.toLocaleString("es-MX")} personas
                                     </p>
                                 </div>
                             </div>
@@ -181,8 +213,8 @@ export function EventDetail() {
 
                         <Button
                             className="w-full"
-                            isDisabled={isSoldOut}
-                            onPress={() => navigate(`/event/${event.id}/asientos`)}
+                            isDisabled={isSoldOut || event.zones.length === 0}
+                            onPress={() => navigate(`/event/${event.id}/fila`)}
                         >
                             <Icon.Armchair />
                             {isSoldOut ? "Agotado" : "Elegir asientos"}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { API_BASE_URL, ApiError, Button, Icon, ListBox, Pagination, Select, SearchField, Table, toast, useApi, useSession } from "@nextticket-frontend/commons";
+import { API_BASE_URL, ApiError, Button, Icon, ListBox, Pagination, Select, SearchField, ScrollShadow, toast, useApi, useSession } from "@nextticket-frontend/commons";
 import { EventFormModal, type EventFormMode, type EventFormValues } from "../components/EventFormModal";
 import { ModalCancelEvent } from "../components/ModalCancelEvent";
+import { OrganizerEventCard } from "../components/OrganizerEventCard";
 import {
   toIsoDateTime,
   toOrganizerEventRow,
@@ -14,14 +15,9 @@ import {
   type OrganizerEventStatus,
 } from "../api";
 
-const STATUS_CLASSNAME: Record<OrganizerEventStatus, string> = {
-  Activo: "text-success bg-success/10",
-  Inactivo: "text-danger bg-danger/10",
-};
-
 const ALL_STATUSES: OrganizerEventStatus[] = ["Activo", "Inactivo"];
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 // El backend no soporta busqueda por texto en la query todavia (solo
 // page/limit): se trae una sola pagina grande y se filtra en el cliente,
 // mismo patron que UsersView/AdminEventsView.
@@ -122,6 +118,8 @@ export function MyEvents() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   useEffect(() => setPage(1), [search, statusFilter, venueFilter]);
   const currentPage = Math.min(page, totalPages);
+  const start = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(currentPage * PAGE_SIZE, filtered.length);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openCreate = () => {
@@ -208,7 +206,7 @@ export function MyEvents() {
   };
 
   return (
-    <div className="flex flex-col gap-3 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-3 h-full animate-in fade-in duration-500">
       {/* Título + botón */}
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
@@ -307,105 +305,30 @@ export function MyEvents() {
 
       {!loading && !error && filtered.length > 0 && (
         <>
-          {/* Tabla */}
-          <Table>
-            <Table.ScrollContainer>
-              <Table.Content aria-label="Mis eventos" className="min-w-160 max-h-100 overflow-y-auto text-xs">
-                <Table.Header>
-                  <Table.Column isRowHeader id="name" minWidth={200} className="text-center">
-                    Evento
-                  </Table.Column>
-                  <Table.Column id="date" minWidth={110} className="text-center">
-                    Fecha y Hora
-                  </Table.Column>
-                  <Table.Column id="venue" minWidth={120} className="text-center">
-                    Recinto
-                  </Table.Column>
-                  <Table.Column id="category" minWidth={110} className="text-center">
-                    Categoría
-                  </Table.Column>
-                  <Table.Column id="status" minWidth={90} className="text-center">
-                    Estado
-                  </Table.Column>
-                  <Table.Column id="sold" minWidth={150} className="text-center">
-                    Boletos Vendidos
-                  </Table.Column>
-                  <Table.Column id="actions" minWidth={80} className="text-center">
-                    Acciones
-                  </Table.Column>
-                </Table.Header>
-                <Table.Body items={paginated}>
-                  {(ev) => {
-                    const pct = ev.total > 0 ? Math.round((ev.sold / ev.total) * 100) : 0;
-                    return (
-                      <Table.Row>
-                        <Table.Cell className="text-center">
-                          <p className="text-foreground text-xs font-medium">{ev.name}</p>
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          <div>
-                            <p className="text-foreground text-xs">{ev.date}</p>
-                            <p className="text-muted text-[11px]">{ev.time}</p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          <span className="text-xs">{ev.venue}</span>
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          {ev.categoryName ? (
-                            <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full bg-default text-foreground">
-                              {ev.categoryName}
-                            </span>
-                          ) : (
-                            <span className="text-muted text-[11px]">Sin categoría</span>
-                          )}
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          <span
-                            className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${STATUS_CLASSNAME[ev.status]}`}
-                          >
-                            {ev.status}
-                          </span>
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          <div className="flex flex-col gap-1 w-32 mx-auto">
-                            <div className="flex justify-between text-[11px]">
-                              <span className="text-muted font-mono">
-                                {ev.sold.toLocaleString()} / {ev.total.toLocaleString()}
-                              </span>
-                              <span className="text-foreground font-medium">{pct}%</span>
-                            </div>
-                            <div className="h-1 rounded-full bg-default overflow-hidden">
-                              <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
-                          <div className="flex justify-center gap-1">
-                            <Button size="sm" variant="ghost" isIconOnly onPress={() => openEdit(ev)}>
-                              <Icon.Pencil />
-                            </Button>
-                            {ev.status === "Activo" && (
-                              <Button size="sm" variant="ghost" color="danger" isIconOnly onPress={() => openCancel(ev)}>
-                                <Icon.CalendarX2 />
-                              </Button>
-                            )}
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  }}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+          <ScrollShadow className="flex-1 overflow-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {paginated.map((ev) => (
+                <OrganizerEventCard key={ev.id} event={ev} onEdit={openEdit} onCancel={openCancel} />
+              ))}
+            </div>
+          </ScrollShadow>
 
-          <div className="flex justify-end">
-            <Pagination size="sm" style={{ justifyContent: "flex-end" }}>
+          <div className="shrink-0 flex justify-center md:justify-between items-center flex-wrap gap-4">
+            <Pagination size="sm">
+              <Pagination.Summary>
+                <div className="flex items-center gap-4">
+                  <span className="text-muted">
+                    <span className="text-foreground font-medium">{start}</span> al{" "}
+                    <span className="text-foreground font-medium">{end}</span> de{" "}
+                    <span className="text-foreground font-medium">{filtered.length}</span> resultados
+                  </span>
+                </div>
+              </Pagination.Summary>
               <Pagination.Content>
                 <Pagination.Item>
                   <Pagination.Previous isDisabled={currentPage <= 1} onPress={() => setPage((p) => p - 1)}>
                     <Pagination.PreviousIcon />
+                    Anterior
                   </Pagination.Previous>
                 </Pagination.Item>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
@@ -417,6 +340,7 @@ export function MyEvents() {
                 ))}
                 <Pagination.Item>
                   <Pagination.Next isDisabled={currentPage >= totalPages} onPress={() => setPage((p) => p + 1)}>
+                    Siguiente
                     <Pagination.NextIcon />
                   </Pagination.Next>
                 </Pagination.Item>

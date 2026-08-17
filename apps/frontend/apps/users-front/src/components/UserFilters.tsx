@@ -60,7 +60,7 @@ export function UserFilters({
                 value={roleFilter}
                 onChange={(value) => onRoleFilterChange(value as AdminUserRole | "all")}
             >
-                <Select.Trigger>
+                <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
                     <div className="flex items-center gap-2">
                         <Icon.SlidersHorizontal className="shrink-0 size-3.5" />
                         <span className="text-xs">{ROLE_LABELS[roleFilter as AdminUserRole] ?? "Todos"}</span>
@@ -85,7 +85,7 @@ export function UserFilters({
                 value={statusFilter}
                 onChange={(value) => onStatusFilterChange(value as StatusFilter)}
             >
-                <Select.Trigger>
+                <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
                     <div className="flex items-center gap-2">
                         <Icon.Activity className="shrink-0 size-3.5" />
                         <span className="text-xs">{STATUS_FILTER_LABELS[statusFilter]}</span>

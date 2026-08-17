@@ -23,6 +23,7 @@ import {
 const CLIENT_LINKS = [
     { to: "/eventos", icon: Icon.Calendar, label: "Eventos" },
     { to: "/mis-boletos", icon: Icon.Ticket, label: "Mis boletos" },
+    { to: "/mis-compras", icon: Icon.ReceiptText, label: "Mis compras" },
 ];
 
 export function ClientLayout() {
@@ -32,10 +33,12 @@ export function ClientLayout() {
     const { seats } = useCart();
     const [profileOpen, setProfileOpen] = useState(false);
 
-    // "Mis boletos" solo tiene sentido para quien ya inició sesión como cliente:
-    // sin sesión, o con otro rol, no tiene boletos propios que consultar aquí.
+    // "Mis boletos"/"Mis compras" solo tienen sentido para quien ya inició
+    // sesión como cliente: sin sesión, o con otro rol, no hay nada propio
+    // que consultar en esas rutas.
+    const isClient = isAuthenticated && user?.role === "usuario";
     const visibleLinks = CLIENT_LINKS.filter(
-        (link) => link.to !== "/mis-boletos" || (isAuthenticated && user?.role === "usuario"),
+        (link) => (link.to !== "/mis-boletos" && link.to !== "/mis-compras") || isClient,
     );
 
     const activeKey =
@@ -149,6 +152,14 @@ export function ClientLayout() {
                                     >
                                         <Icon.Ticket className="size-4" />
                                         Mis boletos
+                                    </Dropdown.Item>
+                                    <Dropdown.Item
+                                        id="compras"
+                                        textValue="Mis compras"
+                                        onAction={() => navigate("/mis-compras")}
+                                    >
+                                        <Icon.ReceiptText className="size-4" />
+                                        Mis compras
                                     </Dropdown.Item>
                                     <Dropdown.Item
                                         id="salir"

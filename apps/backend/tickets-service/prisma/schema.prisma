@@ -78,6 +78,11 @@ model Ticket {
   transfersAsOriginal TicketTransfer[]  @relation("OriginalTicket")
   transfersAsIssued   TicketTransfer[]  @relation("IssuedTicket")
 
+  // Único (Postgres permite múltiples NULL): un PurchaseDetail nunca puede
+  // tener más de un ticket PURCHASE emitido — es la protección anti-doble-
+  // emisión/doble-compra. Los tickets COMPLIMENTARY/STAFF (purchaseDetailId
+  // null) no se ven afectados.
+  @@unique([purchaseDetailId])
   @@index([purchaseId])
   @@index([eventZoneId])
   @@index([eventSeatId])

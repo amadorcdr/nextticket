@@ -22,6 +22,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateTemporaryBlockDto } from './dto/create-temporary-block.dto';
 import { PurchasesStatsResponseDto } from './dto/purchases-stats-response.dto';
+import { PurchasesStatsQueryDto } from './dto/purchases-stats-query.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 
 @ApiTags('purchases')
@@ -32,7 +33,10 @@ export class PurchasesController {
   @Post('temporary-blocks')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('bearer')
-  @ApiOperation({ summary: 'Crear bloqueo temporal de asiento o zona' })
+  @ApiOperation({
+    summary:
+      'Crear bloqueo temporal de uno o varios asientos (atómico) o de admisión general por cantidad. Requiere una admisión ACTIVA vigente en la fila virtual del evento (POST /purchases/queue/:eventId).',
+  })
   createTemporaryBlock(
     @Body() dto: CreateTemporaryBlockDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -115,11 +119,23 @@ export class PurchasesController {
     required: false,
     description: 'Si se indica, agrega las métricas solo de ese evento. Obligatorio para ORGANIZER.',
   })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Inicio del periodo (ISO 8601). Acota la recaudación a un rango de fechas.',
+    example: '2026-05-01T00:00:00.000Z',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Fin del periodo (ISO 8601).',
+    example: '2026-05-31T23:59:59.000Z',
+  })
   getStats(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('eventId', new ParseUUIDPipe({ optional: true })) eventId?: string,
+    @Query() query: PurchasesStatsQueryDto,
   ): Promise<PurchasesStatsResponseDto> {
-    return this.purchases.getStats(user, eventId);
+    return this.purchases.getStats(user, query);
   }
 
   @Get(':id')

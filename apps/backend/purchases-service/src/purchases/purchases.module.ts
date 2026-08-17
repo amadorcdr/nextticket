@@ -7,5 +7,6 @@ import { TemporaryBlocksScheduler } from './temporary-blocks.scheduler';
 @Module({
   controllers: [PurchasesController],
   providers: [PurchasesService, PurchasesGateway, TemporaryBlocksScheduler],
+  exports: [PurchasesGateway],
 })
 export class PurchasesModule {}

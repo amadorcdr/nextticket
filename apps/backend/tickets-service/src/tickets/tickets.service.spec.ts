@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { TicketsService } from './tickets.service';
@@ -11,6 +12,8 @@ describe('TicketsService', () => {
     ticket: {
       count: jest.fn(),
       groupBy: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn(),
     },
   };
 
@@ -99,6 +102,70 @@ describe('TicketsService', () => {
 
       expect(prisma.ticket.count).not.toHaveBeenCalled();
       expect(prisma.ticket.groupBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('issueForPurchase', () => {
+    const DTO = {
+      purchaseId: 'purchase-1',
+      purchaseDetailId: 'detail-1',
+      currentHolderId: 'user-1',
+      eventZoneId: 'zone-1',
+      eventSeatId: 'seat-1',
+    };
+
+    it('issues a new ISSUED ticket with a generated folio and qrCode', async () => {
+      prisma.ticket.findFirst.mockResolvedValueOnce(null);
+      prisma.ticket.create.mockImplementationOnce(({ data }) =>
+        Promise.resolve({ id: 'ticket-1', ...data }),
+      );
+
+      const result = await service.issueForPurchase(DTO);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: 'ticket-1',
+          purchaseDetailId: 'detail-1',
+          currentHolderId: 'user-1',
+          originType: 'PURCHASE',
+          status: 'ISSUED',
+          folio: expect.any(String),
+          qrCode: expect.any(String),
+        }),
+      );
+      expect(redis.del).toHaveBeenCalledWith('tickets:list');
+      expect(redis.del).toHaveBeenCalledWith('tickets:stats');
+    });
+
+    it('is idempotent: returns the existing ticket instead of creating a duplicate', async () => {
+      prisma.ticket.findFirst.mockResolvedValueOnce({
+        id: 'existing-ticket',
+        purchaseDetailId: 'detail-1',
+      });
+
+      const result = await service.issueForPurchase(DTO);
+
+      expect(result).toEqual(
+        expect.objectContaining({ id: 'existing-ticket' }),
+      );
+      expect(prisma.ticket.create).not.toHaveBeenCalled();
+    });
+
+    it('recovers the winning ticket when two concurrent calls race on the unique constraint', async () => {
+      prisma.ticket.findFirst
+        .mockResolvedValueOnce(null) // no existe todavía en el pre-check
+        .mockResolvedValueOnce({ id: 'race-winner', purchaseDetailId: 'detail-1' }); // recuperado tras P2002
+
+      prisma.ticket.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.8.0',
+        }),
+      );
+
+      const result = await service.issueForPurchase(DTO);
+
+      expect(result).toEqual(expect.objectContaining({ id: 'race-winner' }));
     });
   });
 

@@ -3,12 +3,15 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { IssueTicketForPurchaseDto } from './dto/issue-ticket-for-purchase.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { TicketsStatsResponseDto } from './dto/tickets-stats-response.dto';
 import {
@@ -45,6 +48,7 @@ function canSeeQrCode(ticketHolderId: string, requester: AuthenticatedUser) {
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
   private readonly qrHashSecret: string;
 
   constructor(
@@ -87,6 +91,65 @@ export class TicketsService {
     await this.redis.del(LIST_CACHE_KEY);
     await this.redis.del(STATS_CACHE_KEY);
     return ticket;
+  }
+
+  /**
+   * Uso interno: purchases-service llama esto una vez por PurchaseDetail
+   * justo después de confirmar el pago. Idempotente — si ya existe un
+   * ticket para ese purchaseDetailId (reintento de red, doble llamada),
+   * devuelve el existente en vez de crear otro.
+   */
+  async issueForPurchase(dto: IssueTicketForPurchaseDto) {
+    const existing = await this.prisma.ticket.findFirst({
+      where: { purchaseDetailId: dto.purchaseDetailId },
+    });
+    if (existing) {
+      this.logger.log(
+        `ticket already issued for purchaseDetail=${dto.purchaseDetailId}, returning existing ticket=${existing.id}`,
+      );
+      return existing;
+    }
+
+    const folio = this.generateFolio();
+    const ticketId = randomBytes(16).toString('hex');
+    const qrCode = this.generateQrHash(ticketId);
+
+    try {
+      const ticket = await this.prisma.ticket.create({
+        data: {
+          purchaseId: dto.purchaseId,
+          purchaseDetailId: dto.purchaseDetailId,
+          eventSeatId: dto.eventSeatId,
+          eventZoneId: dto.eventZoneId,
+          currentHolderId: dto.currentHolderId,
+          originType: 'PURCHASE',
+          folio,
+          qrCode,
+          issuedAt: new Date(),
+          status: 'ISSUED',
+        },
+      });
+
+      await this.redis.del(LIST_CACHE_KEY);
+      await this.redis.del(STATS_CACHE_KEY);
+      this.logger.log(
+        `ticket issued: purchaseDetail=${dto.purchaseDetailId} ticket=${ticket.id}`,
+      );
+      return ticket;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Carrera: otra llamada concurrente ya emitió el ticket para este
+        // detalle entre el findFirst de arriba y este create.
+        const race = await this.prisma.ticket.findFirst({
+          where: { purchaseDetailId: dto.purchaseDetailId },
+        });
+        if (race) return race;
+      }
+      throw error;
+    }
   }
 
   // ── List all tickets (cached) ─────────────────────────────

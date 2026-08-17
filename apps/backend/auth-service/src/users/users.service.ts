@@ -247,6 +247,27 @@ export class UsersService {
     });
   }
 
+  /** Login por voz: la semilla llega ya normalizada desde AuthService. */
+  async findByAlexaSeedForAuth(alexaSeed: string) {
+    return this.prisma.user.findUnique({
+      where: { alexaSeed },
+      include: { role: true },
+    });
+  }
+
+  async setAlexaSeed(id: string, alexaSeed: string) {
+    await this.findPublicById(id);
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { alexaSeed },
+      select: USER_PUBLIC_SELECT,
+    });
+
+    await this.redis.del(LIST_CACHE_KEY);
+    return user;
+  }
+
   async findPublicById(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },

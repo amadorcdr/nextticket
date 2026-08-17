@@ -36,14 +36,22 @@ export function Dashboard() {
 
             {!loading && !error && data && (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <StatCard label="Total Eventos" value={data.metrics.totalEvents.toString()} icon={Icon.Calendar} />
-                        <StatCard label="Eventos Activos" value={data.metrics.activeEvents.toString()} icon={Icon.CalendarCheck} />
-                        <StatCard label="Eventos Próximos" value={data.metrics.upcomingEvents.toString()} icon={Icon.CalendarClock} />
-                        <StatCard label="Total Usuarios" value={data.metrics.totalUsers.toLocaleString()} icon={Icon.Users} />
-                        <StatCard label="Boletos Vendidos" value={data.metrics.ticketsSold.toLocaleString()} icon={Icon.Ticket} />
-                        <StatCard label="Ingresos Totales" value={formatCurrency(data.metrics.totalRevenue)} icon={Icon.Wallet} />
-                        <StatCard label="Compras Recientes" value={data.metrics.recentPurchasesCount.toString()} icon={Icon.ShoppingCart} />
+                    <div className="flex flex-col gap-2">
+                        <p className="text-muted text-[11px] font-semibold uppercase tracking-wide">Inventario</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <StatCard label="Total Recintos" value={data.metrics.totalVenues.toString()} icon={Icon.Home} />
+                            <StatCard label="Total Eventos" value={data.metrics.totalEvents.toString()} icon={Icon.Calendar} />
+                            <StatCard label="Total Usuarios" value={data.metrics.totalUsers.toLocaleString()} icon={Icon.Users} />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <p className="text-muted text-[11px] font-semibold uppercase tracking-wide">Actividad y ventas</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <StatCard label="Eventos Activos" value={data.metrics.activeEvents.toString()} icon={Icon.CalendarCheck} />
+                            <StatCard label="Boletos Vendidos" value={data.metrics.ticketsSold.toLocaleString()} icon={Icon.Ticket} />
+                            <StatCard label="Ingresos Totales" value={formatCurrency(data.metrics.totalRevenue)} icon={Icon.Wallet} />
+                        </div>
                     </div>
 
                     <div className="grid lg:grid-cols-2 gap-2">

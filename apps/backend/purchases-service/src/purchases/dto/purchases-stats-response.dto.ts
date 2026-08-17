@@ -12,6 +12,12 @@ export class PurchaseZoneRevenueDto {
     example: 442000,
   })
   revenue!: number;
+
+  @ApiProperty({
+    description: 'Boletos vendidos en la zona (detalles de compras CONFIRMED)',
+    example: 120,
+  })
+  ticketsSold!: number;
 }
 
 /** Respuesta agregada para las tarjetas de ingresos/compras, global o de un evento. */
@@ -33,4 +39,20 @@ export class PurchasesStatsResponseDto {
     type: [PurchaseZoneRevenueDto],
   })
   byEventZone?: PurchaseZoneRevenueDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Inicio del periodo aplicado, o null si no se filtró por fecha. ' +
+      'Permite al consumidor distinguir un total de periodo de un acumulado.',
+    example: '2026-05-01T00:00:00.000Z',
+    nullable: true,
+  })
+  from?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Fin del periodo aplicado, o null si no se filtró por fecha.',
+    example: '2026-05-31T23:59:59.000Z',
+    nullable: true,
+  })
+  to?: string | null;
 }

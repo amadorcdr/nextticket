@@ -7,6 +7,7 @@ import {
   ParseEnumPipe,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,12 +19,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { EventSeatStatus } from '@prisma/client';
+import { MarkEventSeatsSoldDto } from './dto/mark-event-seats-sold.dto';
 import { UpdateEventSeatDto } from './dto/update-event-seat.dto';
 import { EventSeatService } from './event-seat.service';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { InternalServiceGuard } from '../auth/internal-service.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('event-seats')
@@ -61,6 +64,41 @@ export class EventSeatController {
       },
       pagination,
     );
+  }
+
+  @Get('by-event-seat-ids')
+  @ApiOperation({
+    summary:
+      'Consultar varios asientos del evento por el id de su EventSeat (uso interno de otros servicios, p. ej. validar un hold antes de crearlo)',
+  })
+  @ApiQuery({
+    name: 'ids',
+    description: 'EventSeat.id separados por coma',
+    example: '550e8400-e29b-41d4-a716-446655440002,550e8400-e29b-41d4-a716-446655440003',
+  })
+  findByEventSeatIds(
+    @Param('eventId', new ParseUUIDPipe())
+    eventId: string,
+    @Query('ids') ids?: string,
+  ) {
+    const eventSeatIds = (ids ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return this.eventSeat.findByEventSeatIds(eventId, eventSeatIds);
+  }
+
+  @Post('internal/mark-sold')
+  @UseGuards(InternalServiceGuard)
+  @ApiOperation({
+    summary:
+      'Uso interno: marca asientos como SOLD tras una compra confirmada. Solo lo llama purchases-service (header X-Internal-Service-Token, no JWT de usuario). Idempotente.',
+  })
+  markSold(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Body() dto: MarkEventSeatsSoldDto,
+  ) {
+    return this.eventSeat.markSoldForPurchase(eventId, dto.eventSeatIds);
   }
 
   @Get(':seatId')

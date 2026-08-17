@@ -1,0 +1,1538 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "next ticket",
+      "modelConfiguration": {
+        "fallbackIntentSensitivity": {
+          "level": "LOW"
+        }
+      },
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": [
+            "qué puedo hacer",
+            "qué puedo preguntarte",
+            "cuáles son mis opciones",
+            "no sé qué decir",
+            "explícame cómo funciona"
+          ]
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": [
+            "vuelve al menú",
+            "regresa al inicio",
+            "menú principal",
+            "empecemos de nuevo",
+            "vamos al inicio"
+          ]
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": [
+            "repite",
+            "repítelo",
+            "puedes repetir",
+            "no te escuché",
+            "dilo otra vez"
+          ]
+        },
+        {
+          "name": "CaptureInputIntent",
+          "slots": [
+            {
+              "name": "userInput",
+              "type": "SeedPhrase"
+            }
+          ],
+          "samples": [
+            "{userInput}",
+            "mi palabra clave es {userInput}",
+            "la palabra clave es {userInput}",
+            "mi clave es {userInput}",
+            "mi semilla es {userInput}",
+            "entrar con {userInput}",
+            "soy {userInput}"
+          ]
+        },
+        {
+          "name": "LogoutIntent",
+          "samples": [
+            "cerrar sesión",
+            "cierra mi sesión",
+            "quiero salir de mi cuenta",
+            "cambiar de usuario",
+            "quiero entrar con otra cuenta",
+            "sal de mi cuenta"
+          ]
+        },
+        {
+          "name": "GetActiveEventsIntent",
+          "samples": [
+            "dime mis eventos activos",
+            "cuáles son mis eventos activos",
+            "cuáles son mis eventos",
+            "qué eventos tengo",
+            "muéstrame mis eventos",
+            "lista mis eventos",
+            "qué eventos estoy organizando",
+            "mis eventos publicados",
+            "qué eventos hay",
+            "qué eventos hay disponibles",
+            "cuáles son los eventos",
+            "cuáles son los eventos disponibles",
+            "dime los eventos",
+            "lista los eventos",
+            "muéstrame los eventos",
+            "qué eventos puedo ver",
+            "qué hay disponible",
+            "qué eventos tienes"
+          ]
+        },
+        {
+          "name": "GetTicketsSoldIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuántos boletos se han vendido de {eventName}",
+            "cómo van las ventas de {eventName}",
+            "dime las ventas de {eventName}",
+            "cuántos boletos vendí en {eventName}",
+            "ventas del evento {eventName}",
+            "cuántos boletos lleva vendidos {eventName}",
+            "cómo van los boletos vendidos",
+            "dime las ventas"
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "qué zonas tiene {eventName}",
+            "dime las zonas de {eventName}",
+            "cuáles son las zonas de {eventName}",
+            "lista las zonas de {eventName}",
+            "muéstrame las zonas de {eventName}",
+            "qué secciones tiene {eventName}",
+            "qué zonas hay disponibles",
+            "dime las zonas"
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "samples": [
+                "la zona {zoneName}",
+                "en {zoneName}",
+                "{zoneName}"
+              ]
+            }
+          ],
+          "samples": [
+            "hay lugares en la zona {zoneName} de {eventName}",
+            "cuántos lugares quedan en {zoneName} de {eventName}",
+            "hay disponibilidad en {zoneName}",
+            "quedan boletos en la zona {zoneName}",
+            "cuántos asientos hay en {zoneName} de {eventName}",
+            "disponibilidad de la zona {zoneName}",
+            "hay lugares disponibles",
+            "queda disponibilidad"
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "el evento {eventName}",
+                "de {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuándo es {eventName}",
+            "dónde es {eventName}",
+            "dame información de {eventName}",
+            "háblame del evento {eventName}",
+            "detalles de {eventName}",
+            "a qué hora es {eventName}",
+            "en qué lugar es {eventName}",
+            "cuándo es el evento"
+          ]
+        },
+        {
+          "name": "GetTopRevenueEventIntent",
+          "samples": [
+            "cuál es el evento más taquillero",
+            "qué evento ha recaudado más",
+            "cuál evento genera más ingresos",
+            "dime el evento con más recaudación",
+            "cuál es el evento que más vende",
+            "ranking de eventos por ingresos"
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "samples": [
+                "el mes de {monthName}",
+                "en {monthName}",
+                "{monthName}"
+              ]
+            }
+          ],
+          "samples": [
+            "cuánto se recaudó en {monthName}",
+            "cuáles fueron los ingresos de {monthName}",
+            "dime la recaudación de {monthName}",
+            "cuánto dinero se generó en {monthName}",
+            "ingresos totales de {monthName}",
+            "cuánto vendimos en {monthName}",
+            "cuánto se ha recaudado"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "EventType",
+          "values": [
+            {
+              "id": "placeholder_1",
+              "name": {
+                "value": "Rock Revolution Tour",
+                "synonyms": [
+                  "rock revolution",
+                  "el tour de rock",
+                  "rock"
+                ]
+              }
+            },
+            {
+              "id": "placeholder_2",
+              "name": {
+                "value": "Neon Nights Festival",
+                "synonyms": [
+                  "neon nights",
+                  "el festival neon",
+                  "neon"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ZoneType",
+          "values": [
+            {
+              "id": "vip",
+              "name": {
+                "value": "VIP",
+                "synonyms": [
+                  "vip",
+                  "zona vip",
+                  "la vip",
+                  "preferencial"
+                ]
+              }
+            },
+            {
+              "id": "general",
+              "name": {
+                "value": "General",
+                "synonyms": [
+                  "general",
+                  "zona general",
+                  "la general",
+                  "general única"
+                ]
+              }
+            },
+            {
+              "id": "preferente",
+              "name": {
+                "value": "Preferente",
+                "synonyms": [
+                  "preferente",
+                  "zona preferente",
+                  "la preferente"
+                ]
+              }
+            },
+            {
+              "id": "platino",
+              "name": {
+                "value": "Platino",
+                "synonyms": [
+                  "platino",
+                  "zona platino",
+                  "la platino"
+                ]
+              }
+            },
+            {
+              "id": "palcos",
+              "name": {
+                "value": "Palcos",
+                "synonyms": [
+                  "palcos",
+                  "palco",
+                  "zona de palcos"
+                ]
+              }
+            },
+            {
+              "id": "gradas",
+              "name": {
+                "value": "Gradas",
+                "synonyms": [
+                  "gradas",
+                  "grada",
+                  "zona de gradas"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SeedPhrase",
+          "values": [
+            {
+              "name": {
+                "value": "rapido jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido faro"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido roble"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido puente"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido rio"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido templo"
+              }
+            },
+            {
+              "name": {
+                "value": "azul jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "azul colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "azul volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "azul faro"
+              }
+            },
+            {
+              "name": {
+                "value": "azul roble"
+              }
+            },
+            {
+              "name": {
+                "value": "azul puente"
+              }
+            },
+            {
+              "name": {
+                "value": "azul rio"
+              }
+            },
+            {
+              "name": {
+                "value": "azul bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "azul cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "azul templo"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante faro"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante roble"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante puente"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante rio"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante templo"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente faro"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente roble"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente puente"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente rio"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente templo"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno faro"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno roble"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno puente"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno rio"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno templo"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado faro"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado roble"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado puente"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado rio"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado templo"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre faro"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre roble"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre puente"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre rio"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre templo"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte faro"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte roble"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte puente"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte rio"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte templo"
+              }
+            },
+            {
+              "name": {
+                "value": "claro jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "claro colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "claro volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "claro faro"
+              }
+            },
+            {
+              "name": {
+                "value": "claro roble"
+              }
+            },
+            {
+              "name": {
+                "value": "claro puente"
+              }
+            },
+            {
+              "name": {
+                "value": "claro rio"
+              }
+            },
+            {
+              "name": {
+                "value": "claro bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "claro cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "claro templo"
+              }
+            },
+            {
+              "name": {
+                "value": "noble jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "noble colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "noble volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "noble faro"
+              }
+            },
+            {
+              "name": {
+                "value": "noble roble"
+              }
+            },
+            {
+              "name": {
+                "value": "noble puente"
+              }
+            },
+            {
+              "name": {
+                "value": "noble rio"
+              }
+            },
+            {
+              "name": {
+                "value": "noble bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "noble cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "noble templo"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar azul"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar claro"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar noble"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri azul"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri claro"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri noble"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan azul"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan claro"
+              }
+            },
+            {
+              "name": {
+                "value": "volcan noble"
+              }
+            },
+            {
+              "name": {
+                "value": "faro rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "faro azul"
+              }
+            },
+            {
+              "name": {
+                "value": "faro brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "faro valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "faro sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "faro dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "faro alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "faro fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "faro claro"
+              }
+            },
+            {
+              "name": {
+                "value": "faro noble"
+              }
+            },
+            {
+              "name": {
+                "value": "roble rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "roble azul"
+              }
+            },
+            {
+              "name": {
+                "value": "roble brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "roble valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "roble sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "roble dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "roble alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "roble fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "roble claro"
+              }
+            },
+            {
+              "name": {
+                "value": "roble noble"
+              }
+            },
+            {
+              "name": {
+                "value": "puente rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "puente azul"
+              }
+            },
+            {
+              "name": {
+                "value": "puente brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "puente valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "puente sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "puente dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "puente alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "puente fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "puente claro"
+              }
+            },
+            {
+              "name": {
+                "value": "puente noble"
+              }
+            },
+            {
+              "name": {
+                "value": "rio rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "rio azul"
+              }
+            },
+            {
+              "name": {
+                "value": "rio brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "rio valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "rio sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "rio dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "rio alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "rio fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "rio claro"
+              }
+            },
+            {
+              "name": {
+                "value": "rio noble"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque azul"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque claro"
+              }
+            },
+            {
+              "name": {
+                "value": "bosque noble"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa azul"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa claro"
+              }
+            },
+            {
+              "name": {
+                "value": "cometa noble"
+              }
+            },
+            {
+              "name": {
+                "value": "templo rapido"
+              }
+            },
+            {
+              "name": {
+                "value": "templo azul"
+              }
+            },
+            {
+              "name": {
+                "value": "templo brillante"
+              }
+            },
+            {
+              "name": {
+                "value": "templo valiente"
+              }
+            },
+            {
+              "name": {
+                "value": "templo sereno"
+              }
+            },
+            {
+              "name": {
+                "value": "templo dorado"
+              }
+            },
+            {
+              "name": {
+                "value": "templo alegre"
+              }
+            },
+            {
+              "name": {
+                "value": "templo fuerte"
+              }
+            },
+            {
+              "name": {
+                "value": "templo claro"
+              }
+            },
+            {
+              "name": {
+                "value": "templo noble"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar morado"
+              }
+            },
+            {
+              "name": {
+                "value": "colibri blanco"
+              }
+            },
+            {
+              "name": {
+                "value": "colibrí blanco"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "dialog": {
+      "delegationStrategy": "SKILL_RESPONSE",
+      "intents": [
+        {
+          "name": "GetTicketsSoldIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Tickets"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Zones"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Availability"
+              }
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.ZoneName"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Info"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.MonthName"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "prompts": [
+      {
+        "id": "Elicit.Slot.EventName.Tickets",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas consultar los boletos vendidos?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento del que quieres saber las ventas."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Zones",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento quieres conocer las zonas?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento y te digo sus zonas."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Availability",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas consultar la disponibilidad?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento para revisar los lugares."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Info",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué evento deseas la información?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del evento del que quieres los detalles."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.ZoneName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿En qué zona deseas consultar la disponibilidad?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime la zona, por ejemplo VIP o general."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.MonthName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿De qué mes deseas consultar los ingresos?"
+          },
+          {
+            "type": "PlainText",
+            "value": "Dime el nombre del mes, por ejemplo mayo."
+          }
+        ]
+      }
+    ]
+  }
+}

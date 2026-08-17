@@ -1,12 +1,23 @@
-import { Icon, SearchField } from "@nextticket-frontend/commons";
+import { Icon, ListBox, SearchField, Select } from "@nextticket-frontend/commons";
 import type { AdminEventStatus } from "../types/admin";
 
 export const EVENT_FILTER_OPTIONS: { id: AdminEventStatus | "all"; label: string }[] = [
     { id: "all", label: "Todos" },
+    { id: "borrador", label: "Borradores" },
     { id: "proximo", label: "Próximos" },
     { id: "activo", label: "Activos" },
     { id: "finalizado", label: "Finalizados" },
+    { id: "cancelado", label: "Cancelados" },
 ];
+
+const EVENT_FILTER_LABELS: Record<AdminEventStatus | "all", string> = {
+    all: "Todos",
+    borrador: "Borradores",
+    proximo: "Próximos",
+    activo: "Activos",
+    finalizado: "Finalizados",
+    cancelado: "Cancelados",
+};
 
 interface AdminEventFiltersProps {
     search: string;
@@ -30,25 +41,30 @@ export function AdminEventFilters({ search, onSearchChange, statusFilter, onStat
                 </SearchField.Group>
             </SearchField>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-                {EVENT_FILTER_OPTIONS.map((opt) => {
-                    const active = statusFilter === opt.id;
-                    return (
-                        <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => onStatusFilterChange(opt.id)}
-                            className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                                active
-                                    ? "bg-accent text-accent-foreground border-transparent"
-                                    : "bg-surface-secondary text-muted border-border hover:text-foreground"
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    );
-                })}
-            </div>
+            <Select
+                className="w-fit"
+                aria-label="Estado"
+                value={statusFilter}
+                onChange={(value) => onStatusFilterChange(value as AdminEventStatus | "all")}
+            >
+                <Select.Trigger className="min-h-0! h-7! px-2.5! py-1! text-xs!">
+                    <div className="flex items-center gap-2">
+                        <Icon.Activity className="shrink-0 size-3.5" />
+                        <span className="text-xs">{EVENT_FILTER_LABELS[statusFilter]}</span>
+                    </div>
+                    <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                    <ListBox>
+                        {EVENT_FILTER_OPTIONS.map((opt) => (
+                            <ListBox.Item key={opt.id} id={opt.id} textValue={opt.label}>
+                                {opt.label}
+                                <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                        ))}
+                    </ListBox>
+                </Select.Popover>
+            </Select>
         </div>
     );
 }

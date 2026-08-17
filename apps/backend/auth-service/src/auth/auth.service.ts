@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ActivateAccountDto } from './dto/activate-account.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { AlexaSeedDto } from './dto/alexa-seed.dto';
 import { AUTH_PROVIDERS } from './auth.constants';
 
 type JwtUser = {
@@ -27,8 +28,24 @@ type JwtUser = {
 };
 
 const INVALID_CREDENTIALS = 'Credenciales inválidas';
+const INVALID_SEED = 'Palabra clave no válida';
 const OAUTH_STATE_PREFIX = 'auth:oauth:state:';
 const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+
+/**
+ * Vocabulario para generar semillas. Palabras cortas, comunes y sin sílabas
+ * ambiguas: el reconocimiento de voz se equivoca mucho menos con estas que con
+ * letras y números sueltos.
+ */
+const SEED_ADJETIVOS = [
+  'rapido', 'azul', 'brillante', 'valiente', 'sereno',
+  'dorado', 'alegre', 'fuerte', 'claro', 'noble',
+];
+
+const SEED_SUSTANTIVOS = [
+  'jaguar', 'colibri', 'volcan', 'faro', 'roble',
+  'puente', 'rio', 'bosque', 'cometa', 'templo',
+];
 
 /**
  * Hash bcrypt de una contraseña que nadie usa. Sirve para gastar el mismo
@@ -165,6 +182,82 @@ export class AuthService implements OnModuleInit {
       }),
       user: publicUser,
     };
+  }
+
+  /**
+   * Normaliza lo que se dictó por voz: minúsculas, sin acentos y sin espacios.
+   * Alexa transcribe "jaguar morado" o "Jaguar Morado" indistintamente, así que
+   * ambas deben resolver a la misma semilla guardada.
+   */
+  private normalizeSeed(seed: string) {
+    return seed
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  /**
+   * Login desde la skill de Alexa. Una sola palabra en vez de correo y
+   * contraseña, porque dictar un correo por voz falla constantemente.
+   */
+  async loginWithAlexaSeed(dto: AlexaSeedDto) {
+    const seed = this.normalizeSeed(dto.seed);
+
+    if (!seed) {
+      throw new UnauthorizedException(INVALID_SEED);
+    }
+
+    const user = await this.usersService.findByAlexaSeedForAuth(seed);
+
+    // Mismo mensaje exista o no: no revelamos qué semillas están registradas.
+    if (!user) {
+      throw new UnauthorizedException(INVALID_SEED);
+    }
+
+    if (!user.status) {
+      throw new ForbiddenException(
+        'Tu cuenta está deshabilitada. Contacta a un administrador.',
+      );
+    }
+
+    const publicUser = await this.usersService.findPublicById(user.id);
+
+    return {
+      token: this.signToken({
+        sub: publicUser.id,
+        email: publicUser.email,
+        role: publicUser.role.name,
+      }),
+      user: publicUser,
+    };
+  }
+
+  /**
+   * Genera una semilla fácil de dictar para el usuario autenticado.
+   * Se reintenta por si dos usuarios caen en la misma combinación.
+   */
+  async generateAlexaSeed(userId: string) {
+    for (let intento = 0; intento < 10; intento += 1) {
+      const adjetivo =
+        SEED_ADJETIVOS[Math.floor(Math.random() * SEED_ADJETIVOS.length)];
+      const sustantivo =
+        SEED_SUSTANTIVOS[Math.floor(Math.random() * SEED_SUSTANTIVOS.length)];
+
+      const seed = `${adjetivo}${sustantivo}`;
+      const ocupada = await this.usersService.findByAlexaSeedForAuth(seed);
+
+      if (!ocupada) {
+        await this.usersService.setAlexaSeed(userId, seed);
+
+        // `spoken` es cómo debe decirla el usuario en voz alta.
+        return { seed, spoken: `${adjetivo} ${sustantivo}` };
+      }
+    }
+
+    throw new ConflictException(
+      'No se pudo generar una palabra disponible. Intenta de nuevo.',
+    );
   }
 
   async getGoogleAuthUrl() {
