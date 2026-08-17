@@ -598,12 +598,13 @@ const es = {
   // ── Consultas ──
   NO_ACTIVE_EVENTS: "No tienes eventos activos en este momento. %s",
   ACTIVE_EVENTS_ONE: "Tienes 1 evento activo: %s. ¿Quieres saber cómo van sus ventas?",
-  ACTIVE_EVENTS_MANY: "Tienes %s eventos activos: %s. ¿De cuál quieres más detalles?",
+  ACTIVE_EVENTS_MANY: "Tienes %s eventos activos: %s. Di el nombre de uno para saber más.",
 
   // Catálogo para quien no organiza: no son "sus" eventos, son los que hay.
   NO_EVENTS_AVAILABLE: "Ahora mismo no hay eventos publicados. %s",
   EVENTS_AVAILABLE_ONE: "Hay 1 evento disponible: %s. ¿Quieres saber sus zonas o su disponibilidad?",
-  EVENTS_AVAILABLE_MANY: "Hay %s eventos disponibles: %s. ¿De cuál quieres más detalles?",
+  EVENTS_AVAILABLE_MANY: "Hay %s eventos disponibles: %s. Di el nombre de uno para saber más.",
+  // Con un solo evento sí cabe el detalle; con varios, solo el nombre.
   EVENT_LIST_ITEM: "%s, en %s el %s",
 
   // Se pregunta por un evento SIEMPRE ofreciendo la lista: si el usuario no
@@ -1232,9 +1233,13 @@ const GetActiveEventsIntentHandler = {
           .getResponse();
       }
 
-      const items = events.map((event) =>
-        t("EVENT_LIST_ITEM", event.name, event.venue.name, formatDate(event.startsAt, handlerInput.locale)),
-      );
+      // Con un solo evento se puede dar el detalle; con varios, solo el nombre:
+      // una lista de cuatro con recinto y fecha es imposible de retener, y el
+      // usuario termina repitiéndola completa en vez de decir un nombre.
+      const items =
+        events.length === 1
+          ? [t("EVENT_LIST_ITEM", events[0].name, events[0].venue.name, formatDate(events[0].startsAt, handlerInput.locale))]
+          : events.map((event) => event.name);
 
       // Con un solo evento se recuerda: lo siguiente que pregunte ya tiene contexto.
       if (events.length === 1) rememberEvent(handlerInput, events[0]);

@@ -247,24 +247,22 @@
           "name": "EventType",
           "values": [
             {
-              "id": "placeholder_1",
+              "id": "ejemplo_1",
               "name": {
-                "value": "Rock Revolution Tour",
+                "value": "Rock en Vivo",
                 "synonyms": [
-                  "rock revolution",
-                  "el tour de rock",
-                  "rock"
+                  "rock",
+                  "el rock"
                 ]
               }
             },
             {
-              "id": "placeholder_2",
+              "id": "ejemplo_2",
               "name": {
-                "value": "Neon Nights Festival",
+                "value": "Festival Sabor Norteño",
                 "synonyms": [
-                  "neon nights",
-                  "el festival neon",
-                  "neon"
+                  "sabor norteño",
+                  "el festival"
                 ]
               }
             }
@@ -1460,11 +1458,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas consultar los boletos vendidos?"
+            "value": "¿De qué evento quieres las ventas? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento del que quieres saber las ventas."
+            "value": "Dime solo el nombre del evento, por ejemplo: Sinfónica de Otoño."
           }
         ]
       },
@@ -1473,11 +1471,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento quieres conocer las zonas?"
+            "value": "¿De qué evento quieres las zonas? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento y te digo sus zonas."
+            "value": "Dime solo el nombre del evento, por ejemplo: Festival Sabor Norteño."
           }
         ]
       },
@@ -1486,11 +1484,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas consultar la disponibilidad?"
+            "value": "¿De qué evento? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento para revisar los lugares."
+            "value": "Dime solo el nombre del evento, por ejemplo: Gira de Comedia."
           }
         ]
       },
@@ -1499,11 +1497,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas la información?"
+            "value": "¿De qué evento? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento del que quieres los detalles."
+            "value": "Dime solo el nombre del evento, por ejemplo: Sinfónica de Otoño."
           }
         ]
       },
@@ -1512,11 +1510,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿En qué zona deseas consultar la disponibilidad?"
+            "value": "¿Qué zona? Por ejemplo: general, preferente o vip."
           },
           {
             "type": "PlainText",
-            "value": "Dime la zona, por ejemplo VIP o general."
+            "value": "Dime la zona, por ejemplo: vip."
           }
         ]
       },
@@ -1525,11 +1523,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué mes deseas consultar los ingresos?"
+            "value": "¿De qué mes? Por ejemplo: agosto."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del mes, por ejemplo mayo."
+            "value": "Dime el nombre del mes, por ejemplo: agosto."
           }
         ]
       }

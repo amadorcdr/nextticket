@@ -399,7 +399,7 @@ async function main() {
 
   const arenaCentral = await seedVenue({
     key: 'arena-central',
-    name: 'DEV - Arena Central',
+    name: 'Arena Central',
     address: 'Av. Central 100',
     city: 'Ciudad de México',
     state: 'CDMX',
@@ -419,7 +419,7 @@ async function main() {
 
   const explanadaNorte = await seedVenue({
     key: 'explanada-norte',
-    name: 'DEV - Explanada Norte',
+    name: 'Explanada Norte',
     address: 'Carretera Nacional Km 12',
     city: 'Monterrey',
     state: 'Nuevo León',
@@ -438,7 +438,7 @@ async function main() {
 
   const teatroDelBosque = await seedVenue({
     key: 'teatro-del-bosque',
-    name: 'DEV - Teatro del Bosque',
+    name: 'Teatro del Bosque',
     address: 'Av. Chapultepec 550',
     city: 'Guadalajara',
     state: 'Jalisco',
@@ -467,7 +467,7 @@ async function main() {
   const eventAId = await seedEvent(
     {
       key: 'rock-en-vivo',
-      name: 'DEV - Rock en Vivo: Noches Eléctricas',
+      name: 'Rock en Vivo',
       description: 'Concierto de rock en vivo con tres zonas de asientos numerados. Evento de prueba comprable de inmediato.',
       imageUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=1200&auto=format&fit=crop',
       venueId: arenaCentral.venueId,
@@ -488,7 +488,7 @@ async function main() {
   const eventBId = await seedEvent(
     {
       key: 'festival-sabor-nortenio',
-      name: 'DEV - Festival Sabor Norteño',
+      name: 'Festival Sabor Norteño',
       description: 'Festival al aire libre con admisión general por cantidad de boletos. Evento de prueba comprable de inmediato, en un recinto distinto.',
       imageUrl: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=1200&auto=format&fit=crop',
       venueId: explanadaNorte.venueId,
@@ -508,7 +508,7 @@ async function main() {
   const eventCId = await seedEvent(
     {
       key: 'sinfonica-de-otonio',
-      name: 'DEV - Sinfónica de Otoño',
+      name: 'Sinfónica de Otoño',
       description: 'Concierto de la orquesta sinfónica en el teatro. Evento próximo (fecha más lejana) con asientos numerados en dos niveles.',
       imageUrl: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?q=80&w=1200&auto=format&fit=crop',
       venueId: teatroDelBosque.venueId,
@@ -528,7 +528,7 @@ async function main() {
   const eventDId = await seedEvent(
     {
       key: 'gira-comedia-stand-up',
-      name: 'DEV - Gira de Comedia: Stand-up Nacional',
+      name: 'Gira de Comedia',
       description: 'Noche de stand-up con una sola zona a precio plano que combina ambos niveles del teatro. Otra configuración de zonas/precios sobre el mismo recinto.',
       imageUrl: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?q=80&w=1200&auto=format&fit=crop',
       venueId: teatroDelBosque.venueId,
@@ -547,7 +547,7 @@ async function main() {
   const eventEId = await seedEvent(
     {
       key: 'expo-gamer-fest',
-      name: 'DEV - Expo Gamer Fest',
+      name: 'Expo Gamer Fest',
       description: 'Torneo y expo de videojuegos. Evento de prueba en estado SOLD_OUT (agotado) para verificar ese estado alternativo en el catálogo.',
       imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop',
       venueId: arenaCentral.venueId,
