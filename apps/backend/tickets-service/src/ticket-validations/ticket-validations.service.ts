@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateValidationDto } from './dto/create-validation.dto';
@@ -6,6 +10,8 @@ import { CreateValidationDto } from './dto/create-validation.dto';
 const LIST_CACHE_KEY = 'tickets:list';
 const VALIDATION_RESULT_ACCEPTED = 1;
 const VALIDATION_RESULT_REJECTED = 0;
+const OTHER_EVENT_REJECTION_REASON =
+  'Ticket does not belong to the selected event';
 
 @Injectable()
 export class TicketValidationsService {
@@ -18,7 +24,9 @@ export class TicketValidationsService {
     const now = new Date();
 
     const ticket = await this.prisma.ticket.findUnique({
-      where: { qrCode: dto.qrHash },
+      where: dto.qrHash
+        ? { qrCode: dto.qrHash }
+        : { folio: dto.folio!.trim().toUpperCase() },
       include: { validations: true },
     });
 
@@ -26,9 +34,30 @@ export class TicketValidationsService {
       return {
         success: false,
         result: VALIDATION_RESULT_REJECTED,
-        rejectionReason: 'QR hash does not match any ticket',
+        rejectionReason: dto.qrHash
+          ? 'QR hash does not match any ticket'
+          : 'Folio does not match any ticket',
         validatedAt: now,
       };
+    }
+
+    // Un boleto real de otro evento nunca debe pasar, sin importar su
+    // estado: esta comprobación va antes que USED/ISSUED a propósito, para
+    // no filtrar el estado de un boleto que no pertenece a este evento.
+    const belongsToEvent = await this.assertEventZoneBelongsToEvent(
+      ticket.eventZoneId,
+      dto.eventId,
+    );
+
+    if (!belongsToEvent) {
+      const validation = await this.createRejectedValidation(
+        ticket.id,
+        validatorId,
+        OTHER_EVENT_REJECTION_REASON,
+        now,
+      );
+
+      return { success: false, ticket, validation };
     }
 
     if (ticket.status === 'USED') {
@@ -145,6 +174,41 @@ export class TicketValidationsService {
       where: { validatorId },
       orderBy: { validatedAt: 'desc' },
     });
+  }
+
+  /**
+   * El Ticket solo guarda eventZoneId (referencia opaca a venues-events-
+   * service): para saber si pertenece al evento seleccionado hay que
+   * preguntarle a ese servicio por las zonas reales del evento. Mismo
+   * patrón que purchases-service usa para verificar precios/zonas.
+   */
+  private async assertEventZoneBelongsToEvent(
+    eventZoneId: string,
+    eventId: string,
+  ): Promise<boolean> {
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/events/${eventId}`);
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar el evento (venues-events-service no responde)',
+      );
+    }
+
+    if (response.status === 404) {
+      throw new NotFoundException(`Event ${eventId} no existe`);
+    }
+    if (!response.ok) {
+      throw new ServiceUnavailableException('No se pudo verificar el evento');
+    }
+
+    const event = (await response.json()) as {
+      zones: Array<{ id: string }>;
+    };
+
+    return event.zones.some((zone) => zone.id === eventZoneId);
   }
 
   private async createRejectedValidation(

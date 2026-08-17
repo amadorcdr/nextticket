@@ -1,3 +1,3 @@
 export { ValidatorModule } from "./ValidatorModule";
-export * from "./mocks/validatorEvents";
-export * from "./mocks/validatorTickets";
+export * from "./types/validatorEvents";
+export * from "./types/validatorTickets";
