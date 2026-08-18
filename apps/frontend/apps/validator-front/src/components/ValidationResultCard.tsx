@@ -1,5 +1,5 @@
 import { Alert, Button, Icon } from "@nextticket-frontend/commons";
-import type { ValidationResult } from "../mocks/validatorTickets";
+import type { ValidationResult } from "../types/validatorTickets";
 
 interface ValidationResultCardProps {
     result: ValidationResult;
@@ -70,16 +70,18 @@ export function ValidationResultCard({ result, onValidateAnother }: ValidationRe
 
                 {result.outcome === "VALID" && ticket ? (
                     <>
-                        <DetailRow label="Asistente" value={ticket.attendeeName} />
                         <DetailRow label="Tipo de boleto" value={ticket.ticketType} />
-                        <DetailRow label="Zona / sección" value={ticket.section} />
+                        <DetailRow label="Zona / asiento" value={ticket.section} />
                     </>
                 ) : null}
 
                 {result.outcome === "USED" && ticket ? (
                     <>
-                        <DetailRow label="Asistente" value={ticket.attendeeName} />
-                        <DetailRow label="Hora de uso" value={`Hoy a las ${ticket.usedAt} h`} />
+                        <DetailRow label="Tipo de boleto" value={ticket.ticketType} />
+                        <DetailRow
+                            label="Hora de uso"
+                            value={ticket.usedAt ? `${ticket.usedAt} h` : "No disponible"}
+                        />
                     </>
                 ) : null}
             </div>

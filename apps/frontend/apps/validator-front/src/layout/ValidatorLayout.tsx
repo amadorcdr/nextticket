@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import {
     Breadcrumbs,
     Button,
-    Chip,
     Description,
     Icon,
     Logo,
@@ -15,7 +14,6 @@ import {
     useBreakpoint,
     useSession,
 } from "@nextticket-frontend/commons";
-import { VALIDATOR_EVENTS } from "../mocks/validatorEvents";
 
 /** Navegación exclusiva del rol Validador: únicamente "Eventos". */
 function ValidatorNav() {
@@ -59,9 +57,6 @@ function ValidatorNav() {
                                         <Icon.Calendar className="size-4" />
                                         <span>Eventos</span>
                                     </div>
-                                    <Chip variant="soft" color="default">
-                                        {VALIDATOR_EVENTS.length}
-                                    </Chip>
                                     <Tabs.Indicator className="rounded-full" />
                                 </Tabs.Tab>
                             </Tabs.List>
@@ -74,7 +69,7 @@ function ValidatorNav() {
                 <div className="rounded-[10px] bg-surface-secondary p-3 flex gap-3">
                     <Icon.Info className="size-4 shrink-0 mt-0.5 text-muted" />
                     <p className="text-xs text-muted">
-                        Modo demostración: los eventos y boletos son datos simulados.
+                        Los boletos validados quedan marcados como utilizados de inmediato.
                     </p>
                 </div>
                 <button
