@@ -38,13 +38,27 @@ else
     | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
+  # El repositorio de Docker tarda meses en publicar paquetes para una versión
+  # de Ubuntu recién salida. Si la de esta máquina no está, se usa la última
+  # LTS soportada: los paquetes son compatibles.
+  CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+  if ! curl -fsI "https://download.docker.com/linux/ubuntu/dists/${CODENAME}/Release" >/dev/null 2>&1; then
+    echo "   Docker aún no publica para '${CODENAME}'; se usa 'noble' (24.04 LTS)."
+    CODENAME=noble
+  fi
+
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
     | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
   sudo apt-get update -qq
-  sudo apt-get install -y -qq \
-    docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  if ! sudo apt-get install -y -qq \
+       docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+    # Último recurso: el Docker que trae Ubuntu. Versión más vieja, pero
+    # suficiente, y así el despliegue no se queda bloqueado.
+    echo "   Falló el repositorio de Docker; se instala el de Ubuntu."
+    sudo apt-get install -y -qq docker.io docker-compose-v2
+  fi
 
   # Para no tener que escribir sudo en cada comando de docker.
   sudo usermod -aG docker "$USER"
