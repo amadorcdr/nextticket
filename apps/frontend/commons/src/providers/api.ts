@@ -1,7 +1,19 @@
 import { useCallback } from "react";
 import { useSession } from "./SessionProvider";
 
-export const API_BASE_URL = "http://localhost:3001";
+/**
+ * Dónde vive el api-gateway.
+ *
+ * En desarrollo no hace falta configurar nada: cae en localhost. Para desplegar
+ * se define VITE_API_URL al compilar, porque el servidor está en otra máquina:
+ *
+ *   VITE_API_URL=http://54.x.x.x:3001 npm run build
+ *
+ * Vite reemplaza el valor en tiempo de compilación, así que el sitio ya sale
+ * apuntando al servidor correcto.
+ */
+export const API_BASE_URL =
+    import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export class ApiError extends Error {
     status: number;
