@@ -17,12 +17,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 WORKDIR /app
 
+# Sin esto pnpm intenta purgar node_modules de forma interactiva al detectar
+# que el lockfile y el árbol no coinciden, y aborta por no tener terminal.
+ENV CI=true
+
+# prisma.config.ts exige DATABASE_URL, y el postinstall del paquete ejecuta
+# `prisma generate` durante la instalación. Generar el cliente NO se conecta a
+# ninguna base: solo lee el schema. Esta URL es un relleno para que la variable
+# resuelva; la real llega por el entorno en la imagen final.
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
+
 # Primero solo los manifiestos: si no cambian, Docker reutiliza la capa de
 # dependencias y la construcción tarda segundos en vez de minutos.
 COPY apps/backend/venues-events-service/package.json apps/backend/venues-events-service/pnpm-lock.yaml ./
 COPY apps/backend/venues-events-service/prisma ./prisma
 COPY apps/backend/venues-events-service/prisma.config.ts ./prisma.config.ts
-RUN pnpm install --frozen-lockfile
+# pnpm 11 ignora por defecto los scripts de instalación de las dependencias y
+# termina con error. Aquí SÍ hacen falta: el de @prisma/engines coloca el motor
+# de consultas. Dentro de una imagen de construcción, reproducible y desechable,
+# permitirlos es seguro.
+RUN pnpm config set dangerouslyAllowAllBuilds true \
+    && pnpm install --frozen-lockfile
 
 COPY apps/backend/venues-events-service/ ./
 RUN pnpm run build
@@ -57,4 +72,8 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
 # Las migraciones se aplican al arrancar: así una instancia nueva o una
 # base recién creada quedan al día sin pasos manuales. `migrate deploy`
 # solo aplica lo pendiente y nunca borra datos.
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main"]
+# nest build emite en dist/main.js o en dist/src/main.js según lo que abarque
+# el rootDir: basta un .ts en la raíz del servicio (prisma.config.ts) para que
+# cambie. Se resuelve en tiempo de arranque en vez de fijar una ruta que se
+# rompe sola cuando alguien agrega o quita un archivo.
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node $(test -f dist/main.js && echo dist/main.js || echo dist/src/main.js)"]

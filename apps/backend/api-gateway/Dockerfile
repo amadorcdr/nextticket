@@ -17,11 +17,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 WORKDIR /app
 
+# Sin esto pnpm intenta purgar node_modules de forma interactiva al detectar
+# que el lockfile y el árbol no coinciden, y aborta por no tener terminal.
+ENV CI=true
+
 # Primero solo los manifiestos: si no cambian, Docker reutiliza la capa de
 # dependencias y la construcción tarda segundos en vez de minutos.
 COPY apps/backend/api-gateway/package.json apps/backend/api-gateway/pnpm-lock.yaml ./
 
-RUN pnpm install --frozen-lockfile
+# pnpm 11 ignora por defecto los scripts de instalación de las dependencias y
+# termina con error. Aquí SÍ hacen falta: el de @prisma/engines coloca el motor
+# de consultas. Dentro de una imagen de construcción, reproducible y desechable,
+# permitirlos es seguro.
+RUN pnpm config set dangerouslyAllowAllBuilds true \
+    && pnpm install --frozen-lockfile
 
 COPY apps/backend/api-gateway/ ./
 RUN pnpm run build
@@ -51,4 +60,8 @@ EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
   CMD curl -fsS http://localhost:3001/health || exit 1
 
-CMD ["node", "dist/main"]
+# nest build emite en dist/main.js o en dist/src/main.js según lo que abarque
+# el rootDir: basta un .ts en la raíz del servicio (prisma.config.ts) para que
+# cambie. Se resuelve en tiempo de arranque en vez de fijar una ruta que se
+# rompe sola cuando alguien agrega o quita un archivo.
+CMD ["sh", "-c", "node $(test -f dist/main.js && echo dist/main.js || echo dist/src/main.js)"]

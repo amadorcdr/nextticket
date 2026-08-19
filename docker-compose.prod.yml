@@ -95,7 +95,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_URL: http://api-gateway:3001
       TICKETS_SERVICE_URL: http://tickets-service:3005
-      VENUES_SERVICE_URL: http://venues-events-service:3003
+      # Ojo: aquí la variable se llama VENUES_EVENTS_URL. El api-gateway usa
+      # VENUES_SERVICE_URL para el MISMO servicio; son nombres distintos en
+      # código distinto y hay que respetar cada uno.
+      VENUES_EVENTS_URL: http://venues-events-service:3003
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -112,6 +115,7 @@ services:
       PORT: 3005
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_URL: http://api-gateway:3001
+      VENUES_EVENTS_URL: http://venues-events-service:3003
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
