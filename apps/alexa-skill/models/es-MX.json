@@ -99,7 +99,12 @@
             "muéstrame los eventos",
             "qué eventos puedo ver",
             "qué hay disponible",
-            "qué eventos tienes"
+            "qué eventos tienes",
+            "qué hay",
+            "qué eventos vienen",
+            "qué se viene",
+            "dime qué eventos hay",
+            "quiero ver los eventos"
           ]
         },
         {
@@ -122,8 +127,14 @@
             "cuántos boletos vendí en {eventName}",
             "ventas del evento {eventName}",
             "cuántos boletos lleva vendidos {eventName}",
+            "cuántas entradas se vendieron de {eventName}",
+            "cuánto se ha vendido de {eventName}",
+            "qué tanto se ha vendido de {eventName}",
+            "cómo va {eventName}",
             "cómo van los boletos vendidos",
-            "dime las ventas"
+            "dime las ventas",
+            "cómo van las ventas",
+            "cuántos boletos van vendidos"
           ]
         },
         {
@@ -146,8 +157,14 @@
             "lista las zonas de {eventName}",
             "muéstrame las zonas de {eventName}",
             "qué secciones tiene {eventName}",
+            "qué áreas tiene {eventName}",
+            "en qué zonas se divide {eventName}",
+            "cuánto cuestan las zonas de {eventName}",
+            "precios de {eventName}",
             "qué zonas hay disponibles",
-            "dime las zonas"
+            "dime las zonas",
+            "cuáles son las zonas",
+            "qué zonas hay"
           ]
         },
         {
@@ -179,8 +196,14 @@
             "quedan boletos en la zona {zoneName}",
             "cuántos asientos hay en {zoneName} de {eventName}",
             "disponibilidad de la zona {zoneName}",
+            "quedan lugares en {zoneName}",
+            "todavía hay lugares en {zoneName}",
+            "hay espacio en {zoneName}",
+            "cuántos quedan en {zoneName}",
+            "sigue habiendo lugares en {zoneName}",
             "hay lugares disponibles",
-            "queda disponibilidad"
+            "queda disponibilidad",
+            "quedan lugares"
           ]
         },
         {
@@ -204,7 +227,13 @@
             "detalles de {eventName}",
             "a qué hora es {eventName}",
             "en qué lugar es {eventName}",
-            "cuándo es el evento"
+            "dónde se hace {eventName}",
+            "qué día es {eventName}",
+            "información del evento {eventName}",
+            "cuéntame de {eventName}",
+            "cuándo es el evento",
+            "dónde es el evento",
+            "dame los detalles"
           ]
         },
         {
@@ -215,7 +244,13 @@
             "cuál evento genera más ingresos",
             "dime el evento con más recaudación",
             "cuál es el evento que más vende",
-            "ranking de eventos por ingresos"
+            "ranking de eventos por ingresos",
+            "cuál evento ha juntado más dinero",
+            "qué evento dejó más dinero",
+            "cuál es el que más vendió",
+            "cuál evento va mejor",
+            "qué evento está vendiendo mejor",
+            "cuál es el mejor evento"
           ]
         },
         {
@@ -233,11 +268,22 @@
           ],
           "samples": [
             "cuánto se recaudó en {monthName}",
+            "cuánto se recaudó para {monthName}",
             "cuáles fueron los ingresos de {monthName}",
             "dime la recaudación de {monthName}",
             "cuánto dinero se generó en {monthName}",
-            "ingresos totales de {monthName}",
+            "cuánto dinero se recaudó en {monthName}",
+            "cuánto dinero entró en {monthName}",
+            "qué cantidad se juntó en {monthName}",
+            "cuánto se juntó en {monthName}",
+            "cuánto juntamos en {monthName}",
             "cuánto vendimos en {monthName}",
+            "cuánto se vendió en {monthName}",
+            "ingresos totales de {monthName}",
+            "ventas totales de {monthName}",
+            "cuánto ganamos en {monthName}",
+            "cuánto generó la plataforma en {monthName}",
+            "total de {monthName}",
             "cuánto se ha recaudado"
           ]
         }
@@ -247,24 +293,22 @@
           "name": "EventType",
           "values": [
             {
-              "id": "placeholder_1",
+              "id": "ejemplo_1",
               "name": {
-                "value": "Rock Revolution Tour",
+                "value": "Rock en Vivo",
                 "synonyms": [
-                  "rock revolution",
-                  "el tour de rock",
-                  "rock"
+                  "rock",
+                  "el rock"
                 ]
               }
             },
             {
-              "id": "placeholder_2",
+              "id": "ejemplo_2",
               "name": {
-                "value": "Neon Nights Festival",
+                "value": "Festival Sabor Norteño",
                 "synonyms": [
-                  "neon nights",
-                  "el festival neon",
-                  "neon"
+                  "sabor norteño",
+                  "el festival"
                 ]
               }
             }
@@ -1460,11 +1504,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas consultar los boletos vendidos?"
+            "value": "¿De qué evento quieres las ventas? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento del que quieres saber las ventas."
+            "value": "Dime solo el nombre del evento, por ejemplo: Sinfónica de Otoño."
           }
         ]
       },
@@ -1473,11 +1517,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento quieres conocer las zonas?"
+            "value": "¿De qué evento quieres las zonas? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento y te digo sus zonas."
+            "value": "Dime solo el nombre del evento, por ejemplo: Festival Sabor Norteño."
           }
         ]
       },
@@ -1486,11 +1530,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas consultar la disponibilidad?"
+            "value": "¿De qué evento? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento para revisar los lugares."
+            "value": "Dime solo el nombre del evento, por ejemplo: Gira de Comedia."
           }
         ]
       },
@@ -1499,11 +1543,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué evento deseas la información?"
+            "value": "¿De qué evento? Di solo el nombre, por ejemplo: Rock en Vivo."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del evento del que quieres los detalles."
+            "value": "Dime solo el nombre del evento, por ejemplo: Sinfónica de Otoño."
           }
         ]
       },
@@ -1512,11 +1556,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿En qué zona deseas consultar la disponibilidad?"
+            "value": "¿Qué zona? Por ejemplo: general, preferente o vip."
           },
           {
             "type": "PlainText",
-            "value": "Dime la zona, por ejemplo VIP o general."
+            "value": "Dime la zona, por ejemplo: vip."
           }
         ]
       },
@@ -1525,11 +1569,11 @@
         "variations": [
           {
             "type": "PlainText",
-            "value": "¿De qué mes deseas consultar los ingresos?"
+            "value": "¿De qué mes? Por ejemplo: agosto."
           },
           {
             "type": "PlainText",
-            "value": "Dime el nombre del mes, por ejemplo mayo."
+            "value": "Dime el nombre del mes, por ejemplo: agosto."
           }
         ]
       }

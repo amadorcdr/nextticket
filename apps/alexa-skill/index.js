@@ -72,6 +72,7 @@ const API_ERRORS = {
   FORBIDDEN: "FORBIDDEN",
   NOT_FOUND: "NOT_FOUND",
   SERVER: "SERVER",
+  TUNNEL_DOWN: "TUNNEL_DOWN",
 };
 
 class ApiError extends Error {
@@ -96,7 +97,19 @@ function toApiError(error, path) {
 
   if (status === 401) return new ApiError(API_ERRORS.UNAUTHORIZED, detail, status);
   if (status === 403) return new ApiError(API_ERRORS.FORBIDDEN, detail, status);
-  if (status === 404) return new ApiError(API_ERRORS.NOT_FOUND, detail, status);
+  if (status === 404) {
+    // ngrok responde 404 con una página HTML cuando el túnel ya no existe.
+    // Sin distinguirlo, la skill diría "no encontré esa información" y mandaría
+    // a buscar un bug donde solo hay un túnel caído: el fallo más frecuente de
+    // esta configuración.
+    const cuerpo = error.response.data;
+    const esHtml = typeof cuerpo === "string" && /ngrok|<html/i.test(cuerpo.slice(0, 400));
+    if (esHtml) {
+      return new ApiError(API_ERRORS.TUNNEL_DOWN,
+        `El túnel de ${BASE_URL} ya no existe (ngrok reiniciado)`, status);
+    }
+    return new ApiError(API_ERRORS.NOT_FOUND, detail, status);
+  }
   return new ApiError(API_ERRORS.SERVER, `HTTP ${status}: ${detail}`, status);
 }
 
@@ -153,6 +166,28 @@ const api = {
 /** Filtrar en CloudWatch:  filter @message like /NEXTTICKET_ERROR/ */
 const LOG_TAG = "NEXTTICKET_ERROR";
 
+/**
+ * Último recurso, construido a mano y sin dependencias: ni i18n, ni
+ * responseBuilder, ni sesión. Si algo falla tan abajo que ni siquiera se puede
+ * armar una respuesta normal, se devuelve esto y la skill sigue viva.
+ */
+const RESPUESTA_DE_EMERGENCIA = {
+  version: "1.0",
+  response: {
+    outputSpeech: {
+      type: "SSML",
+      ssml: "<speak>Tuve un problema para procesar eso. ¿Qué deseas consultar?</speak>",
+    },
+    reprompt: {
+      outputSpeech: {
+        type: "SSML",
+        ssml: "<speak>¿Qué deseas consultar?</speak>",
+      },
+    },
+    shouldEndSession: false,
+  },
+};
+
 const SPEECH_BY_CODE = {
   [API_ERRORS.NOT_CONFIGURED]: "ERR_API_NOT_CONFIGURED",
   [API_ERRORS.NETWORK]: "ERR_API_NETWORK",
@@ -161,6 +196,7 @@ const SPEECH_BY_CODE = {
   [API_ERRORS.FORBIDDEN]: "ERR_API_FORBIDDEN",
   [API_ERRORS.NOT_FOUND]: "ERR_API_NOT_FOUND",
   [API_ERRORS.SERVER]: "ERR_API_SERVER",
+  [API_ERRORS.TUNNEL_DOWN]: "ERR_API_TUNNEL",
 };
 
 /**
@@ -170,13 +206,22 @@ const SPEECH_BY_CODE = {
 function reportError(source, error, context) {
   const isApiError = error instanceof ApiError;
   const code = isApiError ? error.code : "UNEXPECTED";
+  // `error` puede no ser un Error: una promesa rechazada con un string, por
+  // ejemplo. Se trata siempre como algo de lo que solo se puede leer.
+
+  let contexto = "{}";
+  try {
+    contexto = JSON.stringify(context || {});
+  } catch (circular) {
+    contexto = "(no serializable)";
+  }
 
   console.error(
-    `[${LOG_TAG}] source=${source} code=${code} status=${error.status || "-"} ` +
-    `message="${error.message}" context=${JSON.stringify(context || {})}`,
+    `[${LOG_TAG}] source=${source} code=${code} status=${(error && error.status) || "-"} ` +
+    `message="${(error && error.message) || error}" context=${contexto}`,
   );
 
-  if (!isApiError && error.stack) {
+  if (!isApiError && error && error.stack) {
     console.error(`[${LOG_TAG}] stack de ${source}:\n${error.stack}`);
   }
 
@@ -200,10 +245,17 @@ function safeHandle(handlerName, handleFn) {
         dialogState: request.dialogState || "-",
       });
 
-      return handlerInput.responseBuilder
-        .speak(`${t(key)} ${t("WHAT_TO_QUERY")}`)
-        .reprompt(t("WHAT_TO_QUERY"))
-        .getResponse();
+      try {
+        return handlerInput.responseBuilder
+          .speak(capSpeech(`${t(key)} ${t("WHAT_TO_QUERY")}`))
+          .reprompt(t("WHAT_TO_QUERY"))
+          .getResponse();
+      } catch (fallo) {
+        // Si hasta el manejo de errores falla, se responde con lo mínimo
+        // indispensable: la sesión sigue abierta y la skill no muere.
+        console.error(`[${LOG_TAG}] falló el propio manejo de ${handlerName}: ${fallo.message}`);
+        return RESPUESTA_DE_EMERGENCIA;
+      }
     }
   };
 }
@@ -222,22 +274,25 @@ function normalizeRole(role) {
   return ROLES.CUSTOMER;
 }
 
+// Todo lo que viene de la API se sanea AQUÍ, en el único punto de entrada,
+// para que ningún handler pueda meter texto crudo en la respuesta hablada.
 function toUser(raw) {
   const user = raw || {};
   return {
     id: user.id,
-    name: user.name || "",
+    name: sanitizeSpeech(user.name, 80),
     email: user.email || "",
     role: normalizeRole(user.role),
   };
 }
 
 function toZone(zone) {
+  const z = zone || {};
   return {
-    id: zone.id,
-    name: zone.publicName,
-    price: Number(zone.eventPrice) || 0,
-    available: Number(zone.availableCapacity) || 0,
+    id: z.id,
+    name: sanitizeSpeech(z.publicName, 60) || "sin nombre",
+    price: Number(z.eventPrice) || 0,
+    available: Number(z.availableCapacity) || 0,
   };
 }
 
@@ -247,16 +302,16 @@ function toEvent(raw) {
 
   return {
     id: raw.id,
-    name: raw.name,
+    name: sanitizeSpeech(raw.name, 100) || "evento sin nombre",
     startsAt: raw.startsAt,
     status: raw.status,
     organizerId: raw.organizerId,
     venue: {
-      name: venue.name || "",
-      city: venue.city || "",
-      state: venue.state || "",
+      name: sanitizeSpeech(venue.name, 80),
+      city: sanitizeSpeech(venue.city, 60),
+      state: sanitizeSpeech(venue.state, 60),
     },
-    zones: (raw.zones || []).map(toZone),
+    zones: (Array.isArray(raw.zones) ? raw.zones : []).map(toZone),
   };
 }
 
@@ -392,6 +447,53 @@ function normalizeSeed(input) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Deja cualquier texto seguro para meterlo en la respuesta hablada.
+ *
+ * El SDK envuelve lo que se le pasa en <speak>…</speak>, así que un nombre con
+ * "&" o "<" produce SSML inválido y Alexa RECHAZA la respuesta entera: la skill
+ * se cae por un dato, no por un bug. Un evento llamado "Rock & Roll" bastaba.
+ *
+ * También se recortan los textos larguísimos: Alexa corta la respuesta si se
+ * pasa de unos 8000 caracteres.
+ */
+function sanitizeSpeech(value, maxLen = 300) {
+  if (value === null || value === undefined) return "";
+
+  let texto = String(value)
+    // Caracteres de control: no se pronuncian y ensucian el SSML.
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (texto.length > maxLen) {
+    texto = `${texto.slice(0, maxLen - 1).trimEnd()}…`;
+  }
+
+  // Escapado XML. El & va primero o se escaparían dos veces los demás.
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Límite duro de la respuesta hablada. Si una lista crece de más (cien eventos,
+ * por ejemplo), se corta en una frase completa en vez de dejar que Alexa
+ * rechace la respuesta por longitud.
+ */
+const MAX_SPEECH_CHARS = 6000;
+
+function capSpeech(texto) {
+  const limpio = String(texto || "").trim();
+  if (limpio.length <= MAX_SPEECH_CHARS) return limpio;
+
+  const cortado = limpio.slice(0, MAX_SPEECH_CHARS);
+  const ultimoPunto = cortado.lastIndexOf(". ");
+  console.warn(`[SPEECH] respuesta de ${limpio.length} caracteres recortada`);
+  return ultimoPunto > 0 ? cortado.slice(0, ultimoPunto + 1) : `${cortado}…`;
+}
+
 /** Nunca se escriben credenciales en CloudWatch. */
 function maskSecret(value) {
   if (!value) return "(vacío)";
@@ -412,10 +514,13 @@ function getSlotValue(slots, slotName) {
       authority.status.code === "ER_SUCCESS_MATCH" &&
       authority.values &&
       authority.values.length > 0;
-    if (matched) return authority.values[0].value.name;
+    if (matched) return sanitizeSpeech(authority.values[0].value.name, 100);
   }
 
-  return slot.value || null;
+  // Lo que dicta el usuario también se sanea: se repite en voz alta cuando no
+  // se encuentra ("No encontré el evento X"), y un valor con & o < rompería el
+  // SSML igual que un dato de la API.
+  return sanitizeSpeech(slot.value, 100) || null;
 }
 
 function getSlots(handlerInput) {
@@ -598,12 +703,13 @@ const es = {
   // ── Consultas ──
   NO_ACTIVE_EVENTS: "No tienes eventos activos en este momento. %s",
   ACTIVE_EVENTS_ONE: "Tienes 1 evento activo: %s. ¿Quieres saber cómo van sus ventas?",
-  ACTIVE_EVENTS_MANY: "Tienes %s eventos activos: %s. ¿De cuál quieres más detalles?",
+  ACTIVE_EVENTS_MANY: "Tienes %s eventos activos: %s. Di el nombre de uno para saber más.",
 
   // Catálogo para quien no organiza: no son "sus" eventos, son los que hay.
   NO_EVENTS_AVAILABLE: "Ahora mismo no hay eventos publicados. %s",
   EVENTS_AVAILABLE_ONE: "Hay 1 evento disponible: %s. ¿Quieres saber sus zonas o su disponibilidad?",
-  EVENTS_AVAILABLE_MANY: "Hay %s eventos disponibles: %s. ¿De cuál quieres más detalles?",
+  EVENTS_AVAILABLE_MANY: "Hay %s eventos disponibles: %s. Di el nombre de uno para saber más.",
+  // Con un solo evento sí cabe el detalle; con varios, solo el nombre.
   EVENT_LIST_ITEM: "%s, en %s el %s",
 
   // Se pregunta por un evento SIEMPRE ofreciendo la lista: si el usuario no
@@ -647,6 +753,7 @@ const es = {
   ERR_API_FORBIDDEN: "Tu cuenta no tiene permiso para consultar esa información en el servidor.",
   ERR_API_NOT_FOUND: "El servidor no encontró esa información.",
   ERR_API_SERVER: "El servidor de Next Ticket respondió con un error interno.",
+  ERR_API_TUNNEL: "Perdí la conexión con el servidor de Next Ticket. Hay que revisar que siga publicado.",
   ERR_UNEXPECTED: "Ocurrió un error inesperado al procesar tu consulta.",
 
   // ── Ayuda y salida ──
@@ -792,17 +899,28 @@ function getFirstName(session) {
 }
 
 function menuForRole(t, role) {
-  if (role === ROLES.ORGANIZER) return t("MENU_ORGANIZER");
-  if (role === ROLES.ADMIN) return t("MENU_ADMIN");
+  const conocido = rolConocido(role);
+  if (conocido === ROLES.ORGANIZER) return t("MENU_ORGANIZER");
+  if (conocido === ROLES.ADMIN) return t("MENU_ADMIN");
   return t("MENU_CUSTOMER");
 }
 
+/**
+ * Un rol desconocido (sesión vieja, dato corrupto) no debe filtrar la clave de
+ * i18n a la voz: se oiría "tu cuenta es de tipo ROLE_NAME_MARCIANO".
+ */
+function rolConocido(role) {
+  return role === ROLES.ORGANIZER || role === ROLES.ADMIN || role === ROLES.CUSTOMER
+    ? role
+    : ROLES.CUSTOMER;
+}
+
 function roleName(t, role) {
-  return t(`ROLE_NAME_${role || ROLES.CUSTOMER}`);
+  return t(`ROLE_NAME_${rolConocido(role)}`);
 }
 
 function rolePlural(t, role) {
-  return t(`ROLE_PLURAL_${role || ROLES.CUSTOMER}`);
+  return t(`ROLE_PLURAL_${rolConocido(role)}`);
 }
 
 /**
@@ -1232,9 +1350,13 @@ const GetActiveEventsIntentHandler = {
           .getResponse();
       }
 
-      const items = events.map((event) =>
-        t("EVENT_LIST_ITEM", event.name, event.venue.name, formatDate(event.startsAt, handlerInput.locale)),
-      );
+      // Con un solo evento se puede dar el detalle; con varios, solo el nombre:
+      // una lista de cuatro con recinto y fecha es imposible de retener, y el
+      // usuario termina repitiéndola completa en vez de decir un nombre.
+      const items =
+        events.length === 1
+          ? [t("EVENT_LIST_ITEM", events[0].name, events[0].venue.name, formatDate(events[0].startsAt, handlerInput.locale))]
+          : events.map((event) => event.name);
 
       // Con un solo evento se recuerda: lo siguiente que pregunte ya tiene contexto.
       if (events.length === 1) rememberEvent(handlerInput, events[0]);
@@ -1626,19 +1748,35 @@ const ErrorHandler = {
     return true;
   },
   handle(handlerInput, error) {
-    const t = safeT(handlerInput);
-    const session = getSession(handlerInput);
+    // Este handler es la última red: si él revienta, la skill muere. Por eso
+    // todo su cuerpo va protegido y termina en una respuesta literal.
+    try {
+      const t = safeT(handlerInput);
+      let session = {};
+      try {
+        session = getSession(handlerInput);
+      } catch (sinSesion) {
+        // Sin attributesManager utilizable: se sigue con sesión vacía.
+      }
 
-    const key = reportError("ErrorHandler", error, {
-      type: handlerInput.requestEnvelope.request.type,
-    });
+      let tipo = "-";
+      try {
+        tipo = handlerInput.requestEnvelope.request.type;
+      } catch (sinTipo) {
+        // Sobre de petición malformado: no impide responder.
+      }
 
-    const nextStep = isLoggedIn(session) ? menuForRole(t, session.userRole) : t("ASK_SEED");
+      const key = reportError("ErrorHandler", error, { type: tipo });
+      const siguiente = isLoggedIn(session) ? menuForRole(t, session.userRole) : t("ASK_SEED");
 
-    return handlerInput.responseBuilder
-      .speak(`${t(key)} ${nextStep}`)
-      .reprompt(t("WHAT_TO_QUERY"))
-      .getResponse();
+      return handlerInput.responseBuilder
+        .speak(capSpeech(`${t(key)} ${siguiente}`))
+        .reprompt(t("WHAT_TO_QUERY"))
+        .getResponse();
+    } catch (fallo) {
+      console.error(`[${LOG_TAG}] el ErrorHandler falló: ${fallo && fallo.message}`);
+      return RESPUESTA_DE_EMERGENCIA;
+    }
   },
 };
 

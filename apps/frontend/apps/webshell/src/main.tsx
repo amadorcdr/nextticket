@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { Router, ThemeProvider, CartProvider, SessionProvider, ToastProvider, RequireRole } from '@nextticket-frontend/commons';
+import { Router, ThemeProvider, CartProvider, SessionProvider, ToastProvider, RequireRole, ProfilePage } from '@nextticket-frontend/commons';
 
 import { App } from './App';
 import { AuthModule, SignIn, SignUp, ActivateAccount, ForgotPassword, ResetPassword } from "@nextticket-frontend/auth-front";
@@ -20,7 +20,7 @@ import {
 } from "@nextticket-frontend/purchases-front";
 import { ValidatorModule } from "@nextticket-frontend/validator-front";
 import { UsersModule } from "@nextticket-frontend/users-front";
-import { OrganizerLayout, OrganizerDashboard, MyEvents, SalesEvent, ZonesEditor } from "@nextticket-frontend/organizer-front";
+import { OrganizerLayout, OrganizerDashboard, MyEvents, EventFormPage, SalesEvent, ZonesEditor } from "@nextticket-frontend/organizer-front";
 import { Dashboard } from "./Dashboard";
 import { Home } from "./Home";
 import { NotFound } from "./NotFound";
@@ -47,8 +47,11 @@ createRoot(document.getElementById('root')!).render(
                         <Router.Route element={<OrganizerLayout />}>
                             <Router.Route path="organizer/dashboard" element={<OrganizerDashboard />} />
                             <Router.Route path="organizer/myEvents" element={<MyEvents />} />
+                            <Router.Route path="organizer/myEvents/new" element={<EventFormPage />} />
+                            <Router.Route path="organizer/myEvents/:id/edit" element={<EventFormPage />} />
                             <Router.Route path="organizer/salesEvent" element={<SalesEvent />} />
                             <Router.Route path="organizer/zonas" element={<ZonesEditor />} />
+                            <Router.Route path="organizer/profile" element={<ProfilePage />} />
                         </Router.Route>
                     </Router.Route>
 
@@ -77,6 +80,7 @@ createRoot(document.getElementById('root')!).render(
                             />
                             <Router.Route path="mis-boletos" element={<TicketsModule />} />
                             <Router.Route path="mis-compras" element={<MyPurchases />} />
+                            <Router.Route path="perfil" element={<ProfilePage />} />
                         </Router.Route>
                     </Router.Route>
 
@@ -105,6 +109,7 @@ createRoot(document.getElementById('root')!).render(
                             <Router.Route path="events/*" element={<EventsModule />} />
                             <Router.Route path="users/*" element={<UsersModule />} />
                             <Router.Route path="tickets/:eventId" element={<EventSalesSummary />} />
+                            <Router.Route path="profile" element={<ProfilePage />} />
                         </Router.Route>
                     </Router.Route>
 

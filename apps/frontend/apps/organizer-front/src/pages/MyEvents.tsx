@@ -1,19 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { API_BASE_URL, ApiError, Button, Icon, ListBox, Pagination, Select, SearchField, ScrollShadow, toast, useApi, useSession } from "@nextticket-frontend/commons";
-import { EventFormModal, type EventFormMode, type EventFormValues } from "../components/EventFormModal";
+import { ApiError, Button, Icon, ListBox, Pagination, Select, SearchField, ScrollShadow, Router, toast, useApi, useSession } from "@nextticket-frontend/commons";
 import { ModalCancelEvent } from "../components/ModalCancelEvent";
 import { OrganizerEventCard } from "../components/OrganizerEventCard";
-import {
-  toIsoDateTime,
-  toOrganizerEventRow,
-  uploadEventImage,
-  type ApiEvent,
-  type ApiEventCategory,
-  type ApiTicketsEventZoneStats,
-  type ApiVenue,
-  type OrganizerEventRow,
-  type OrganizerEventStatus,
-} from "../api";
+import { toOrganizerEventRow, type ApiEvent, type ApiTicketsEventZoneStats, type OrganizerEventRow, type OrganizerEventStatus } from "../api";
 
 const ALL_STATUSES: OrganizerEventStatus[] = ["Activo", "Inactivo"];
 
@@ -32,10 +21,9 @@ const EMPTY_TICKET_STATS: ApiTicketsEventZoneStats = { total: 0, sold: 0, valida
 export function MyEvents() {
   const api = useApi();
   const { user } = useSession();
+  const navigate = Router.useNavigate();
 
   const [events, setEvents] = useState<OrganizerEventRow[]>([]);
-  const [venues, setVenues] = useState<ApiVenue[]>([]);
-  const [categories, setCategories] = useState<ApiEventCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,11 +31,6 @@ export function MyEvents() {
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(ALL_STATUSES));
   const [venueFilter, setVenueFilter] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<EventFormMode>("create");
-  const [selectedEvent, setSelectedEvent] = useState<OrganizerEventRow | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [eventToCancel, setEventToCancel] = useState<OrganizerEventRow | null>(null);
@@ -82,22 +65,6 @@ export function MyEvents() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [user?.id]);
 
-  useEffect(() => {
-    api
-      .get<Paginated<ApiVenue>>(`/venues?limit=${FETCH_LIMIT}`)
-      .then((res) => setVenues(res.data.filter((v) => v.status !== "REMOVED" && v.status !== "INACTIVE" && v.status !== "UNDER_MAINTENANCE")))
-      .catch(() => {
-        // Si falla, el selector de recinto simplemente queda vacío.
-      });
-    api
-      .get<Paginated<ApiEventCategory>>(`/event-categories?limit=${FETCH_LIMIT}`)
-      .then((res) => setCategories(res.data.filter((c) => c.status === "ACTIVE")))
-      .catch(() => {
-        // Si falla, el selector de categoría simplemente queda vacío.
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const venueOptions = useMemo(() => {
     const names = new Set(events.map((ev) => ev.venue));
     return Array.from(names);
@@ -122,72 +89,12 @@ export function MyEvents() {
   const end = Math.min(currentPage * PAGE_SIZE, filtered.length);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const openCreate = () => {
-    setSelectedEvent(null);
-    setModalMode("create");
-    setModalOpen(true);
-  };
-
-  const openEdit = (ev: OrganizerEventRow) => {
-    setSelectedEvent(ev);
-    setModalMode("edit");
-    setModalOpen(true);
-  };
+  const openCreate = () => navigate("/organizer/myEvents/new");
+  const openEdit = (ev: OrganizerEventRow) => navigate(`/organizer/myEvents/${ev.id}/edit`);
 
   const openCancel = (ev: OrganizerEventRow) => {
     setEventToCancel(ev);
     setCancelOpen(true);
-  };
-
-  const handleSave = async (data: EventFormValues) => {
-    setSaving(true);
-    try {
-      const payload = {
-        venueId: data.venueId,
-        name: data.nombre,
-        startsAt: toIsoDateTime(data.fecha, data.horaInicio),
-        endsAt: toIsoDateTime(data.fecha, data.horaFin),
-        description: data.descripcion.trim() || undefined,
-      };
-
-      let eventId: string;
-
-      if (modalMode === "create") {
-        const created = await api.post<ApiEvent>("/events", {
-          ...payload,
-          categoryIds: data.categoryId ? [data.categoryId] : undefined,
-        });
-        eventId = created.id;
-      } else {
-        if (!selectedEvent) return;
-        eventId = selectedEvent.id;
-        await api.patch<ApiEvent>(`/events/${eventId}`, payload);
-
-        if (data.categoryId !== selectedEvent.categoryId) {
-          if (selectedEvent.categoryId) {
-            await api.del(`/events/${eventId}/categories/${selectedEvent.categoryId}`).catch(() => {
-              // Si ya no existía la asignación, no hay nada que limpiar.
-            });
-          }
-          if (data.categoryId) {
-            await api.post(`/events/${eventId}/categories`, { categoryIds: [data.categoryId] });
-          }
-        }
-      }
-
-      if (data.imageFile) {
-        await uploadEventImage(API_BASE_URL, eventId, data.imageFile, user?.token);
-      }
-
-      toast.success(modalMode === "create" ? "Evento creado" : "Evento actualizado");
-      setModalOpen(false);
-      load();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "No se pudo guardar el evento";
-      toast.danger(message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   const confirmCancel = async () => {
@@ -349,17 +256,6 @@ export function MyEvents() {
           </div>
         </>
       )}
-
-      <EventFormModal
-        open={modalOpen}
-        mode={modalMode}
-        event={selectedEvent}
-        venues={venues}
-        categories={categories}
-        saving={saving}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSave}
-      />
 
       <ModalCancelEvent
         open={cancelOpen}

@@ -170,14 +170,9 @@ export function VenueCanvasCreate() {
     if (step === "info") {
         return (
             <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-                <div className="flex items-center gap-3">
-                    <Button size="sm" variant="ghost" isIconOnly onPress={() => navigate("/venues")}>
-                        <Icon.ArrowLeft />
-                    </Button>
-                    <div>
-                        <h3>Crear recinto</h3>
-                        <p className="text-muted text-xs mt-0.5">Datos generales, antes de diseñar pisos y zonas.</p>
-                    </div>
+                <div>
+                    <h3>Crear recinto</h3>
+                    <p className="text-muted text-xs mt-0.5">Datos generales, antes de diseñar pisos y zonas.</p>
                 </div>
 
                 <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
@@ -240,7 +235,7 @@ export function VenueCanvasCreate() {
                     </div>
                 </section>
 
-                <div className="flex gap-2 justify-end sticky bottom-0 bg-background border-t border-border pt-3 pb-1">
+                <div className="flex gap-2 justify-end border-t border-border pt-3 pb-1">
                     <Button size="sm" variant="secondary" onPress={() => navigate("/venues")}>
                         Cancelar
                     </Button>

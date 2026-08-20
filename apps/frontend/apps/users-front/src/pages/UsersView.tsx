@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, Button, Icon, Pagination, toast, useApi } from "@nextticket-frontend/commons";
+import { ApiError, Button, Icon, Pagination, Router, toast, useApi } from "@nextticket-frontend/commons";
 import { UserTable } from "../components/UserTable";
 import { UserFilters, type StatusFilter } from "../components/UserFilters";
-import { UserFormModal, type UserFormMode, type UserFormValues } from "../components/UserFormModal";
 import { ModalDeleteUser } from "../components/ModalDeleteUser";
-import { ROLE_ID_BY_ROLE, toAdminUser, type AdminUser, type AdminUserRole, type ApiUser } from "../types/user";
+import { toAdminUser, type AdminUser, type AdminUserRole, type ApiUser } from "../types/user";
 
 const PAGE_SIZE = 10;
 // El backend no soporta busqueda/filtro por rol en la query todavia (solo
@@ -17,6 +16,7 @@ interface UsersListResponse {
 
 export function UsersView() {
     const api = useApi();
+    const navigate = Router.useNavigate();
 
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
@@ -24,11 +24,6 @@ export function UsersView() {
     const [roleFilter, setRoleFilter] = useState<AdminUserRole | "all">("all");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [page, setPage] = useState(1);
-
-    const [modalOpen, setModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<UserFormMode>("create");
-    const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-    const [saving, setSaving] = useState(false);
 
     const [toggleOpen, setToggleOpen] = useState(false);
     const [userToToggle, setUserToToggle] = useState<AdminUser | null>(null);
@@ -61,16 +56,8 @@ export function UsersView() {
     const currentPage = Math.min(page, totalPages);
     const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-    const openEdit = (user: AdminUser) => {
-        setSelectedUser(user);
-        setModalMode("edit");
-        setModalOpen(true);
-    };
-    const openCreate = () => {
-        setSelectedUser(null);
-        setModalMode("create");
-        setModalOpen(true);
-    };
+    const openEdit = (user: AdminUser) => navigate(`/users/${user.id}/edit`);
+    const openCreate = () => navigate("/users/new");
 
     const openToggleStatus = (user: AdminUser) => {
         setUserToToggle(user);
@@ -88,44 +75,6 @@ export function UsersView() {
                 toast.success(nextStatus ? "Usuario activado" : "Usuario desactivado");
             })
             .catch((err) => toast.danger(err instanceof ApiError ? err.message : "No se pudo actualizar el estado"));
-    };
-
-    const handleSave = async (data: UserFormValues) => {
-        setSaving(true);
-        try {
-            if (modalMode === "create") {
-                const created = await api.post<ApiUser>("/users", {
-                    name: data.name,
-                    email: data.email,
-                    roleId: ROLE_ID_BY_ROLE[data.role],
-                });
-                setUsers((prev) => [toAdminUser(created), ...prev]);
-                toast.success(
-                    `Usuario registrado correctamente. Se envió un correo a ${created.email} para que active su cuenta y establezca su contraseña.`,
-                );
-            } else if (selectedUser) {
-                const updated = await api.patch<ApiUser>(`/users/${selectedUser.id}`, {
-                    name: data.name,
-                    email: data.email,
-                    ...(data.password ? { password: data.password } : {}),
-                });
-
-                let finalUser = updated;
-                if (data.role !== selectedUser.role) {
-                    finalUser = await api.patch<ApiUser>(`/users/${selectedUser.id}/role`, {
-                        roleId: ROLE_ID_BY_ROLE[data.role],
-                    });
-                }
-
-                setUsers((prev) => prev.map((u) => (u.id === selectedUser.id ? toAdminUser(finalUser) : u)));
-                toast.success("Usuario actualizado");
-            }
-            setModalOpen(false);
-        } catch (err) {
-            toast.danger(err instanceof ApiError ? err.message : "No se pudo guardar el usuario");
-        } finally {
-            setSaving(false);
-        }
     };
 
     return (
@@ -181,15 +130,6 @@ export function UsersView() {
                     </div>
                 </>
             )}
-
-            <UserFormModal
-                open={modalOpen}
-                mode={modalMode}
-                user={selectedUser}
-                saving={saving}
-                onClose={() => setModalOpen(false)}
-                onSave={handleSave}
-            />
 
             <ModalDeleteUser
                 open={toggleOpen}

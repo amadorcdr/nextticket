@@ -106,6 +106,53 @@ export class UsersService {
   }
 
   /**
+   * Bootstrap del primer ADMIN: sin esto, una base de datos nueva no tiene
+   * forma de crear un ADMIN (POST /users con rol ADMIN ya requiere ser
+   * ADMIN). Se corre en cada arranque pero es un no-op en cuanto ya existe
+   * al menos un ADMIN, así que es seguro dejarlo siempre encendido — nunca
+   * toca contraseñas de cuentas ya creadas.
+   */
+  async ensureDefaultAdmin(email: string, password: string) {
+    const adminRole = await this.prisma.role.findUnique({
+      where: { name: 'ADMIN' },
+    });
+    if (!adminRole) return;
+
+    const existingAdmin = await this.prisma.user.findFirst({
+      where: { roleId: adminRole.id },
+    });
+    if (existingAdmin) return;
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingByEmail) {
+      console.warn(
+        `[seed] Ya existe una cuenta con el correo ${email} pero no tiene rol ADMIN; no se creó un admin por defecto. Asígnale el rol ADMIN manualmente o usa SEED_ADMIN_EMAIL con otro correo.`,
+      );
+      return;
+    }
+
+    const hashed = await hash(password, 10);
+    await this.prisma.user.create({
+      data: {
+        name: 'Administrador',
+        email,
+        password: hashed,
+        accountStatus: 'ACTIVE',
+        roleId: adminRole.id,
+      },
+    });
+
+    console.log('============================================================');
+    console.log(' Cuenta ADMIN creada automáticamente (primer arranque)');
+    console.log(` Correo:      ${email}`);
+    console.log(` Contraseña:  ${password}`);
+    console.log(' Inicia sesión y cámbiala desde Perfil en cuanto puedas.');
+    console.log('============================================================');
+  }
+
+  /**
    * Alta administrativa: crea al usuario como PENDING (sin contraseña) y
    * dispara el correo de activación. Es el mismo camino que usa el
    * autorregistro de Cliente (ver AuthService.register) — la única

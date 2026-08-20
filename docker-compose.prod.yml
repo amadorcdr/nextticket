@@ -1,0 +1,152 @@
+# NextTicket completo en contenedores: base, caché y los 5 microservicios.
+# ============================================================================
+# Esto es lo que corre en la EC2. A diferencia de docker-compose.yml (que solo
+# levanta Postgres y Redis para desarrollar en local), aquí TODO va en
+# contenedores, para que al encender la máquina el proyecto quede en pie solo.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Las variables sensibles se leen de un archivo .env junto a este archivo.
+# Ver .env.prod.example.
+# ============================================================================
+name: nextticket
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: nextticket-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en el .env}
+    # Sin "ports": la base NO se expone a internet. Solo la alcanzan los
+    # servicios, por la red interna de Docker.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: nextticket-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/backend/auth-service/Dockerfile
+    container_name: nextticket-auth
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/auth_db?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3002
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en el .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@nextticket.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
+      GATEWAY_URL: http://api-gateway:3001
+      FRONTEND_URL: ${FRONTEND_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-NextTicket <no-reply@nextticket.local>}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  venues-events-service:
+    build:
+      context: .
+      dockerfile: apps/backend/venues-events-service/Dockerfile
+    container_name: nextticket-venues
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/venues_events_db?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3003
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_URL: http://api-gateway:3001
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  purchases-service:
+    build:
+      context: .
+      dockerfile: apps/backend/purchases-service/Dockerfile
+    container_name: nextticket-purchases
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/purchases_db?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3004
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_URL: http://api-gateway:3001
+      TICKETS_SERVICE_URL: http://tickets-service:3005
+      # Ojo: aquí la variable se llama VENUES_EVENTS_URL. El api-gateway usa
+      # VENUES_SERVICE_URL para el MISMO servicio; son nombres distintos en
+      # código distinto y hay que respetar cada uno.
+      VENUES_EVENTS_URL: http://venues-events-service:3003
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  tickets-service:
+    build:
+      context: .
+      dockerfile: apps/backend/tickets-service/Dockerfile
+    container_name: nextticket-tickets
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/tickets_db?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3005
+      JWT_SECRET: ${JWT_SECRET}
+      GATEWAY_URL: http://api-gateway:3001
+      VENUES_EVENTS_URL: http://venues-events-service:3003
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/backend/api-gateway/Dockerfile
+    container_name: nextticket-gateway
+    restart: unless-stopped
+    # El ÚNICO puerto abierto al exterior. Todo entra por aquí.
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:3002
+      VENUES_SERVICE_URL: http://venues-events-service:3003
+      PURCHASES_SERVICE_URL: http://purchases-service:3004
+      TICKETS_SERVICE_URL: http://tickets-service:3005
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      auth-service: { condition: service_started }
+      venues-events-service: { condition: service_started }
+      purchases-service: { condition: service_started }
+      tickets-service: { condition: service_started }
+
+volumes:
+  postgres_data:
+    # Mismo nombre que en desarrollo, para poder probar este compose en local
+    # contra las bases que ya existen sin volver a sembrar nada.
+    name: purchases-service_purchases_db_data

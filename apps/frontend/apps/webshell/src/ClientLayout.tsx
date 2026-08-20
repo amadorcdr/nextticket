@@ -1,12 +1,11 @@
-import { useState } from "react";
 import {
+    Breadcrumbs,
     Button,
     Chip,
     Dropdown,
     getInitials,
     Icon,
     Logo,
-    ProfileModal,
     Router,
     ScrollShadow,
     Tabs,
@@ -31,7 +30,7 @@ export function ClientLayout() {
     const navigate = Router.useNavigate();
     const { user, isAuthenticated, signOut } = useSession();
     const { seats } = useCart();
-    const [profileOpen, setProfileOpen] = useState(false);
+    const isProfileRoute = location.pathname === "/perfil";
 
     // "Mis boletos"/"Mis compras" solo tienen sentido para quien ya inició
     // sesión como cliente: sin sesión, o con otro rol, no hay nada propio
@@ -140,7 +139,7 @@ export function ClientLayout() {
                                     <Dropdown.Item
                                         id="perfil"
                                         textValue="Mi perfil"
-                                        onAction={() => setProfileOpen(true)}
+                                        onAction={() => navigate("/perfil")}
                                     >
                                         <Icon.User className="size-4" />
                                         Mi perfil
@@ -184,6 +183,15 @@ export function ClientLayout() {
                 </div>
             </header>
 
+            {isProfileRoute && (
+                <div className="px-2">
+                    <Breadcrumbs>
+                        <Breadcrumbs.Item>Cliente</Breadcrumbs.Item>
+                        <Breadcrumbs.Item>Perfil</Breadcrumbs.Item>
+                    </Breadcrumbs>
+                </div>
+            )}
+
             <ScrollShadow className="flex-1 overflow-auto relative pb-[88px] md:pb-2 px-2">
                 <Router.Outlet />
             </ScrollShadow>
@@ -223,8 +231,6 @@ export function ClientLayout() {
                     </Tabs>
                 </ScrollShadow>
             </div>
-
-            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
         </div>
     );
 }

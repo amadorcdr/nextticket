@@ -1,4 +1,4 @@
-import { Router } from "@nextticket-frontend/commons";
+import { ProfilePage, Router } from "@nextticket-frontend/commons";
 import { SelectedEventProvider } from "./context/SelectedEventContext";
 import { ValidatorLayout } from "./layout/ValidatorLayout";
 import { EventsPage } from "./pages/EventsPage";
@@ -16,6 +16,7 @@ export function ValidatorModule() {
                 <Router.Routes>
                     <Router.Route index element={<EventsPage />} />
                     <Router.Route path="validate" element={<ValidationPage />} />
+                    <Router.Route path="profile" element={<ProfilePage />} />
                     <Router.Route path="*" element={<Router.Navigate to="/validator" replace />} />
                 </Router.Routes>
             </ValidatorLayout>

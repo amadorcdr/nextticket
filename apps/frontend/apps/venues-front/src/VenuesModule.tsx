@@ -78,7 +78,7 @@ export function VenuesModule() {
               <h2>Recintos</h2>
               <p className="text-muted text-xs mt-0.5">Consulta y administra los recintos registrados en la plataforma.</p>
             </div>
-            <Button className="shrink-0" onPress={() => navigate("canvas")}>
+            <Button size="sm" className="shrink-0" onPress={() => navigate("canvas")}>
               <Icon.HousePlus />
               Crear recinto
             </Button>
