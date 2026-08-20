@@ -167,15 +167,33 @@ está en el grupo de seguridad.
 
 ### Datos de prueba
 
-```bash
-cd ~/nextticket && sudo docker compose -f docker-compose.prod.yml exec venues-events-service ./node_modules/.bin/ts-node src/seed/seed-dev-data.ts
-```
-
-Y las cuentas con sus palabras clave para Alexa:
+**Eventos y recintos.** La imagen solo lleva el código compilado (`dist`), no
+`src`, así que el sembrador no está dentro del contenedor. Se monta al vuelo
+desde el repositorio clonado:
 
 ```bash
-cd ~/nextticket && bash scripts/seed-users.sh && bash apps/alexa-skill/seed-alexa.sh
+cd ~/nextticket && sudo docker compose -f docker-compose.prod.yml run --rm --no-deps -v ~/nextticket/apps/backend/venues-events-service/src:/app/src venues-events-service ./node_modules/.bin/ts-node src/seed/seed-dev-data.ts
 ```
+
+**Cuentas de prueba.** El script habla con la API, y en el servidor el único
+puerto abierto es el del gateway, así que hay que decírselo:
+
+```bash
+cd ~/nextticket && AUTH_URL=http://localhost:3001 bash scripts/seed-users.sh
+```
+
+**Palabras clave de Alexa:**
+
+```bash
+cd ~/nextticket && sudo bash apps/alexa-skill/seed-alexa.sh
+```
+
+> El `sudo` en el último hace falta porque el script llama a `docker` y el
+> usuario `ubuntu` solo entra al grupo `docker` tras volver a iniciar sesión.
+>
+> Nota: `admin@nextticket.com` se crea **solo** en el primer arranque de
+> `auth-service`; esos scripts crean las cuentas de prueba adicionales que usa
+> la skill (organizador, cliente, validador).
 
 ---
 
