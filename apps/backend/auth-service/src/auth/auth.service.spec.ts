@@ -50,6 +50,7 @@ describe('AuthService', () => {
   const activation = {
     issueAndSendActivation: jest.fn(),
     consumeToken: jest.fn(),
+    sendWelcomeEmail: jest.fn(),
   };
 
   const passwordReset = {
@@ -159,6 +160,7 @@ describe('AuthService', () => {
         USER_ID,
         PASSWORD,
       );
+      expect(activation.sendWelcomeEmail).toHaveBeenCalledWith(publicUser);
       expect(result.message).toEqual(expect.any(String));
     });
 
