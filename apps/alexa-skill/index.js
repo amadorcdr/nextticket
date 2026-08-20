@@ -246,6 +246,29 @@ function safeHandle(handlerName, handleFn) {
       });
 
       try {
+        // Sesión guardada que ya no sirve. Pasa cuando el token se emitió antes
+        // de que a la cuenta le cambiaran el rol: el rol viaja DENTRO del token,
+        // así que la base dice ORGANIZER y el token sigue diciendo CLIENT, y la
+        // API responde 403. withAuth ya validó el rol de la sesión, de modo que
+        // un 401 o un 403 aquí solo puede ser eso.
+        //
+        // Sin esto el usuario oye "no tienes permiso" sin saber por qué, y
+        // decir la palabra clave no arregla nada porque la skill se cree con
+        // sesión abierta. Se cierra y se pide de nuevo: eso sí lo resuelve.
+        const esSesionVencida =
+          error instanceof ApiError &&
+          (error.code === API_ERRORS.UNAUTHORIZED ||
+            error.code === API_ERRORS.FORBIDDEN) &&
+          isLoggedIn(getSession(handlerInput));
+
+        if (esSesionVencida) {
+          console.warn(
+            `[${LOG_TAG}] sesión vencida en ${handlerName} (${error.code}); se cierra y se pide la palabra clave`,
+          );
+          logoutUser(handlerInput);
+          return askForSeed(handlerInput, t("SESSION_STALE"));
+        }
+
         return handlerInput.responseBuilder
           .speak(capSpeech(`${t(key)} ${t("WHAT_TO_QUERY")}`))
           .reprompt(t("WHAT_TO_QUERY"))
@@ -660,6 +683,7 @@ const es = {
   LOGIN_OK_BACK: "Bienvenido de nuevo, %s. %s",
   LOGIN_REQUIRED: "Primero necesitas identificarte. Dime tu palabra clave.",
   SESSION_EXPIRED: "Por seguridad cerré tu sesión anterior. Dime tu palabra clave.",
+  SESSION_STALE: "Tu sesión guardada ya no es válida, seguramente porque cambiaron los permisos de tu cuenta. La cerré para que puedas entrar de nuevo. ¿Cuál es tu palabra clave?",
   LOGOUT: "Sesión cerrada. Dime la palabra clave de la cuenta con la que quieres entrar.",
   ALREADY_LOGGED_IN: "Ya tienes la sesión iniciada, %s. %s",
   ROLE_DENIED: "Esta consulta solo está disponible para %s, y tu cuenta es de tipo %s. %s",
