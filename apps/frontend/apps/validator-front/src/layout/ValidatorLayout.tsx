@@ -65,12 +65,6 @@ function ValidatorNav() {
             </div>
 
             <div className="p-4 flex flex-col gap-2">
-                <div className="rounded-[10px] bg-surface-secondary p-3 flex gap-3">
-                    <Icon.Info className="size-4 shrink-0 mt-0.5 text-muted" />
-                    <p className="text-xs text-muted">
-                        Los boletos validados quedan marcados como utilizados de inmediato.
-                    </p>
-                </div>
                 <button
                     type="button"
                     onClick={handleSignOut}

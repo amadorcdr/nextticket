@@ -108,6 +108,7 @@ export function ValidationPage() {
                             <QrValidationPanel
                                 event={selectedEvent}
                                 isProcessing={isProcessing}
+                                result={result}
                                 onProcessingChange={setIsProcessing}
                                 onValidate={handleValidate}
                                 onServiceError={handleServiceError}
