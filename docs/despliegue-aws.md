@@ -167,7 +167,21 @@ está en el grupo de seguridad.
 
 ### Datos de prueba
 
-**Eventos y recintos.** La imagen solo lleva el código compilado (`dist`), no
+**El orden importa.** El sembrador de eventos los crea a nombre de
+`organizador@test.com`, así que ese usuario tiene que existir antes.
+
+**1. Cuentas de prueba.** En el servidor solo el gateway publica puerto, así que
+hay que indicarle a dónde hablar:
+
+```bash
+cd ~/nextticket && AUTH_URL=http://localhost:3001 bash scripts/seed-users.sh
+```
+
+Crea las cuatro cuentas, las activa y les asigna su rol. Debe terminar
+imprimiendo la tabla con ORGANIZER, ADMIN, CLIENT y VALIDATOR — si todas
+aparecen como CLIENT, algo falló a medias y hay que volver a correrlo.
+
+**2. Eventos y recintos.** La imagen solo lleva el código compilado (`dist`), no
 `src`, así que el sembrador no está dentro del contenedor. Se monta al vuelo
 desde el repositorio clonado:
 
@@ -175,25 +189,14 @@ desde el repositorio clonado:
 cd ~/nextticket && sudo docker compose -f docker-compose.prod.yml run --rm --no-deps -v ~/nextticket/apps/backend/venues-events-service/src:/app/src venues-events-service ./node_modules/.bin/ts-node src/seed/seed-dev-data.ts
 ```
 
-**Cuentas de prueba.** El script habla con la API, y en el servidor el único
-puerto abierto es el del gateway, así que hay que decírselo:
-
-```bash
-cd ~/nextticket && AUTH_URL=http://localhost:3001 bash scripts/seed-users.sh
-```
-
-**Palabras clave de Alexa:**
+**3. Palabras clave de Alexa:**
 
 ```bash
 cd ~/nextticket && sudo bash apps/alexa-skill/seed-alexa.sh
 ```
 
-> El `sudo` en el último hace falta porque el script llama a `docker` y el
-> usuario `ubuntu` solo entra al grupo `docker` tras volver a iniciar sesión.
->
-> Nota: `admin@nextticket.com` se crea **solo** en el primer arranque de
-> `auth-service`; esos scripts crean las cuentas de prueba adicionales que usa
-> la skill (organizador, cliente, validador).
+> `admin@nextticket.com` es aparte: lo crea `auth-service` solo, en su primer
+> arranque. Estos scripts crean las cuentas de prueba que usa la skill.
 
 ---
 

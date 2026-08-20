@@ -13,6 +13,15 @@ set -euo pipefail
 
 AUTH_URL="${AUTH_URL:-http://localhost:3002}"
 DB_CONTAINER="${DB_CONTAINER:-nextticket-postgres}"
+AUTH_CONTAINER="${AUTH_CONTAINER:-nextticket-auth}"
+
+# En un servidor el usuario no suele estar en el grupo docker hasta volver a
+# iniciar sesión. Se detecta una vez y se antepone sudo solo si hace falta.
+if docker info >/dev/null 2>&1; then
+  DOCKER="docker"
+else
+  DOCKER="sudo docker"
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTH_SERVICE_DIR="$SCRIPT_DIR/../apps/backend/auth-service"
 
@@ -58,12 +67,26 @@ register "Validador Demo"   "validador@test.com"
 # que ya usa este script para asignar el primer ADMIN (ver sección 2 más abajo).
 # NUNCA hagas esto contra una base que no sea tu entorno local de desarrollo.
 
+# El hash se calcula con bcryptjs. En una máquina de desarrollo está en
+# node_modules del servicio; en un servidor donde todo corre en contenedores no
+# hay Node instalado, así que se usa el del propio contenedor de auth.
+hash_password() {
+  local password="$1"
+  local script="console.log(require('bcryptjs').hashSync(process.argv[1], 10))"
+
+  if command -v node >/dev/null 2>&1 && [ -d "$AUTH_SERVICE_DIR/node_modules/bcryptjs" ]; then
+    (cd "$AUTH_SERVICE_DIR" && node -e "$script" "$password")
+  else
+    $DOCKER exec "$AUTH_CONTAINER" node -e "$script" "$password"
+  fi
+}
+
 activate_with_password() {
   local email="$1" password="$2"
   local hash
-  hash=$(cd "$AUTH_SERVICE_DIR" && node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 10))" "$password")
+  hash=$(hash_password "$password")
 
-  docker exec "$DB_CONTAINER" psql -U postgres -d auth_db -q -c \
+  $DOCKER exec "$DB_CONTAINER" psql -U postgres -d auth_db -q -c \
     "UPDATE \"User\" SET password = '$hash', \"accountStatus\" = 'ACTIVE' WHERE email = '$email';" \
     >/dev/null
   echo "  activado  $email"
@@ -86,7 +109,7 @@ echo "Asignando roles..."
 
 assign_role() {
   local email="$1" role="$2"
-  docker exec "$DB_CONTAINER" psql -U postgres -d auth_db -q -c \
+  $DOCKER exec "$DB_CONTAINER" psql -U postgres -d auth_db -q -c \
     "UPDATE \"User\" SET \"roleId\" = (SELECT id FROM \"Role\" WHERE name = '$role') WHERE email = '$email';"
   echo "  $email → $role"
 }
@@ -98,7 +121,7 @@ assign_role "validador@test.com"   "VALIDATOR"
 echo ""
 echo "Listo. Usuarios disponibles:"
 echo ""
-docker exec "$DB_CONTAINER" psql -U postgres -d auth_db -tAc \
+$DOCKER exec "$DB_CONTAINER" psql -U postgres -d auth_db -tAc \
   'SELECT u.email || E'"'"'\t'"'"' || r.name FROM "User" u JOIN "Role" r ON r.id = u."roleId" ORDER BY r.name;' \
   | sed 's/^/  /'
 
