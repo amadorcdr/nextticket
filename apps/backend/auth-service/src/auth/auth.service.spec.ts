@@ -20,6 +20,7 @@ describe('AuthService', () => {
 
   const usersService = {
     ensureDefaultRoles: jest.fn(),
+    ensureDefaultAdmin: jest.fn(),
     createLocalUser: jest.fn(),
     findByEmailForAuth: jest.fn(),
     findPublicById: jest.fn(),

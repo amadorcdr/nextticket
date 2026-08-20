@@ -30,7 +30,6 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function EventSalesSummary() {
     const { eventId } = Router.useParams<{ eventId: string }>();
-    const navigate = Router.useNavigate();
     const { data, loading, error, notFound, retry } = useEventSalesSummary(eventId);
 
     if (loading) {
@@ -41,10 +40,7 @@ export function EventSalesSummary() {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                 <p className="text-foreground font-semibold">Evento no encontrado</p>
-                <Button size="sm" variant="secondary" onPress={() => navigate("/events")}>
-                    <Icon.ArrowLeft />
-                    Volver a Eventos
-                </Button>
+                <p className="text-muted text-xs">Usa las migas de pan de arriba para volver a Eventos.</p>
             </div>
         );
     }
@@ -64,20 +60,15 @@ export function EventSalesSummary() {
 
     return (
         <div className="flex flex-col gap-3 animate-in fade-in duration-500">
-            <div className="flex items-center gap-3">
-                <Button size="sm" variant="ghost" isIconOnly onPress={() => navigate("/events")}>
-                    <Icon.ArrowLeft />
-                </Button>
-                <div>
-                    <h3>{event.name}</h3>
-                    <p className="text-muted text-xs mt-0.5 flex items-center gap-1.5">
-                        <Icon.Calendar className="size-3" />
-                        {event.date}
-                        <span className="mx-0.5">·</span>
-                        <Icon.MapPin className="size-3" />
-                        {event.venue}
-                    </p>
-                </div>
+            <div>
+                <h3>{event.name}</h3>
+                <p className="text-muted text-xs mt-0.5 flex items-center gap-1.5">
+                    <Icon.Calendar className="size-3" />
+                    {event.date}
+                    <span className="mx-0.5">·</span>
+                    <Icon.MapPin className="size-3" />
+                    {event.venue}
+                </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">

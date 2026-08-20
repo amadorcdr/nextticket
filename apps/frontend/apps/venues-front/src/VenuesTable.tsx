@@ -205,7 +205,7 @@ export function VenuesTable({
                       <Chip size="sm" variant="soft">{venue.floorsCount} {venue.floorsCount === 1 ? "Piso" : "Pisos"}</Chip>
                       <Chip size="sm" variant="soft">{venue.sectionsCount} Secciones</Chip>
                     </ScrollShadow>
-                    <Button fullWidth onPress={() => navigate(`/venues/${venue.id}/edit`)}>
+                    <Button size="sm" fullWidth onPress={() => navigate(`/venues/${venue.id}/edit`)}>
                       <Icon.SquarePen />
                       Editar
                     </Button>

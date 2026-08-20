@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import {
     ApiError,
-    Button,
-    Icon,
     PhysicalEditor,
     Router,
     toast,
@@ -240,10 +238,7 @@ export function VenueCanvasEdit() {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                 <p className="text-foreground font-semibold">Recinto no encontrado</p>
-                <Button size="sm" variant="secondary" onPress={() => navigate("/venues")}>
-                    <Icon.ArrowLeft />
-                    Volver a Recintos
-                </Button>
+                <p className="text-muted text-xs">Usa las migas de pan de arriba para volver a Recintos.</p>
             </div>
         );
     }
@@ -255,10 +250,6 @@ export function VenueCanvasEdit() {
                     <p className="text-foreground font-semibold text-sm truncate">{current.venue.name}</p>
                     <p className="text-muted text-xs truncate">Editando distribución de zonas</p>
                 </div>
-                <Button size="sm" variant="ghost" onPress={() => navigate(`/venues/${id}/edit`)} isDisabled={saving}>
-                    <Icon.ArrowLeft />
-                    Volver a datos generales
-                </Button>
             </div>
             <div className="flex-1 min-h-0">
                 <PhysicalEditor initialState={current} onChange={setCurrent} mode="update" onSave={handleSave} />

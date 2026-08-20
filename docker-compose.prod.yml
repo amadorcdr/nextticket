@@ -52,6 +52,8 @@ services:
       PORT: 3002
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en el .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@nextticket.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
       GATEWAY_URL: http://api-gateway:3001
       FRONTEND_URL: ${FRONTEND_URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

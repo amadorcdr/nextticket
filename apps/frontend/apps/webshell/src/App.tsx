@@ -1,5 +1,55 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Button, Icon, Router, Tooltip, Panel, ProfileModal, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Label, ThemeSwitcher, TextField, Input, Logo, useApi, useSession } from "@nextticket-frontend/commons";
+import { Breadcrumbs, Button, Icon, Router, Tooltip, Panel, useBreakpoint, ScrollShadow, Avatar, Tabs, Chip, Description, Badge, Label, ThemeSwitcher, TextField, Input, Logo, useApi, useSession } from "@nextticket-frontend/commons";
+
+interface Crumb {
+    label: string;
+    onPress?: () => void;
+}
+
+/** Deriva las migas de pan del shell de Admin a partir de la ruta activa. */
+function useAdminBreadcrumb(navigate: ReturnType<typeof Router.useNavigate>): Crumb[] {
+    const location = Router.useLocation();
+    const path = location.pathname;
+
+    if (/^\/venues\/[^/]+\/canvas$/.test(path)) {
+        return [
+            { label: "Recintos", onPress: () => navigate("/venues") },
+            { label: "Editar recinto", onPress: () => navigate(path.replace(/\/canvas$/, "/edit")) },
+            { label: "Zonas" },
+        ];
+    }
+    if (/^\/venues\/[^/]+\/edit$/.test(path)) {
+        return [{ label: "Recintos", onPress: () => navigate("/venues") }, { label: "Editar recinto" }];
+    }
+    if (path === "/venues/canvas") {
+        return [{ label: "Recintos", onPress: () => navigate("/venues") }, { label: "Crear recinto" }];
+    }
+    if (path.startsWith("/venues")) {
+        return [{ label: "Recintos" }];
+    }
+    if (path.startsWith("/tickets/")) {
+        return [{ label: "Eventos", onPress: () => navigate("/events") }, { label: "Ventas" }];
+    }
+    if (path.startsWith("/events")) {
+        return [{ label: "Eventos" }];
+    }
+    if (path === "/users/new") {
+        return [{ label: "Usuarios", onPress: () => navigate("/users") }, { label: "Crear usuario" }];
+    }
+    if (/^\/users\/[^/]+\/edit$/.test(path)) {
+        return [{ label: "Usuarios", onPress: () => navigate("/users") }, { label: "Editar usuario" }];
+    }
+    if (path.startsWith("/users")) {
+        return [{ label: "Usuarios" }];
+    }
+    if (path.startsWith("/purchases")) {
+        return [{ label: "Compras" }];
+    }
+    if (path === "/profile") {
+        return [{ label: "Perfil" }];
+    }
+    return [{ label: "Dashboard" }];
+}
 
 const NAV_LINKS = [
     { to: "/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
@@ -12,7 +62,6 @@ export function App() {
     const isDesktop = useBreakpoint(1024);
 
     const [sidebarVisible, setSidebarVisible] = useState(true);
-    const [profileOpen, setProfileOpen] = useState(false);
 
     const toggleSidebar = useCallback(() => {
         setSidebarVisible((v) => !v);
@@ -70,6 +119,7 @@ export function App() {
     );
 
     const activeNavKey = navLinks.find(link => location.pathname.startsWith(link.to))?.to || "none";
+    const breadcrumb = useAdminBreadcrumb(navigate);
 
     const navContent = (
         <>
@@ -159,7 +209,16 @@ export function App() {
                             </Tooltip.Trigger>
                             <Tooltip.Content>{sidebarVisible ? "Ocultar sidebar" : "Mostrar sidebar"}</Tooltip.Content>
                         </Tooltip>
-                        <div className="flex-1 min-w-0" />
+                        <ScrollShadow className="flex-1 min-w-0" orientation="horizontal" hideScrollBar size={16}>
+                            <Breadcrumbs>
+                                <Breadcrumbs.Item>Admin</Breadcrumbs.Item>
+                                {breadcrumb.map((crumb, index) => (
+                                    <Breadcrumbs.Item key={index} onPress={crumb.onPress}>
+                                        {crumb.label}
+                                    </Breadcrumbs.Item>
+                                ))}
+                            </Breadcrumbs>
+                        </ScrollShadow>
                     </div>
                     <div className="flex items-center md:gap-2 gap-1 shrink-0">
                         <Tooltip>
@@ -168,7 +227,7 @@ export function App() {
                                     size="sm"
                                     variant="ghost"
                                     isIconOnly
-                                    onPress={() => setProfileOpen(true)}
+                                    onPress={() => navigate("/profile")}
                                 >
                                     <Icon.User />
                                 </Button>
@@ -182,9 +241,6 @@ export function App() {
                     <Router.Outlet />
                 </ScrollShadow>
             </div>
-
-            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
-
 
             {/* Mobile Bottom Navigation */}
             <div className="md:hidden absolute inset-x-0 bottom-0 p-4 z-50 pointer-events-none flex justify-center">

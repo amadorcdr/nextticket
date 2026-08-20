@@ -66,6 +66,13 @@ export class AuthService implements OnModuleInit {
 
   async onModuleInit() {
     await this.usersService.ensureDefaultRoles();
+
+    const adminEmail =
+      this.configService.get<string>('SEED_ADMIN_EMAIL') ??
+      'admin@nextticket.com';
+    const adminPassword =
+      this.configService.get<string>('SEED_ADMIN_PASSWORD') ?? 'Admin123!';
+    await this.usersService.ensureDefaultAdmin(adminEmail, adminPassword);
   }
 
   /**

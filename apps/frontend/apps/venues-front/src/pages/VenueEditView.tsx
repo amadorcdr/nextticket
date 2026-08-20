@@ -61,10 +61,7 @@ export function VenueEditView() {
         return (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                 <p className="text-foreground font-semibold">Recinto no encontrado</p>
-                <Button size="sm" variant="secondary" onPress={() => navigate("/venues")}>
-                    <Icon.ArrowLeft />
-                    Volver a Recintos
-                </Button>
+                <p className="text-muted text-xs">Usa las migas de pan de arriba para volver a Recintos.</p>
             </div>
         );
     }
@@ -85,14 +82,9 @@ export function VenueEditView() {
 
     return (
         <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-            <div className="flex items-center gap-3">
-                <Button size="sm" variant="ghost" isIconOnly onPress={() => navigate("/venues")}>
-                    <Icon.ArrowLeft />
-                </Button>
-                <div>
-                    <h3>Editar recinto</h3>
-                    <p className="text-muted text-xs mt-0.5">{venue.name}</p>
-                </div>
+            <div>
+                <h3>Editar recinto</h3>
+                <p className="text-muted text-xs mt-0.5">{venue.name}</p>
             </div>
 
             <VenueEditForm
@@ -103,7 +95,7 @@ export function VenueEditView() {
                 onEditZones={() => navigate(`/venues/${id}/canvas`)}
             />
 
-            <div className="flex gap-2 justify-end sticky bottom-0 bg-background border-t border-border pt-3 pb-1">
+            <div className="flex gap-2 justify-end border-t border-border pt-3 pb-1">
                 <Button size="sm" variant="secondary" onPress={() => navigate("/venues")} isDisabled={saving}>
                     Cancelar
                 </Button>

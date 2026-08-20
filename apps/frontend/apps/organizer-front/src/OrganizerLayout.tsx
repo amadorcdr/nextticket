@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button, Icon, Logo, Panel, ProfileModal, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint, useSession } from "@nextticket-frontend/commons";
+import { Breadcrumbs, Button, Icon, Logo, Panel, Router, ScrollShadow, Tabs, Tooltip, useBreakpoint, useSession } from "@nextticket-frontend/commons";
 
 const NAV_LINKS = [
   { to: "/organizer/dashboard", icon: Icon.LayoutDashboard, label: "Dashboard" },
@@ -11,7 +11,6 @@ const NAV_LINKS = [
 export function OrganizerLayout() {
   const isDesktop = useBreakpoint(1024);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [profileOpen, setProfileOpen] = useState(false);
   const { signOut } = useSession();
 
   const toggleSidebar = useCallback(() => setSidebarVisible((v) => !v), []);
@@ -27,6 +26,11 @@ export function OrganizerLayout() {
   };
 
   const activeNavKey = NAV_LINKS.find((link) => location.pathname.startsWith(link.to))?.to ?? "none";
+  const activeLabel = NAV_LINKS.find((link) => location.pathname.startsWith(link.to))?.label;
+
+  const isNewEvent = location.pathname === "/organizer/myEvents/new";
+  const isEditEvent = /^\/organizer\/myEvents\/[^/]+\/edit$/.test(location.pathname);
+  const isProfile = location.pathname === "/organizer/profile";
 
   const navContent = (
     <div className="py-4 flex flex-col justify-between flex-1 min-h-0 overflow-hidden">
@@ -91,11 +95,24 @@ export function OrganizerLayout() {
               </Tooltip.Trigger>
               <Tooltip.Content>{sidebarVisible ? "Ocultar sidebar" : "Mostrar sidebar"}</Tooltip.Content>
             </Tooltip>
+            <ScrollShadow className="flex-1 min-w-0" orientation="horizontal" hideScrollBar size={16}>
+              <Breadcrumbs>
+                <Breadcrumbs.Item>Organizador</Breadcrumbs.Item>
+                {isProfile ? <Breadcrumbs.Item>Perfil</Breadcrumbs.Item> : null}
+                {!isProfile && activeLabel ? (
+                  <Breadcrumbs.Item onPress={isNewEvent || isEditEvent ? () => navigate("/organizer/myEvents") : undefined}>
+                    {activeLabel}
+                  </Breadcrumbs.Item>
+                ) : null}
+                {isNewEvent ? <Breadcrumbs.Item>Crear evento</Breadcrumbs.Item> : null}
+                {isEditEvent ? <Breadcrumbs.Item>Editar evento</Breadcrumbs.Item> : null}
+              </Breadcrumbs>
+            </ScrollShadow>
           </div>
           <div className="flex items-center md:gap-2 gap-1 shrink-0">
             <Tooltip>
               <Tooltip.Trigger>
-                <Button size="sm" variant="ghost" isIconOnly onPress={() => setProfileOpen(true)}>
+                <Button size="sm" variant="ghost" isIconOnly onPress={() => navigate("/organizer/profile")}>
                   <Icon.User />
                 </Button>
               </Tooltip.Trigger>
@@ -135,8 +152,6 @@ export function OrganizerLayout() {
           </Tabs>
         </ScrollShadow>
       </div>
-
-      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }
