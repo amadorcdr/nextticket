@@ -1,13 +1,15 @@
 # NextTicket
 
+> 📘 Este README cubre convenciones de equipo, Git Flow y cómo levantar el proyecto. Para la arquitectura técnica completa (responsabilidades de cada microservicio y cada microfrontend, modelos de datos, fila virtual, flujo de compra, etc.) ver **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 ## 1. Stack Tecnológico
 
 ### Frontend
 
 | Tecnología | Versión | Uso |
 |------------|---------|-----|
-| **Vite** | 5.x | Bundler rápido y entorno de desarrollo para cada microfrontend |
-| **React** | 18.x | Librería UI |
+| **Vite** | 5.x | Bundler rápido; solo `webshell` tiene dev-server propio (los demás paquetes de frontend son código fuente sin build propio, integrados en tiempo de compilación) |
+| **React** | 19.x | Librería UI |
 | **TypeScript** | 5.x | Tipado estático |
 | **Tailwind CSS** | 4.x | Utilidades CSS con design system personalizado (Material 3) |
 | **HeroUI** | 3.x | Componentes UI |
@@ -35,90 +37,56 @@
 
 ## 2. Arquitectura de Microfrontends
 
-Cada microfrontend es una aplicación React (Vite) independiente dentro del monorepo que se compila y despliega de forma autónoma.
+`webshell` es el único paquete con dev-server y build propios (Vite, puerto 4000). Los demás paquetes de `apps/frontend/apps/*` son código fuente puro (`"main": "src/index.ts"`, sin `vite.config.ts`): Vite los compila junto con `webshell` en tiempo de build, como workspaces de NPM normales — no hay Module Federation ni carga remota en runtime.
 
-### Modelo utilizado: Build-time / Workspaces
+### Los 9 paquetes de frontend
 
-```
-┌──────────────────────────────────────────────────────┐
-│                  NPM WORKSPACES                      │
-│                                                      │
-│  ┌────────────────┐  ┌─────────────────────────────┐ │
-│  │   webshell     │  │      auth-front             │ │
-│  │   (Host/Shell) │  │  • Login / Registro          │ │
-│  │                │  │  • Perfil                    │ │
-│  │  Orquesta los  │  └─────────────┬───────────────┘ │
-│  │  microfronts   │                │                 │
-│  │  Layout global │  ┌─────────────▼───────────────┐ │
-│  └────────┬───────┘  │  venues-events-front        │ │
-│           │          │  • Landing / Catálogo        │ │
-│           │          │  • Detalle Evento            │ │
-│           │          │  • Panel Organizador         │ │
-│           │          └─────────────┬───────────────┘ │
-│           │                        │                 │
-│           │          ┌─────────────▼───────────────┐ │
-│           ├─────────►│     purchases-front         │ │
-│           │          │  • Checkout                  │ │
-│           │          │  • Historial                 │ │
-│           │          └─────────────┬───────────────┘ │
-│           │                        │                 │
-│           │          ┌─────────────▼───────────────┐ │
-│           ├─────────►│      tickets-front          │ │
-│           │          │  • Selección Asientos        │ │
-│           │          │  • Mis Boletos               │ │
-│           │          │  • Validador QR              │ │
-│           │          └─────────────────────────────┘ │
-│           │                                          │
-│           ▼          ┌───────────────────┐          │
-│                      │     commons       │          │
-│                      │  (Librería Comp.) │          │
-│                      └───────────────────┘          │
-└──────────────────────────────────────────────────────┘
-```
+| Paquete | Puerto propio | Responsabilidad |
+|---------------|--------|-----------------|
+| **webshell** | 4000 (dev) | Host: routing global, layouts por rol, providers globales. Único punto de entrada real |
+| **auth-front** | — | Login, registro, activación de cuenta, recuperación de contraseña |
+| **events-front** | — | Catálogo público, detalle de evento, selección de asientos, vista admin de eventos |
+| **organizer-front** | — | Panel del organizador: dashboard, mis eventos, formulario de evento, ventas, editor de zonas |
+| **purchases-front** | — | Checkout, fila virtual, confirmación e historial de compras |
+| **tickets-front** | — | "Mis boletos" del cliente y resumen de ventas por evento (admin) |
+| **users-front** | — | CRUD administrativo de usuarios |
+| **validator-front** | — | Escaneo/validación de boletos por QR o folio |
+| **venues-front** | — | CRUD de recintos y editor visual de asientos/zonas |
+| **commons** | — (librería) | Componentes, providers, tipos y utilidades que usan todos los anteriores |
 
-### Los 6 Microfrontends
-
-| Microfrontend | Paquete | Puerto | Responsabilidad |
-|---------------|---------|--------|-----------------|
-| **Web Shell** | `apps/frontend/apps/webshell` | 4000 | El host/cáscara que orquesta el layout global. Es el punto de entrada de la aplicación |
-| **Auth Frontend** | `apps/frontend/apps/auth-front` | Microfrontend de autenticación: login, registro y perfil |
-| **Venues & Events Frontend** | `apps/frontend/apps/venues-events-front` | Microfrontend de eventos: landing, catálogo, detalle de evento y panel organizador |
-| **Purchases Frontend** | `apps/frontend/apps/purchases-front` | Microfrontend de compras: flujo de checkout y pasarela de pago |
-| **Tickets Frontend** | `apps/frontend/apps/tickets-front` | Microfrontend de boletos: mapa de asientos, mis boletos y app de validador |
-| **Frontend Commons** | `apps/frontend/commons` | Librería compartida: componentes, tipos y utilidades que usan todos los microfrontends |
+> Detalle de rutas, roles asociados y dependencias entre paquetes: ver [docs/ARCHITECTURE.md §4](docs/ARCHITECTURE.md#4-frontend).
 
 ### Comunicación entre Microfrontends
 
 ```mermaid
 graph TD
-    A["Web Shell (Host)"] --> B["auth-front"]
-    A --> C["purchases-front"]
-    A --> F["venues-events-front"]
-    A --> G["tickets-front"]
+    A["Web Shell (Host, :4000 dev)"] --> B["auth-front"]
+    A --> C["events-front"]
+    A --> D2["organizer-front"]
+    A --> E2["purchases-front"]
+    A --> F["tickets-front"]
+    A --> G["users-front"]
+    A --> H["validator-front"]
+    A --> I["venues-front"]
     B --> D["commons (Shared)"]
     C --> D
+    D2 --> D
+    E2 --> D
     F --> D
     G --> D
-    B --> E["Backend API"]
-    C --> E
-    F --> E
-    G --> E
+    H --> D
+    I --> D
+    D --> E["API Gateway :3001"]
 
     style A fill:#7c3aed,color:#fff,stroke:#5b21b6
-    style B fill:#0053db,color:#fff,stroke:#003ea8
-    style C fill:#0053db,color:#fff,stroke:#003ea8
-    style F fill:#0053db,color:#fff,stroke:#003ea8
-    style G fill:#0053db,color:#fff,stroke:#003ea8
     style D fill:#059669,color:#fff,stroke:#047857
     style E fill:#dc2626,color:#fff,stroke:#b91c1c
 ```
 
 Cada microfrontend:
-- ✅ Tiene su **propio `package.json`**, `vite.config.ts`, `tailwind.config.ts`
-- ✅ Se **compila de forma independiente** (`vite build`)
+- ✅ Tiene su **propio `package.json`** y su propio dominio de negocio (autenticación, compras, etc.)
 - ✅ Comparte el **design system** via `commons`
-- ✅ Tiene su **propio dominio de negocio** (autenticación, compras, etc.)
-- ✅ Puede **desplegarse por separado** en diferentes URLs/puertos
+- ⚠️ **No** tiene `vite.config.ts` ni dev-server propio: se compila como parte del bundle de `webshell`, no de forma independiente ni desplegable por separado
 
 ---
 
@@ -130,27 +98,20 @@ nextticket/
 ├── 📁 apps/                           # Aplicaciones del monorepo
 │   ├── 📁 frontend/                   # ── Entorno de Microfrontends (NPM) ──
 │   │   ├── 📄 package.json            #    NPM Workspaces ("workspaces": ["commons", "apps/*"])
-│   │   ├── 📁 commons/                # 📦 Librería compartida (UI, Store)
+│   │   ├── 📁 commons/                # 📦 Librería compartida (UI, providers, editor de mapas)
 │   │   │   └── 📄 package.json        #    @nextticket-frontend/commons
-│   │   └── 📁 apps/                   # ── Microfrontends ──
-│   │       ├── 📁 auth-front/         # 🔐 MF de Autenticación
-│   │       │   ├── 📁 src/            #    Código fuente (Vite + React)
-│   │       │   └── 📄 package.json    #    @nextticket-frontend/auth-front
+│   │   └── 📁 apps/                   # ── Microfrontends (sin vite.config propio, salvo webshell) ──
+│   │       ├── 📁 auth-front/         # 🔐 Login, registro, activación, reset de contraseña
+│   │       ├── 📁 events-front/       # 🎟️ Catálogo, detalle, selección de asientos, vista admin de eventos
+│   │       ├── 📁 organizer-front/    # 🎭 Panel del organizador
+│   │       ├── 📁 purchases-front/    # 🛒 Checkout, fila virtual, historial de compras
+│   │       ├── 📁 tickets-front/      # 🎫 Mis boletos, resumen de ventas
+│   │       ├── 📁 users-front/        # 👤 CRUD administrativo de usuarios
+│   │       ├── 📁 validator-front/    # ✅ Escaneo/validación de boletos
+│   │       ├── 📁 venues-front/       # 🏟️ CRUD de recintos + editor visual de asientos
 │   │       │
-│   │       ├── 📁 venues-events-front/ # 🏟️ MF de Eventos y Recintos
-│   │       │   ├── 📁 src/            #    Código fuente
-│   │       │   └── 📄 package.json    #    @nextticket-frontend/venues-events
-│   │       │
-│   │       ├── 📁 purchases-front/    # 🛒 MF de Compras
-│   │       │   ├── 📁 src/            #    Código fuente
-│   │       │   └── 📄 package.json    #    @nextticket-frontend/purchases
-│   │       │
-│   │       ├── 📁 tickets-front/      # 🎫 MF de Boletos
-│   │       │   ├── 📁 src/            #    Código fuente
-│   │       │   └── 📄 package.json    #    @nextticket-frontend/tickets
-│   │       │
-│   │       └── 📁 webshell/           # 🏗️ Shell/Host (Orquestador principal)
-│   │           ├── 📁 src/            #    Configuración de integración
+│   │       └── 📁 webshell/           # 🏗️ Shell/Host — único con vite.config.ts y dev-server (:4000)
+│   │           ├── 📁 src/            #    Routing global, layouts, providers
 │   │           └── 📄 package.json    #    @nextticket-frontend/webshell
 │   │
 │   └── 📁 backend/                    # ── Microservicios Backend (PNPM aislado) ──
@@ -611,14 +572,15 @@ Realiza tus cambios en los archivos correspondientes del monorepo. Recuerda resp
 
 | Si trabajas en... | Modifica archivos en... |
 |-------------------|------------------------|
-| Login/Registro | `apps/frontend/apps/auth-front/src/` |
-| Landing page | `apps/frontend/apps/venues-events-front/src/` |
-| Catálogo de eventos | `apps/frontend/apps/venues-events-front/src/` |
-| Selección de asientos | `apps/frontend/apps/tickets-front/src/` |
-| Checkout | `apps/frontend/apps/purchases-front/src/` |
-| Mis boletos | `apps/frontend/apps/tickets-front/src/` |
-| Panel organizador | `apps/frontend/apps/venues-events-front/src/` |
-| Validador | `apps/frontend/apps/tickets-front/src/` |
+| Login/Registro/Activación | `apps/frontend/apps/auth-front/src/` |
+| Catálogo de eventos / Detalle / Selección de asientos | `apps/frontend/apps/events-front/src/` |
+| Checkout / Fila virtual / Historial de compras | `apps/frontend/apps/purchases-front/src/` |
+| Mis boletos / Resumen de ventas | `apps/frontend/apps/tickets-front/src/` |
+| Panel organizador | `apps/frontend/apps/organizer-front/src/` |
+| CRUD de usuarios (admin) | `apps/frontend/apps/users-front/src/` |
+| Validador (QR/folio) | `apps/frontend/apps/validator-front/src/` |
+| Recintos / editor de asientos | `apps/frontend/apps/venues-front/src/` |
+| Routing global / layouts por rol | `apps/frontend/apps/webshell/src/` |
 | Componentes compartidos | `apps/frontend/commons/src/` |
 
 ### Paso 4: Hacer commits
@@ -847,15 +809,7 @@ npm install
 npm run dev
 ```
 
-### Desarrollo por microfrontend individual (Frontend)
-
-```bash
-# Desde la carpeta apps/frontend
-npm run dev -w @nextticket-frontend/auth-front
-npm run dev -w @nextticket-frontend/venues-events
-npm run dev -w @nextticket-frontend/purchases
-npm run dev -w @nextticket-frontend/tickets
-```
+> ⚠️ No existe forma de levantar un microfrontend individual con su propio puerto: solo `webshell` tiene `vite.config.ts` y dev-server. Para trabajar en, por ejemplo, `events-front`, se edita su código y se ve reflejado dentro de `npm run dev` (webshell), igual que el resto.
 
 ### Desarrollo del backend (microservicios)
 
@@ -967,40 +921,51 @@ Se utilizan comandos de **NestJS** y **pnpm**:
 
 ## 11. Roles y Módulos de la Aplicación
 
-NextTicket maneja 4 roles de usuario, cada uno con su propio módulo:
+NextTicket maneja 4 roles de usuario. Detalle completo de rutas por rol: [docs/ARCHITECTURE.md §15](docs/ARCHITECTURE.md#15-roles--funcionalidades-por-rol).
 
 ### 👤 Cliente
 
-| Funcionalidad | Ruta | Archivo principal |
-|---------------|------|-------------------|
-| Landing page | `/` | `apps/frontend/apps/venues-events-front/src/...` |
-| Catálogo de eventos | `/eventos` | `apps/frontend/apps/venues-events-front/src/...` |
-| Detalle de evento | `/event/[id]` | `apps/frontend/apps/venues-events-front/src/...` |
-| Selección de asientos | `/seats` | `apps/frontend/apps/tickets-front/src/...` |
-| Checkout | `/checkout` | `apps/frontend/apps/purchases-front/src/...` |
-| Confirmación | `/checkout/confirmacion` | `apps/frontend/apps/purchases-front/src/...` |
-| Mis boletos | `/mis-boletos` | `apps/frontend/apps/tickets-front/src/...` |
+| Funcionalidad | Ruta | Paquete |
+|---------------|------|---------|
+| Catálogo de eventos | `/eventos` | `events-front` |
+| Detalle de evento | `/event/:eventId` | `events-front` |
+| Fila virtual | `/event/:eventId/fila` | `purchases-front` |
+| Selección de asientos | `/event/:eventId/asientos` | `events-front` |
+| Checkout | `/checkout` | `purchases-front` |
+| Confirmación | `/checkout/confirmacion` | `purchases-front` |
+| Mis compras | `/mis-compras` | `purchases-front` |
+| Mis boletos | `/mis-boletos` | `tickets-front` |
 
 ### 🎭 Organizador
 
-| Funcionalidad | Ruta | Archivo principal |
-|---------------|------|-------------------|
-| Dashboard | `/organizer/dashboard` | `apps/frontend/apps/venues-events-front/src/...` |
-| Mis eventos | `/organizer/myEvents` | `apps/frontend/apps/venues-events-front/src/...` |
-| Ventas por evento | `/organizer/salesEvent` | `apps/frontend/apps/venues-events-front/src/...` |
+| Funcionalidad | Ruta | Paquete |
+|---------------|------|---------|
+| Dashboard | `/organizer/dashboard` | `organizer-front` |
+| Mis eventos | `/organizer/myEvents` | `organizer-front` |
+| Ventas por evento | `/organizer/salesEvent` | `organizer-front` |
+| Editor de zonas | `/organizer/zonas` | `organizer-front` |
 
 ### ✅ Validador
 
-| Funcionalidad | Ruta | Archivo principal |
-|---------------|------|-------------------|
-| Vista principal | `/validator` | `apps/frontend/apps/tickets-front/src/...` |
-| Eventos asignados | `/validator/events` | `apps/frontend/apps/tickets-front/src/...` |
+| Funcionalidad | Ruta | Paquete |
+|---------------|------|---------|
+| Eventos / validación | `/validator/*` | `validator-front` |
+
+### 🛠️ Administrador
+
+| Funcionalidad | Ruta | Paquete |
+|---------------|------|---------|
+| Usuarios | `/users/*` | `users-front` |
+| Recintos | `/venues`, `/venues/canvas` | `venues-front` |
+| Eventos (admin) | `/events/*` | `events-front` |
 
 ### 🔐 Autenticación
 
-| Funcionalidad | Ruta | Archivo principal |
-|---------------|------|-------------------|
-| Login/Registro | `/login` | `apps/frontend/apps/auth-front/src/...` |
+| Funcionalidad | Ruta | Paquete |
+|---------------|------|---------|
+| Login | `/sign-in` | `auth-front` |
+| Registro | `/sign-up` | `auth-front` |
+| Activación / recuperación de contraseña | `/activate-account`, `/forgot-password`, `/reset-password` | `auth-front` |
 
 ---
 
@@ -1034,22 +999,13 @@ NextTicket maneja 4 roles de usuario, cada uno con su propio módulo:
 
 ```mermaid
 graph TB
-    subgraph "🌐 Frontend (Microfrontends)"
-        WS["🏗️ Web Shell<br/>(Host/Orquestador)"]
-        AF["🔐 Auth Front<br/>(Vite / React 18)"]
-        VEF["🏟️ Venues & Events<br/>(Vite / React 18)"]
-        PF["🛒 Purchases Front<br/>(Vite / React 18)"]
-        TF["🎫 Tickets Front<br/>(Vite / React 18)"]
-        FC["📦 Frontend Commons<br/>(Shared Components)"]
+    subgraph "🌐 Frontend (webshell + 8 paquetes de frontend, React 19 / Vite)"
+        WS["🏗️ Web Shell<br/>(Host/Orquestador, único dev-server)"]
+        MF["🔐🏟️🛒🎫👤✅ auth-front · events-front · organizer-front<br/>purchases-front · tickets-front · users-front<br/>validator-front · venues-front"]
+        FC["📦 Frontend Commons<br/>(Shared Components / Providers)"]
 
-        WS --> AF
-        WS --> VEF
-        WS --> PF
-        WS --> TF
-        AF --> FC
-        VEF --> FC
-        PF --> FC
-        TF --> FC
+        WS --> MF
+        MF --> FC
     end
 
     subgraph "⚙️ Backend (Microservicios)"
@@ -1070,25 +1026,12 @@ graph TB
         RD["⚡ Redis 7<br/>(caché compartida)"]
     end
 
-    subgraph "📱 Mobile"
-        MA["📱 App Shell"]
-        MC["📦 Mobile Commons"]
-        MP["🔌 Plugins"]
-
-        MA --> MC
-        MA --> MP
+    subgraph "🗣️ Otros clientes"
+        ALEXA["🔊 Alexa Skill<br/>(apps/alexa-skill)"]
     end
 
-    subgraph "🛠️ Infraestructura"
-        TF_INFRA["☁️ Terraform (IaC)"]
-        CI["🔄 CI/CD"]
-    end
-
-    AF -->|"API calls"| GW
-    VEF -->|"API calls"| GW
-    PF -->|"API calls"| GW
-    TF -->|"API calls"| GW
-    MA -->|"API calls"| GW
+    MF -->|"API calls"| GW
+    ALEXA -->|"API calls"| GW
     AS --> PG
     VE --> PG
     PS --> PG
@@ -1099,10 +1042,7 @@ graph TB
     TS --> RD
 
     style WS fill:#7c3aed,color:#fff,stroke:#5b21b6
-    style AF fill:#0053db,color:#fff,stroke:#003ea8
-    style VEF fill:#0053db,color:#fff,stroke:#003ea8
-    style PF fill:#0053db,color:#fff,stroke:#003ea8
-    style TF fill:#0053db,color:#fff,stroke:#003ea8
+    style MF fill:#0053db,color:#fff,stroke:#003ea8
     style FC fill:#059669,color:#fff,stroke:#047857
     style GW fill:#f59e0b,color:#000,stroke:#d97706
     style AS fill:#dc2626,color:#fff,stroke:#b91c1c
@@ -1111,9 +1051,5 @@ graph TB
     style TS fill:#dc2626,color:#fff,stroke:#b91c1c
     style PG fill:#336791,color:#fff,stroke:#264f73
     style RD fill:#d82c20,color:#fff,stroke:#a52018
-    style MA fill:#8b5cf6,color:#fff,stroke:#7c3aed
-    style MC fill:#059669,color:#fff,stroke:#047857
-    style MP fill:#06b6d4,color:#fff,stroke:#0891b2
-    style TF_INFRA fill:#6366f1,color:#fff,stroke:#4f46e5
-    style CI fill:#6366f1,color:#fff,stroke:#4f46e5
+    style ALEXA fill:#8b5cf6,color:#fff,stroke:#7c3aed
 ```
