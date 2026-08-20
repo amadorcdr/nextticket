@@ -116,6 +116,7 @@ export class AuthService implements OnModuleInit {
     }
 
     await this.usersService.setPasswordAndActivate(userId, dto.password);
+    await this.activation.sendWelcomeEmail(user);
     return { message: 'Tu cuenta ha sido activada correctamente.' };
   }
 

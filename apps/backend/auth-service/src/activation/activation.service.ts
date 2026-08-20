@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,10 @@ const ROLE_LABELS: Record<string, string> = {
   VALIDATOR: 'Validador',
   ADMIN: 'Administrador',
 };
+
+const BUTTON_STYLE =
+  'display:inline-block;padding:10px 22px;background-color:#0d84f8;' +
+  'color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;';
 
 export interface ActivatableUser {
   id: string;
@@ -35,6 +40,8 @@ export interface ActivatableUser {
  */
 @Injectable()
 export class ActivationService {
+  private readonly logger = new Logger(ActivationService.name);
+
   constructor(
     private readonly redis: RedisService,
     private readonly mail: MailService,
@@ -68,15 +75,21 @@ export class ActivationService {
 
     const text =
       `Hola ${user.name},\n\n` +
-      `Se creó una cuenta en NextTicket para ti con el rol ${roleLabel}.\n` +
-      `Actívala y establece tu contraseña en el siguiente enlace (válido por ${hours} horas):\n` +
-      `${activationUrl}\n`;
+      `Se creó una cuenta en NextTicket para ti con el rol de ${roleLabel}. ` +
+      `Solo falta un paso para empezar a usarla: activarla y crear tu contraseña.\n\n` +
+      `Hazlo desde el siguiente enlace, vigente por las próximas ${hours} horas:\n` +
+      `${activationUrl}\n\n` +
+      `Si tú no solicitaste esta cuenta, puedes ignorar este correo sin problema.\n\n` +
+      `— El equipo de NextTicket`;
 
     const html =
       `<p>Hola ${user.name},</p>` +
-      `<p>Se creó una cuenta en <strong>NextTicket</strong> para ti con el rol <strong>${roleLabel}</strong>.</p>` +
-      `<p>Actívala y establece tu contraseña en el siguiente enlace (válido por ${hours} horas):</p>` +
-      `<p><a href="${activationUrl}">${activationUrl}</a></p>`;
+      `<p>Se creó una cuenta en <strong>NextTicket</strong> para ti con el rol de <strong>${roleLabel}</strong>. ` +
+      `Solo falta un paso para empezar a usarla: activarla y crear tu contraseña.</p>` +
+      `<p><a href="${activationUrl}" style="${BUTTON_STYLE}">Activar mi cuenta</a></p>` +
+      `<p>Este enlace está vigente por las próximas ${hours} horas.</p>` +
+      `<p>Si tú no solicitaste esta cuenta, puedes ignorar este correo sin problema.</p>` +
+      `<p>— El equipo de NextTicket</p>`;
 
     try {
       await this.mail.send(user.email, 'Activa tu cuenta de NextTicket', html, text);
@@ -85,6 +98,41 @@ export class ActivationService {
         'El usuario se creó, pero no se pudo enviar el correo de activación. ' +
           `Intenta reenviarlo más tarde. (${(error as Error).message})`,
       );
+    }
+  }
+
+  /**
+   * Aviso de bienvenida tras una activación exitosa. Es puramente informativo
+   * (la cuenta ya quedó activa antes de llamar esto), así que un fallo de
+   * envío se registra pero nunca debe tumbar la respuesta de activación.
+   */
+  async sendWelcomeEmail(user: ActivatableUser) {
+    const roleLabel = ROLE_LABELS[user.role.name] ?? user.role.name;
+    const frontendUrl = this.config.get<string>('FRONTEND_URL');
+    const loginUrl = frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/sign-in` : null;
+
+    const text =
+      `Hola ${user.name},\n\n` +
+      `¡Bienvenido a NextTicket! Tu cuenta ya está activa y lista para usarse como ${roleLabel}.\n\n` +
+      `A partir de ahora puedes iniciar sesión, descubrir eventos y gestionar tus boletos ` +
+      `desde un solo lugar.` +
+      (loginUrl ? `\n\nInicia sesión aquí:\n${loginUrl}\n` : '\n') +
+      `\nGracias por unirte, ¡nos alegra tenerte con nosotros!\n\n` +
+      `— El equipo de NextTicket`;
+
+    const html =
+      `<p>Hola ${user.name},</p>` +
+      `<p>¡Bienvenido a <strong>NextTicket</strong>! Tu cuenta ya está activa y lista para usarse como ` +
+      `<strong>${roleLabel}</strong>.</p>` +
+      `<p>A partir de ahora puedes iniciar sesión, descubrir eventos y gestionar tus boletos desde un solo lugar.</p>` +
+      (loginUrl ? `<p><a href="${loginUrl}" style="${BUTTON_STYLE}">Iniciar sesión</a></p>` : '') +
+      `<p>Gracias por unirte, ¡nos alegra tenerte con nosotros!</p>` +
+      `<p>— El equipo de NextTicket</p>`;
+
+    try {
+      await this.mail.send(user.email, '¡Bienvenido a NextTicket!', html, text);
+    } catch (error) {
+      this.logger.error(`No se pudo enviar el correo de bienvenida: ${(error as Error).message}`);
     }
   }
 

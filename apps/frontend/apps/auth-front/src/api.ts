@@ -1,6 +1,10 @@
 import type { SessionRole } from "@nextticket-frontend/commons";
 
-const API_BASE_URL = "http://localhost:3001";
+// Se reutiliza la de commons en vez de declarar otra: tener dos constantes con
+// la misma dirección significaba que al desplegar solo se actualizaba una, y el
+// login seguía apuntando a localhost mientras el resto de la app ya iba al
+// servidor. Aquí solo se cambia una vez, con VITE_API_URL al compilar.
+import { API_BASE_URL } from "@nextticket-frontend/commons";
 
 type BackendRole = "CLIENT" | "ORGANIZER" | "VALIDATOR" | "ADMIN";
 
