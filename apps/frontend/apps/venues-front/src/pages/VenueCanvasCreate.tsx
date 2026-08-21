@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
     ApiError,
-    Button,
     createEmptyPhysicalVenue,
-    Icon,
-    Input,
-    Label,
     PhysicalEditor,
     Router,
-    TextField,
     toast,
     useApi,
     type PhysicalVenueState,
+    Button,
+    Icon,
+    TextField,
+    Label,
+    Input
 } from "@nextticket-frontend/commons";
 
 interface CreatedEntity {
@@ -43,9 +43,16 @@ type Step = "info" | "canvas";
 export function VenueCanvasCreate() {
     const api = useApi();
     const navigate = Router.useNavigate();
-    const [step, setStep] = useState<Step>("info");
     const [venueState, setVenueState] = useState<PhysicalVenueState>(() => createEmptyPhysicalVenue());
     const [saving, setSaving] = useState(false);
+    const [step, setStep] = useState<Step>("info");
+    // Candado síncrono aparte del estado: dos clics muy seguidos pueden
+    // disparar dos onPress antes de que React re-renderice el botón como
+    // deshabilitado (el estado "saving" todavía no se refleja en el DOM),
+    // y como /venues no es idempotente, cada llamada de más crea otro
+    // recinto duplicado. Esta ref se lee/escribe de forma inmediata, sin
+    // esperar a un render, así que sí corta la segunda llamada a tiempo.
+    const savingRef = useRef(false);
 
     const setVenueField = <K extends keyof PhysicalVenueState["venue"]>(
         key: K,
@@ -54,28 +61,24 @@ export function VenueCanvasCreate() {
         setVenueState((prev) => ({ ...prev, venue: { ...prev.venue, [key]: value } }));
     };
 
-    const canContinue =
-        venueState.venue.name.trim().length > 0 &&
-        venueState.venue.address.trim().length > 0 &&
-        venueState.venue.city.trim().length > 0;
+    const canContinue = venueState.venue.name.trim() && venueState.venue.address.trim() && venueState.venue.city.trim();
 
     const handleSave = async (state: PhysicalVenueState) => {
         if (saving) return;
+        if (savingRef.current) return;
 
         if (!state.venue.name.trim() || !state.venue.address.trim() || !state.venue.city.trim()) {
             toast.danger("Completa nombre, dirección y ciudad del recinto antes de guardar.");
-            setStep("info");
             return;
         }
 
-        // La capacidad ya no se captura a mano: es la suma de la capacidad de
-        // cada sección que el usuario acomodó en el canvas.
         const totalCapacity = state.sections.reduce((sum, s) => sum + (s.capacity || 0), 0);
         if (totalCapacity < 1) {
             toast.danger("Agrega al menos una sección con capacidad en el canvas antes de guardar.");
             return;
         }
 
+        savingRef.current = true;
         setSaving(true);
         let createdVenueId: string | null = null;
 
@@ -170,6 +173,7 @@ export function VenueCanvasCreate() {
                 api.del(`/venues/${createdVenueId}`).catch(() => {});
             }
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -177,9 +181,14 @@ export function VenueCanvasCreate() {
     if (step === "info") {
         return (
             <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-                <div>
-                    <h3>Crear recinto</h3>
-                    <p className="text-muted text-xs mt-0.5">Datos generales, antes de diseñar pisos y zonas.</p>
+                <div className="flex items-center gap-3">
+                    <Button size="sm" variant="ghost" isIconOnly onPress={() => navigate("/venues")}>
+                        <Icon.ArrowLeft />
+                    </Button>
+                    <div>
+                        <h3>Crear recinto</h3>
+                        <p className="text-muted text-xs mt-0.5">Datos generales, antes de diseñar pisos y zonas.</p>
+                    </div>
                 </div>
 
                 <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
@@ -228,7 +237,23 @@ export function VenueCanvasCreate() {
                     </div>
                 </section>
 
-                <div className="flex gap-2 justify-end border-t border-border pt-3 pb-1">
+                {/*
+                <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
+                    <p className="text-foreground font-bold text-sm">Información operativa</p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                        <TextField isRequired type="number">
+                            <Label>Capacidad total</Label>
+                            <Input
+                                type="number"
+                                value={venueState.venue.totalCapacity.toString()}
+                                onChange={(e) => setVenueField("totalCapacity", Number(e.target.value) || 0)}
+                            />
+                        </TextField>
+                    </div>
+                </section>
+                */}
+
+                <div className="flex gap-2 justify-end sticky bottom-0 bg-background border-t border-border pt-3 pb-1">
                     <Button size="sm" variant="secondary" onPress={() => navigate("/venues")}>
                         Cancelar
                     </Button>
@@ -256,7 +281,14 @@ export function VenueCanvasCreate() {
                 </Button>
             </div>
             <div className="flex-1 min-h-0">
-                <PhysicalEditor initialState={venueState} onChange={setVenueState} mode="create" onSave={handleSave} />
+                <PhysicalEditor
+                    initialState={venueState}
+                    onChange={setVenueState}
+                    mode="create"
+                    onSave={handleSave}
+                    saving={saving}
+                    onCancel={() => navigate("/venues")}
+                />
             </div>
         </div>
     );

@@ -1,16 +1,22 @@
 import {
   Button,
-  HeroParticles,
-  HeroWaves,
   HOME_BY_ROLE,
   Icon,
   Router,
   SessionRole,
   toast,
   useSession,
+  Surface,
+  Form,
+  TextField,
+  Label,
+  Input,
+  FieldError,
+  InputGroup,
+  Description,
+  Link,
 } from "@nextticket-frontend/commons";
 import { CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
-import { InputField, authCardClassName } from "./AuthCardUI";
 import { login, register, toFriendlyAuthError } from "../api";
 
 const WELCOME_LABEL_BY_ROLE: Record<SessionRole, string> = {
@@ -19,20 +25,6 @@ const WELCOME_LABEL_BY_ROLE: Record<SessionRole, string> = {
   validador: "validador",
   admin: "administrador",
 };
-
-function BackToHome() {
-  return (
-    <div className="flex mb-3">
-      <Router.Link
-        to="/"
-        className="inline-flex items-center gap-1 text-muted hover:text-foreground text-xs transition-colors"
-      >
-        <Icon.ChevronLeft className="w-3.5 h-3.5" />
-        Inicio
-      </Router.Link>
-    </div>
-  );
-}
 
 function LoginFace({ onFlip }: { onFlip: () => void }) {
   const navigate = Router.useNavigate();
@@ -69,69 +61,87 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
   };
 
   return (
-    <div className={`w-full rounded-[24px] p-5 ${authCardClassName}`}>
-      <BackToHome />
-
-      <div className="text-center mb-4 pb-4 border-b border-border">
-        <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Inicio de sesión</h1>
-        <p className="text-muted text-xs">Accede a tu cuenta para gestionar tus eventos</p>
+    <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+      <div className="flex justify-between gap-4">
+        <Router.Link to="/" className="link gap-1">
+          <Link.Icon>
+            <Icon.ChevronLeft />
+          </Link.Icon>
+          Inicio
+        </Router.Link>
+      </div>
+      <div className="flex flex-col gap-2">
+        <h1>
+          ¡Bienvenido de nuevo!
+        </h1>
+        <p className="text-muted">
+          Introduce tus datos para acceder a la aplicación.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <InputField
-          id="signin-email"
-          label="Correo electrónico"
+      <Form className="flex flex-col gap-4 flex-1" onSubmit={handleSubmit}>
+        <TextField
+          isRequired
+          name="email"
           type="email"
-          placeholder="nombre@ejemplo.com"
           value={email}
-          onChange={setEmail}
-          icon={<Icon.Mail className="w-4 h-4" />}
-        />
-        <InputField
-          id="signin-password"
-          label="Contraseña"
+          onChange={(e: any) => setEmail(e.target ? e.target.value : e)}
+          validate={(value) => {
+            if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
+              return "Por favor ingresa un correo electrónico válido.";
+            }
+            return null;
+          }}
+        >
+          <Label>Correo electrónico</Label>
+          <Input placeholder="usuario@gmail.com" />
+          <FieldError />
+        </TextField>
+        <TextField
+          isRequired
+          name="password"
           type={showPassword ? "text" : "password"}
-          placeholder="••••••••"
           value={password}
-          onChange={setPassword}
-          icon={<Icon.Lock className="w-4 h-4" />}
-          rightSlot={
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="text-muted hover:text-foreground transition-colors"
-            >
-              {showPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-            </button>
-          }
-        />
-        <div className="flex justify-end -mt-1">
+          onChange={(e: any) => setPassword(e.target ? e.target.value : e)}
+        >
+          <Label>Contraseña</Label>
+          <InputGroup>
+            <InputGroup.Input placeholder="••••••••" />
+            <InputGroup.Suffix>
+              <Button type="button" isIconOnly size="sm" variant="ghost" onPress={() => setShowPassword(!showPassword)}>
+                {showPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+              </Button>
+            </InputGroup.Suffix>
+          </InputGroup>
+          <FieldError />
+        </TextField>
+
+        <div className="flex justify-end -mt-2">
           <Router.Link
             to="/forgot-password"
-            className="text-muted text-[11px] hover:text-foreground transition-colors"
-          >
+            className="link gap-1">
             ¿Olvidaste tu contraseña?
           </Router.Link>
         </div>
-        <Button type="submit" fullWidth isDisabled={loading}>
-          <Icon.LogIn />
-          {loading ? "Ingresando..." : "Ingresar"}
-        </Button>
-      </form>
 
-      <div className="mt-3 pt-3 text-center border-t border-border">
-        <p className="text-muted text-xs">
-          ¿No tienes una cuenta?{" "}
-          <button
-            type="button"
-            onClick={onFlip}
-            className="text-foreground font-semibold hover:opacity-70 transition-opacity ml-0.5"
-          >
-            Regístrate
-          </button>
-        </p>
+        <div className="flex justify-end gap-2 mt-2">
+          <Button type="submit" fullWidth isDisabled={loading}>
+            <Icon.LogIn />
+            {loading ? "Ingresando..." : "Ingresar"}
+          </Button>
+        </div>
+      </Form>
+
+      <div className="flex justify-center gap-2">
+        <p className="text-muted">¿Aún no tienes una cuenta? </p>
+        <button type="button" onClick={onFlip} className="link gap-1 flex items-center">
+          Regístrate
+          <Link.Icon>
+            <Icon.ChevronRight />
+          </Link.Icon>
+        </button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -161,84 +171,120 @@ function RegisterFace({ onFlip }: { onFlip: () => void }) {
 
   if (done) {
     return (
-      <div className={`w-full rounded-[24px] p-5 ${authCardClassName}`}>
-        <BackToHome />
-        <div className="flex flex-col items-center text-center gap-3 py-4">
-          <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
-            <Icon.MailCheck className="size-6 text-success" />
-          </div>
-          <h1 className="text-foreground font-bold text-lg tracking-tight">Revisa tu correo</h1>
-          <p className="text-muted text-xs">
-            Enviamos un enlace de activación a <span className="text-foreground font-medium">{done}</span>. Ábrelo
-            para establecer tu contraseña y activar tu cuenta.
-          </p>
-          <Button size="sm" variant="secondary" onPress={onFlip}>
-            Volver a iniciar sesión
-          </Button>
+      <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+        <div className="flex justify-between gap-4">
+          <Router.Link to="/" className="link gap-1">
+            <Link.Icon>
+              <Icon.ChevronLeft />
+            </Link.Icon>
+            Inicio
+          </Router.Link>
         </div>
-      </div>
+        
+        <div className="flex justify-between items-center gap-3">
+          <h1>Revisa tu correo</h1>
+          <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-success/10 text-success mb-2">
+            <Icon.MailCheck className="size-8!" />
+          </div>
+        </div>
+
+        <p className="text-muted">
+          Enviamos un enlace de activación a <span className="text-foreground font-medium">{done}</span>. Ábrelo
+          para establecer tu contraseña y activar tu cuenta.
+        </p>
+
+        <Button fullWidth onPress={onFlip}>
+          <Icon.LogIn />
+          Volver al inicio de sesión
+        </Button>
+      </Surface>
     );
   }
 
   return (
-    <div className={`w-full rounded-[24px] p-5 ${authCardClassName}`}>
-      <BackToHome />
-
-      <div className="text-center mb-4 pb-4 border-b border-border">
-        <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Crear cuenta</h1>
-        <p className="text-muted text-xs">Únete y empieza a vivir los mejores eventos</p>
+    <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+      <div className="flex justify-between gap-4">
+        <Router.Link to="/" className="link gap-1">
+          <Link.Icon>
+            <Icon.ChevronLeft />
+          </Link.Icon>
+          Inicio
+        </Router.Link>
+      </div>
+      <div className="flex flex-col gap-2">
+        <h1>
+          Crear cuenta
+        </h1>
+        <p className="text-muted">
+          Únete a nosotros, introduce tus datos para registrarte.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <Form className="flex flex-col gap-4 flex-1" onSubmit={handleSubmit}>
         <div className="grid grid-cols-2 gap-3">
-          <InputField
-            id="signup-nombre"
-            label="Nombre"
-            placeholder="Juan"
+          <TextField
+            isRequired
+            name="nombre"
+            type="text"
             value={nombre}
-            onChange={setNombre}
-            icon={<Icon.User className="w-4 h-4" />}
-          />
-          <InputField
-            id="signup-apellidos"
-            label="Apellidos"
-            placeholder="García"
-            value={apellidos}
-            onChange={setApellidos}
-            icon={<Icon.User className="w-4 h-4" />}
-          />
-        </div>
-        <InputField
-          id="signup-email"
-          label="Correo electrónico"
-          type="email"
-          placeholder="nombre@ejemplo.com"
-          value={email}
-          onChange={setEmail}
-          icon={<Icon.Mail className="w-4 h-4" />}
-        />
-        <p className="text-muted text-[11px] -mt-1">
-          Te enviaremos un correo para que establezcas tu contraseña y actives tu cuenta.
-        </p>
-        <Button type="submit" fullWidth isDisabled={loading}>
-          <Icon.UserPlus />
-          {loading ? "Creando cuenta..." : "Crear cuenta"}
-        </Button>
-      </form>
-
-      <div className="mt-3 pt-3 text-center border-t border-border">
-        <p className="text-muted text-xs">
-          ¿Ya tienes una cuenta?{" "}
-          <button
-            type="button"
-            onClick={onFlip}
-            className="text-foreground font-semibold hover:opacity-70 transition-opacity ml-0.5"
+            onChange={(e: any) => setNombre(e.target ? e.target.value : e)}
           >
-            Inicia sesión
-          </button>
-        </p>
+            <Label>Nombres</Label>
+            <Input placeholder="Juan" />
+            <FieldError />
+          </TextField>
+          <TextField
+            isRequired
+            name="apellidos"
+            type="text"
+            value={apellidos}
+            onChange={(e: any) => setApellidos(e.target ? e.target.value : e)}
+          >
+            <Label>Apellidos</Label>
+            <Input placeholder="García" />
+            <FieldError />
+          </TextField>
+        </div>
+        <TextField
+          isRequired
+          name="email"
+          type="email"
+          value={email}
+          onChange={(e: any) => setEmail(e.target ? e.target.value : e)}
+          validate={(value) => {
+            if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
+              return "Por favor ingresa un correo electrónico válido.";
+            }
+            return null;
+          }}
+        >
+          <Label>Correo electrónico</Label>
+          <Input placeholder="nombre@gmail.com" />
+          <FieldError />
+        </TextField>
+
+        <Description>
+          Te enviaremos un correo para que establezcas tu contraseña y actives tu cuenta.
+        </Description>
+
+        <div className="flex justify-end gap-2 mt-2">
+          <Button type="submit" fullWidth isDisabled={loading}>
+            <Icon.UserPlus />
+            {loading ? "Creando cuenta..." : "Crear cuenta"}
+          </Button>
+        </div>
+      </Form>
+
+      <div className="flex justify-center gap-2">
+        <p className="text-muted">¿Ya tienes una cuenta? </p>
+        <button type="button" onClick={onFlip} className="link gap-1 flex items-center">
+          Inicia sesión
+          <Link.Icon>
+            <Icon.ChevronRight />
+          </Link.Icon>
+        </button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -295,26 +341,21 @@ export function AuthCard() {
   };
 
   return (
-    <div className="relative w-full min-h-screen flex items-center justify-center px-4 py-10 bg-background overflow-hidden">
-      <HeroWaves />
-      <HeroParticles />
-
-      <div className="relative z-10 w-full max-w-88" style={{ perspective: "1400px" }}>
-        <div
-          style={{
-            position: "relative",
-            height: containerH,
-            transformStyle: "preserve-3d",
-            transition: `transform ${FLIP_DURATION_MS}ms cubic-bezier(0.4, 0.2, 0.2, 1)`,
-            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          }}
-        >
-          <div ref={frontRef} style={faceStyle(false)}>
-            <LoginFace onFlip={flip} />
-          </div>
-          <div ref={backRef} style={faceStyle(true)}>
-            <RegisterFace onFlip={flip} />
-          </div>
+    <div className="w-full max-w-[400px]" style={{ perspective: "1400px" }}>
+      <div
+        style={{
+          position: "relative",
+          height: containerH,
+          transformStyle: "preserve-3d",
+          transition: `transform ${FLIP_DURATION_MS}ms cubic-bezier(0.4, 0.2, 0.2, 1)`,
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+        }}
+      >
+        <div ref={frontRef} style={faceStyle(false)}>
+          <LoginFace onFlip={flip} />
+        </div>
+        <div ref={backRef} style={faceStyle(true)}>
+          <RegisterFace onFlip={flip} />
         </div>
       </div>
     </div>

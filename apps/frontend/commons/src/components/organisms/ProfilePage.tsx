@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { Button, Description, Input, Label, TextField, toast } from "@heroui/react";
-import { Check, Mail, Pencil } from "lucide-react";
+import { useEffect, useState, FormEvent } from "react";
+import { Button, Input, Label, TextField, FieldError, Form, toast, Avatar, Description, Surface } from "@heroui/react";
+import { Check, Pencil } from "lucide-react";
 import { ThemeSwitcher } from "../molecules/ThemeSwitcher";
-import { useSession, type SessionRole } from "../../providers/SessionProvider";
+import { useSession } from "../../providers/SessionProvider";
 import { API_BASE_URL, ApiError, useApi } from "../../providers/api";
 
 interface ProfileData {
@@ -11,24 +11,11 @@ interface ProfileData {
     email: string;
 }
 
-const ROLE_LABELS: Record<SessionRole, string> = {
-    usuario: "Cliente",
-    organizador: "Organizador",
-    admin: "Administrador",
-    validador: "Validador",
-};
-
 function splitName(fullName: string): { nombre: string; apellido: string } {
     const [nombre = "", ...rest] = fullName.trim().split(/\s+/);
     return { nombre, apellido: rest.join(" ") };
 }
 
-/**
- * Página de perfil compartida por los 4 roles: cada shell la monta bajo su
- * propia ruta (/dashboard aparte para Admin, /organizer/profile, etc.) y le
- * agrega su propio breadcrumb — esta pieza es agnóstica de rol salvo por el
- * chip de rol que muestra.
- */
 export function ProfilePage() {
     const { user, signIn } = useSession();
     const api = useApi();
@@ -44,7 +31,6 @@ export function ProfilePage() {
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
-    // Si cambia el usuario de la sesión, refleja lo último guardado.
     useEffect(() => {
         if (!user) return;
         const next = { ...splitName(user.name), email: user.email };
@@ -67,12 +53,14 @@ export function ProfilePage() {
         setConfirmPassword("");
     };
 
-    const set = (k: keyof ProfileData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setDraft((p) => ({ ...p, [k]: e.target.value }));
+    const handleDraftChange = (k: keyof ProfileData, val: string) =>
+        setDraft((p) => ({ ...p, [k]: val }));
 
-    const saveEdit = async () => {
+    const saveEdit = async (e?: FormEvent) => {
+        if (e) e.preventDefault();
+
         if (!user?.id) {
-            toast.danger("Tu sesión no tiene un id válido. Cierra sesión y vuelve a iniciarla.");
+            toast.danger("Tu sesión no tiene un id válido.");
             return;
         }
         const name = `${draft.nombre.trim()} ${draft.apellido.trim()}`.trim();
@@ -81,9 +69,6 @@ export function ProfilePage() {
             return;
         }
 
-        // El cambio de contraseña es opcional dentro de este mismo botón de
-        // Guardar: solo se valida/aplica si el usuario tocó alguno de los tres
-        // campos de la sección Seguridad.
         const wantsPasswordChange = Boolean(currentPassword || newPassword || confirmPassword);
         if (wantsPasswordChange) {
             if (!currentPassword) {
@@ -103,10 +88,6 @@ export function ProfilePage() {
         setSaving(true);
         try {
             if (wantsPasswordChange) {
-                // Verifica la contraseña actual llamando a /auth/login directo (sin
-                // useApi): si se usara useApi y la contraseña actual estuviera mal,
-                // el 401 dispararía su signOut() automático y cerraría la sesión
-                // válida que ya tenía el usuario — justo lo que no queremos aquí.
                 const verifyRes = await fetch(`${API_BASE_URL}/auth/login`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -147,123 +128,157 @@ export function ProfilePage() {
     if (!user) return null;
 
     const initials = `${data.nombre.charAt(0)}${data.apellido.charAt(0)}`.toUpperCase();
-    const roleLabel = ROLE_LABELS[user.role];
 
     return (
-        <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-            <div className="flex justify-between items-start flex-wrap gap-3">
-                <div className="flex items-center gap-3.5">
-                    <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center text-accent-foreground text-xl font-black select-none shrink-0">
-                        {initials}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h3>
-                                {data.nombre} {data.apellido}
-                            </h3>
-                            <span className="uppercase text-[10px] font-semibold px-2 py-0.5 rounded-full bg-default text-muted">
-                                {roleLabel}
-                            </span>
+        <div className="flex-1 w-full h-full p-4 md:p-8 lg:p-12 overflow-y-auto animate-in fade-in duration-500">
+            <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row gap-6 lg:gap-8">
+
+                {/* Panel lateral / Info general */}
+                <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col gap-6">
+                    <Surface className="flex flex-col items-center text-center gap-5 bg-background shadow-overlay rounded-[10px] p-8 pointer-events-auto">
+                        <Avatar className="w-32 h-32 rounded-full border-[4px] border-background shadow-sm text-4xl font-black shrink-0">
+                            <Avatar.Fallback className="bg-default text-muted text-2xl">{initials}</Avatar.Fallback>
+                        </Avatar>
+
+                        <div className="flex flex-col items-center gap-2">
+                            <h2>Perfil</h2>
                         </div>
-                        <p className="text-muted text-xs flex items-center gap-1.5">
-                            <Mail className="size-3.5" />
-                            {data.email}
-                        </p>
-                    </div>
+                    </Surface>
+
+                    <Surface className="flex flex-col gap-4 bg-background shadow-overlay rounded-[10px] p-6 pointer-events-auto">
+                        <div className="flex flex-col gap-1">
+                            <h2 className="font-bold text-foreground">Apariencia</h2>
+                            <p className="text-xs text-muted">Elige el aspecto visual de tu sesión</p>
+                        </div>
+                        <div className="flex items-center justify-between bg-surface-secondary/50 p-3 rounded-lg border border-border/50">
+                            <Label className="text-sm font-semibold text-foreground m-0">Tema visual</Label>
+                            <ThemeSwitcher />
+                        </div>
+                    </Surface>
                 </div>
 
-                {!editing && (
-                    <Button size="sm" variant="secondary" onPress={startEdit}>
-                        <Pencil className="size-3.5" />
-                        Editar perfil
-                    </Button>
-                )}
+                {/* Formulario Principal */}
+                <Surface className="flex-1 flex flex-col bg-background shadow-overlay rounded-[10px] p-8 sm:p-10 pointer-events-auto">
+                    <Form className="flex flex-col gap-8 w-full" onSubmit={saveEdit}>
+
+                        {/* Acciones */}
+                        <div className="flex justify-end gap-3 pb-2 mb-2">
+                            {!editing ? (
+                                <Button variant="tertiary" onPress={startEdit} className="w-full sm:w-auto px-8">
+                                    <Pencil className="size-4" /> Editar información
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button variant="tertiary" onPress={cancelEdit} isDisabled={saving} className="w-full sm:w-auto">
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" isDisabled={saving} className="w-full sm:w-auto px-8">
+                                        <Check className="size-4" /> {saving ? "Guardando..." : "Guardar cambios"}
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Datos Personales */}
+                        <div className="flex flex-col gap-5">
+                            <div className="pb-2 border-b border-border/50">
+                                <h2 className="text-lg font-bold text-foreground">Datos Personales</h2>
+                                <p className="text-sm text-muted">Administra tu información básica de contacto.</p>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-5">
+                                <TextField
+                                    isDisabled={!editing}
+                                    name="nombre"
+                                    value={editing ? draft.nombre : data.nombre}
+                                    onChange={(e: any) => handleDraftChange("nombre", e.target ? e.target.value : e)}
+                                >
+                                    <Label>Nombres</Label>
+                                    <Input placeholder="Juan" />
+                                    <FieldError />
+                                </TextField>
+
+                                <TextField
+                                    isDisabled={!editing}
+                                    name="apellido"
+                                    value={editing ? draft.apellido : data.apellido}
+                                    onChange={(e: any) => handleDraftChange("apellido", e.target ? e.target.value : e)}
+                                >
+                                    <Label>Apellidos</Label>
+                                    <Input placeholder="Pérez" />
+                                    <FieldError />
+                                </TextField>
+                            </div>
+
+                            <TextField
+                                isDisabled={!editing}
+                                name="email"
+                                type="email"
+                                value={editing ? draft.email : data.email}
+                                onChange={(e: any) => handleDraftChange("email", e.target ? e.target.value : e)}
+                                validate={(value) => {
+                                    if (editing && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
+                                        return "Por favor ingresa un correo electrónico válido.";
+                                    }
+                                    return null;
+                                }}
+                            >
+                                <Label>Correo electrónico</Label>
+                                <Input placeholder="juan@ejemplo.com" />
+                                <FieldError />
+                            </TextField>
+                        </div>
+
+                        {/* Seguridad */}
+                        <div className="flex flex-col gap-5">
+                            <div className="pb-2 border-b border-border/50">
+                                <h2 className="text-lg font-bold text-foreground">Seguridad</h2>
+                                <p className="text-sm text-muted">Administra la contraseña de tu cuenta.</p>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-5">
+                                <TextField
+                                    isDisabled={!editing}
+                                    name="current_password"
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e: any) => setCurrentPassword(e.target ? e.target.value : e)}
+                                    className="md:col-span-2 max-w-sm"
+                                >
+                                    <Label>Contraseña actual</Label>
+                                    <Input autoComplete="current-password" placeholder="••••••••" />
+                                    <FieldError />
+                                </TextField>
+
+                                <TextField
+                                    isDisabled={!editing}
+                                    name="new_password"
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e: any) => setNewPassword(e.target ? e.target.value : e)}
+                                >
+                                    <Label>Nueva contraseña</Label>
+                                    <Input autoComplete="new-password" placeholder="••••••••" />
+                                    <FieldError />
+                                </TextField>
+
+                                <TextField
+                                    isDisabled={!editing}
+                                    name="confirm_password"
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e: any) => setConfirmPassword(e.target ? e.target.value : e)}
+                                >
+                                    <Label>Confirmar contraseña</Label>
+                                    <Input autoComplete="new-password" placeholder="••••••••" />
+                                    <FieldError />
+                                </TextField>
+                            </div>
+                        </div>
+
+                    </Form>
+                </Surface>
             </div>
-
-            <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
-                <p className="text-foreground font-bold text-sm">Datos personales</p>
-                <div className="grid sm:grid-cols-2 gap-3.5">
-                    <TextField isDisabled={!editing}>
-                        <Label>Nombre</Label>
-                        <Input value={editing ? draft.nombre : data.nombre} onChange={set("nombre")} />
-                    </TextField>
-                    <TextField isDisabled={!editing}>
-                        <Label>Apellido</Label>
-                        <Input value={editing ? draft.apellido : data.apellido} onChange={set("apellido")} />
-                    </TextField>
-                    <TextField isDisabled={!editing} className="sm:col-span-2">
-                        <Label>Correo electrónico</Label>
-                        <Input type="email" value={editing ? draft.email : data.email} onChange={set("email")} />
-                    </TextField>
-                </div>
-            </section>
-
-            <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
-                <div>
-                    <p className="text-foreground font-bold text-sm">Apariencia</p>
-                    <Description>Elige cómo se ve Nextticket en tu sesión</Description>
-                </div>
-                <ThemeSwitcher />
-            </section>
-
-            <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
-                <div>
-                    <p className="text-foreground font-bold text-sm">Seguridad</p>
-                    <Description>
-                        {editing ? "Deja estos campos vacíos si no quieres cambiar tu contraseña." : "Actualiza la contraseña de tu cuenta"}
-                    </Description>
-                </div>
-                {/*
-                    autoComplete="off" en el <form> es necesario: sin un formulario
-                    propio, el navegador trata todos los inputs de la página como uno
-                    solo y, al ver un campo type="password", autocompleta el texto más
-                    cercano (p. ej. la barra de búsqueda de Eventos) con una credencial
-                    guardada del sitio.
-                */}
-                <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <TextField isDisabled={!editing} className="sm:col-span-2">
-                            <Label>Contraseña actual</Label>
-                            <Input
-                                type="password"
-                                autoComplete="current-password"
-                                value={currentPassword}
-                                onChange={(e) => setCurrentPassword(e.target.value)}
-                            />
-                        </TextField>
-                        <TextField isDisabled={!editing}>
-                            <Label>Nueva contraseña</Label>
-                            <Input
-                                type="password"
-                                autoComplete="new-password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                            />
-                        </TextField>
-                        <TextField isDisabled={!editing}>
-                            <Label>Confirmar contraseña</Label>
-                            <Input
-                                type="password"
-                                autoComplete="new-password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                            />
-                        </TextField>
-                    </div>
-                </form>
-            </section>
-
-            {editing && (
-                <div className="flex gap-2 justify-end border-t border-border pt-3 pb-1">
-                    <Button size="sm" variant="secondary" onPress={cancelEdit} isDisabled={saving}>
-                        Cancelar
-                    </Button>
-                    <Button size="sm" onPress={saveEdit} isDisabled={saving}>
-                        <Check className="size-3.5" />
-                        {saving ? "Guardando..." : "Guardar"}
-                    </Button>
-                </div>
-            )}
         </div>
     );
 }

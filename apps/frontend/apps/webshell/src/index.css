@@ -33,7 +33,7 @@
     }
 
     p {
-        @apply md:text-base text-sm leading-relaxed;
+        @apply md:text-sm text-sm leading-relaxed;
     }
 
     /* HeroUI Default Theme */
@@ -357,7 +357,7 @@
     }
 
     .accordion__body-inner {
-        @apply px-2 pb-2 pt-0 bg-transparent;
+        @apply px-4 pb-4 pt-0 bg-transparent;
     }
 
     .accordion__trigger {
@@ -384,6 +384,10 @@
 
     .description {
         @apply flex items-center gap-1;
+    }
+
+    .link {
+        @apply text-sm;
     }
 }
 

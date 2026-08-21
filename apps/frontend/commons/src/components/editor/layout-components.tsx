@@ -46,7 +46,7 @@ export function SmartPanel({
         onOpenChange={onOpenChange}
       >
         <Drawer.Content placement={placement}>
-          <Drawer.Dialog>
+          <Drawer.Dialog aria-label="Panel lateral">
             <Drawer.CloseTrigger />
             <Drawer.Body className="p-4">{children}</Drawer.Body>
           </Drawer.Dialog>

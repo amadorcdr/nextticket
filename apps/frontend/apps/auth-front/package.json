@@ -9,7 +9,8 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
-        "@nextticket-frontend/commons": "1.0.0"
+        "@nextticket-frontend/commons": "1.0.0",
+        "@nextticket-frontend/events-front": "1.0.0"
     },
     "peerDependencies": {
         "react": "^19.0.0"

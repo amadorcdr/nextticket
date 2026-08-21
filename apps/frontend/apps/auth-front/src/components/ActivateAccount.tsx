@@ -1,70 +1,54 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router, toast } from "@nextticket-frontend/commons";
+import {
+  Button,
+  Icon,
+  Router,
+  toast,
+  Surface,
+  Form,
+  TextField,
+  Label,
+  Input,
+  FieldError,
+  InputGroup,
+  Link,
+} from "@nextticket-frontend/commons";
 import { FormEvent, useState } from "react";
-import { InputField, authCardClassName } from "./AuthCardUI";
 import { activateAccount, resendActivation, toFriendlyAuthError } from "../api";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-function BackToLogin() {
-  return (
-    <div className="flex mb-3">
-      <Router.Link
-        to="/sign-in"
-        className="inline-flex items-center gap-1 text-muted hover:text-foreground text-xs transition-colors"
-      >
-        <Icon.ChevronLeft className="w-3.5 h-3.5" />
-        Inicio de sesión
-      </Router.Link>
-    </div>
-  );
-}
-
-function ResendActivation({ token }: { token: string | null }) {
-  const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
+function ResendActivation({ token }: { token: string }) {
+  const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleResend = async (e: FormEvent) => {
-    e.preventDefault();
-    setSending(true);
+  const handleResend = async () => {
+    setLoading(true);
     try {
-      await resendActivation(email);
+      await resendActivation(token);
       setSent(true);
+      toast.success("Te hemos enviado un nuevo enlace de activación.");
     } catch (err) {
-      toast.danger(toFriendlyAuthError(err, "No se pudo reenviar el correo de activación."));
+      toast.danger(toFriendlyAuthError(err, "No se pudo enviar el enlace."));
     } finally {
-      setSending(false);
+      setLoading(false);
     }
   };
 
-  if (sent) {
-    return (
-      <p className="text-success text-xs text-center">
-        Si el correo corresponde a una cuenta pendiente de activación, se envió un nuevo enlace.
-      </p>
-    );
-  }
-
   return (
-    <form onSubmit={handleResend} className="space-y-3">
-      <p className="text-muted text-xs text-center">
-        {token
-          ? "El enlace de activación ya no es válido. Escribe tu correo para recibir uno nuevo."
-          : "Escribe tu correo para recibir un nuevo enlace de activación."}
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-between items-center gap-3">
+        <h1>Enlace inválido</h1>
+        <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-danger/10 text-danger mb-2">
+          <Icon.XCircle className="size-8!" />
+        </div>
+      </div>
+      <p className="text-muted">
+        El enlace de activación es inválido o ha expirado.
       </p>
-      <InputField
-        id="resend-email"
-        label="Correo electrónico"
-        type="email"
-        placeholder="nombre@ejemplo.com"
-        value={email}
-        onChange={setEmail}
-        icon={<Icon.Mail className="w-4 h-4" />}
-      />
-      <Button type="submit" fullWidth isDisabled={sending}>
-        {sending ? "Enviando..." : "Reenviar enlace de activación"}
+      <Button fullWidth isDisabled={loading || sent} onPress={handleResend}>
+        {loading ? "Enviando..." : sent ? "Enlace enviado" : "Solicitar nuevo enlace"}
       </Button>
-    </form>
+    </div>
   );
 }
 
@@ -98,7 +82,7 @@ export function ActivateAccount() {
       return;
     }
     if (!token) {
-      const message = "El enlace de activación no incluye un token válido.";
+      const message = "El enlace de activación no es válido.";
       toast.danger(message);
       setLinkError(message);
       return;
@@ -124,79 +108,121 @@ export function ActivateAccount() {
   };
 
   return (
-    <div className="relative w-full min-h-screen flex items-center justify-center px-4 py-10 bg-background overflow-hidden">
-      <HeroWaves />
-      <HeroParticles />
-
-      <div className={`relative z-10 w-full max-w-88 rounded-[24px] p-5 ${authCardClassName}`}>
-        {activated ? (
-          <div className="flex flex-col items-center text-center gap-3 py-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
-              <Icon.CheckCircle2 className="size-6 text-success" />
-            </div>
-            <h1 className="text-foreground font-bold text-lg tracking-tight">¡Cuenta activada!</h1>
-            <p className="text-muted text-xs">Tu cuenta ha sido activada correctamente. Ya puedes iniciar sesión.</p>
-            <Button fullWidth onPress={() => navigate("/sign-in")}>
-              <Icon.LogIn />
-              Ir a iniciar sesión
-            </Button>
+    <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+      {activated ? (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio
+            </Router.Link>
           </div>
-        ) : (
-          <>
-            <BackToLogin />
-            <div className="text-center mb-4 pb-4 border-b border-border">
-              <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Activar cuenta</h1>
-              <p className="text-muted text-xs">Establece tu contraseña para activar tu cuenta de NextTicket</p>
+          <div className="flex justify-between items-center gap-3">
+            <h1>¡Cuenta activada!</h1>
+            <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-success/10 text-success mb-2">
+              <Icon.CheckCircle2 className="size-8!" />
             </div>
+          </div>
 
-            {linkError ? (
-              <ResendActivation token={token} />
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <InputField
-                  id="activate-password"
-                  label="Nueva contraseña"
+          <p className="text-muted">
+            Tu cuenta ha sido activada correctamente. Ya puedes iniciar sesión.
+          </p>
+
+          <Button fullWidth onPress={() => navigate("/sign-in")}>
+            <Icon.LogIn />
+            Ir al inicio de sesión
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/sign-in" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio de sesión
+            </Router.Link>
+          </div>
+
+          {linkError ? (
+            <ResendActivation token={token || ""} />
+          ) : (
+            <>
+              <div className="flex flex-col gap-2">
+                <h1>Activa tu cuenta</h1>
+                <p className="text-muted">Crea una contraseña segura para terminar de configurar tu cuenta.</p>
+              </div>
+
+              <Form className="flex flex-col gap-4 flex-1" onSubmit={handleSubmit}>
+                <TextField
+                  isRequired
+                  name="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
                   value={password}
-                  onChange={setPassword}
-                  icon={<Icon.Lock className="w-4 h-4" />}
-                  rightSlot={
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="text-muted hover:text-foreground transition-colors"
-                    >
-                      {showPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-                    </button>
-                  }
-                />
-                <InputField
-                  id="activate-confirm-password"
-                  label="Confirmar contraseña"
+                  onChange={(e: any) => setPassword(e.target ? e.target.value : e)}
+                  validate={(value) => {
+                    if (value.length < MIN_PASSWORD_LENGTH) {
+                      return `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
+                    }
+                    return null;
+                  }}
+                >
+                  <Label>Contraseña</Label>
+                  <InputGroup>
+                    <InputGroup.Input placeholder="••••••••" />
+                    <InputGroup.Suffix>
+                      <Button type="button" isIconOnly size="sm" variant="ghost" onPress={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                      </Button>
+                    </InputGroup.Suffix>
+                  </InputGroup>
+                  <FieldError />
+                </TextField>
+
+                <TextField
+                  isRequired
+                  name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  placeholder="••••••••"
                   value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  icon={<Icon.Lock className="w-4 h-4" />}
-                  rightSlot={
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((v) => !v)}
-                      className="text-muted hover:text-foreground transition-colors"
-                    >
-                      {showConfirmPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-                    </button>
-                  }
-                />
-                <Button type="submit" fullWidth isDisabled={loading}>
-                  {loading ? "Activando..." : "Activar cuenta"}
-                </Button>
-              </form>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+                  onChange={(e: any) => setConfirmPassword(e.target ? e.target.value : e)}
+                  validate={(value) => {
+                    if (value !== password) return "Las contraseñas no coinciden.";
+                    return null;
+                  }}
+                >
+                  <Label>Confirmar contraseña</Label>
+                  <InputGroup>
+                    <InputGroup.Input placeholder="••••••••" />
+                    <InputGroup.Suffix>
+                      <Button type="button" isIconOnly size="sm" variant="ghost" onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                        {showConfirmPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                      </Button>
+                    </InputGroup.Suffix>
+                  </InputGroup>
+                  <FieldError />
+                </TextField>
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <Button type="submit" fullWidth isDisabled={loading}>
+                    {loading ? "Activando..." : "Activar cuenta"}
+                  </Button>
+                </div>
+              </Form>
+
+              <div className="flex justify-center mt-2">
+                <p className="text-muted text-center">
+                  Al activar tu cuenta, aceptas nuestros
+                  Términos y Condiciones
+                  y
+                  Aviso de Privacidad.
+                </p>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </Surface>
   );
 }

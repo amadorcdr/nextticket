@@ -46,7 +46,7 @@ import {
 import { useKeyboardShortcuts } from "./keyboard";
 import { SmartPanel, useIsDesktop, ConfirmSwitch, ConfirmSelect } from "./layout-components";
 import { ColorField, CheckField } from "./controls";
-import { Accordion, Button, ButtonGroup, Checkbox, Chip, SearchField, Description, Kbd, Label, NumberField, ScrollShadow, Separator, Toolbar, Tooltip, ToggleButton, ToggleButtonGroup, InputGroup, TextField, TextArea, ListBox, Select, Switch, Input, Dropdown, CloseButton, Tabs, Spinner } from "@heroui/react";
+import { Accordion, Button, ButtonGroup, Checkbox, Chip, SearchField, Description, Kbd, Label, NumberField, ScrollShadow, Separator, Toolbar, Tooltip, ToggleButton, ToggleButtonGroup, InputGroup, TextField, TextArea, ListBox, Select, Switch, Input, Dropdown, CloseButton, Tabs, Spinner, Modal, FieldError } from "@heroui/react";
 import { Armchair, Search, ClipboardPaste, ClipboardPlus, Copy, CopyPlus, LocateFixed, PanelLeftOpen, PanelRightOpen, Plus, Redo2, SquareDashedMousePointer, Trash2, Undo2, Users, X, ZoomIn, ZoomOut, Circle, Square, LockKeyhole, LockKeyholeOpen, Link, Unlink, Spline, MousePointer2, Hand, Theater, TvMinimal, Speaker, LogIn, LogOut, Route, Toilet, Wine, Type, Shapes, Component, Crown, Gem, Accessibility, LayersPlus, FileUp, Save, Check, Download, ChevronDown, GripVertical, Pencil, CheckCircle2, Ban, Wrench, Construction, Upload, SquareSquare, ChevronRight, ChevronLeft, SquarePen, Layers } from "lucide-react";
 
 const ELEMENT_ICONS: Record<CanvasElementType, React.ElementType> = {
@@ -117,6 +117,14 @@ export interface PhysicalEditorProps {
   mode?: PhysicalEditorMode;
   /** Callback al presionar el botón principal (Crear / Guardar). */
   onSave?: (state: PhysicalVenueState) => void;
+  /** El backend no tiene un endpoint de "guardar todo": onSave hace una
+   * cascada de requests entidad por entidad, que en recintos grandes tarda
+   * varios segundos. Mientras esto sea true, se deshabilita el botón y se
+   * muestra un indicador de carga para que no parezca que la app se colgó. */
+  saving?: boolean;
+  /** Callback al presionar "Cancelar". Si no se pasa, el botón no se muestra
+   * (el canvas no tiene ninguna otra forma de salir sin guardar). */
+  onCancel?: () => void;
 }
 import { worldOutline } from "./geometry";
 
@@ -207,10 +215,18 @@ const StaticSectionPreview = ({ section, seats }: { section: Section, seats: Sea
   );
 };
 
-export default function PhysicalEditor({ initialState, onChange, mode = "create", onSave }: PhysicalEditorProps) {
+export default function PhysicalEditor({ initialState, onChange, mode = "create", onSave, saving = false, onCancel }: PhysicalEditorProps) {
   const { state: venue, commit: setVenue, mutateSilently: setVenueSilent, settle, undo, redo, canUndo, canRedo } =
     useHistory<PhysicalVenueState>(initialState ?? createEmptyPhysicalVenue());
   useEffect(() => { onChange?.(venue); }, [venue, onChange]);
+
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const setVenueField = <K extends keyof PhysicalVenueState["venue"]>(
+    key: K,
+    value: PhysicalVenueState["venue"][K],
+  ) => {
+    setVenue((prev) => ({ ...prev, venue: { ...prev.venue, [key]: value } }));
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -240,6 +256,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
   const marqueeRef = useRef<{ active: boolean; start: Pt; current: Pt }>({ active: false, start: { x: 0, y: 0 }, current: { x: 0, y: 0 } });
   const clipboardRef = useRef<{ sections: Section[]; elements: CanvasElementModel[] }>({ sections: [], elements: [] });
   const [hasClipboard, setHasClipboard] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newRowName, setNewRowName] = useState("");
   const [newRowSeats, setNewRowSeats] = useState(10);
   const sectionLabelPoolRef = useRef<Text[]>([]);
@@ -385,7 +402,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
       if (!section) return prev;
       if (numbered) {
         // De general a numerada: crear config de filas
-        const updated = { ...section, rowSeatCounts: [10], rowNames: ["A"] };
+        const rowSeatCounts = [10];
+        const updated = { ...section, rowSeatCounts, rowNames: ["A"], capacity: rowSeatCounts.reduce((a, b) => a + b, 0) };
         const rebuilt = buildSeatsForSection(updated, []);
         return { ...prev, sections: prev.sections.map((z) => (z.id === id ? updated : z)), seats: [...prev.seats.filter((s) => s.sectionId !== id), ...rebuilt] };
       } else {
@@ -400,7 +418,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
     setVenue((prev) => {
       const section = prev.sections.find((z) => z.id === id);
       if (!section) return prev;
-      const updated = { ...section, rowSeatCounts, rowNames };
+      const updated = { ...section, rowSeatCounts, rowNames, capacity: rowSeatCounts.reduce((a, b) => a + b, 0) };
       const rebuilt = buildSeatsForSection(updated, prev.seats.filter((s) => s.sectionId === id));
       return { ...prev, sections: prev.sections.map((z) => (z.id === id ? updated : z)), seats: [...prev.seats.filter((s) => s.sectionId !== id), ...rebuilt] };
     });
@@ -963,8 +981,67 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
         <div className="flex flex-row items-end justify-between gap-4">
           <div className="flex flex-col gap-3">
             <div className="flex gap-2 items-center">
-              <h2>{mode === "update" ? "Editar distribución de zonas" : "Crear nuevo recinto"}</h2>
+              <h2>{venue.venue.name || (mode === "update" ? "Editar distribución de zonas" : "Nuevo recinto")}</h2>
 
+              <div className="flex gap-1 items-center">
+
+                <Tooltip>
+                  <Button
+                    isIconOnly
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => fileInputRef.current?.click()}
+                  >
+                    <Upload />
+                  </Button>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Importar</span>
+                  </Tooltip.Content>
+                </Tooltip>
+
+                <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
+
+                <Dropdown>
+                  <Tooltip>
+                    <Button isIconOnly
+                      variant="ghost"
+                      size="sm"
+                    >
+                      <Download />
+                    </Button>
+                    <Tooltip.Content showArrow offset={12}>
+                      <Tooltip.Arrow />
+                      <span>Exportar</span>
+                    </Tooltip.Content>
+                  </Tooltip>
+
+                  <Dropdown.Popover placement="bottom end" className="min-w-0">
+                    <Dropdown.Menu>
+                      <Dropdown.Item
+                        id="json"
+                        textValue="Como JSON"
+                        onAction={handleExportJSON}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <Label>Exportar como JSON</Label>
+                          <Description>Formato apto para editar</Description>
+                        </div>
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        id="svg"
+                        textValue="Como SVG"
+                        onAction={handleExportSVG}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <Label>Exportar como SVG</Label>
+                          <Description>Formato solo ilustrativo</Description>
+                        </div>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+              </div>
               {importedFileName && <Description><Icon.FileBracesCorner /> {importedFileName}</Description>}
 
             </div>
@@ -978,63 +1055,19 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           </div>
 
           <div className="flex gap-1 items-center">
-            <Tooltip>
-              <Button
-                isIconOnly
-                variant="tertiary"
-                onPress={() => fileInputRef.current?.click()}
-              >
-                <Upload />
+            {onCancel && (
+              <Button variant="secondary" onPress={onCancel} isDisabled={saving}>
+                Cancelar
               </Button>
-              <Tooltip.Content showArrow offset={12}>
-                <Tooltip.Arrow />
-                <span>Importar</span>
-              </Tooltip.Content>
-            </Tooltip>
-
-            <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
-
-            <Dropdown>
-              <Tooltip>
-                <Button isIconOnly
-                  variant="tertiary"
-                >
-                  <Download />
-                </Button>
-                <Tooltip.Content showArrow offset={12}>
-                  <Tooltip.Arrow />
-                  <span>Exportar</span>
-                </Tooltip.Content>
-              </Tooltip>
-
-              <Dropdown.Popover placement="bottom end" className="min-w-0">
-                <Dropdown.Menu>
-                  <Dropdown.Item
-                    id="json"
-                    textValue="Como JSON"
-                    onAction={handleExportJSON}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <Label>Exportar como JSON</Label>
-                      <Description>Formato apto para editar</Description>
-                    </div>
-                  </Dropdown.Item>
-                  <Dropdown.Item
-                    id="svg"
-                    textValue="Como SVG"
-                    onAction={handleExportSVG}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <Label>Exportar como SVG</Label>
-                      <Description>Formato solo ilustrativo</Description>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-
-            <Button onPress={() => onSave?.(venue)}>
-              {mode === "create" ? (<><Plus /> Registrar</>) : (<><Save /> Guardar cambios</>)}
+            )}
+            <Button onPress={() => { if (!saving) onSave?.(venue); }} isDisabled={saving}>
+              {saving ? (
+                <><Spinner size="sm" /> Guardando…</>
+              ) : mode === "create" ? (
+                <><Plus /> Registrar</>
+              ) : (
+                <><Save /> Guardar cambios</>
+              )}
             </Button>
           </div>
         </div>
@@ -1046,11 +1079,13 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
       <div className="flex flex-col gap-3 flex-1 min-h-0">
 
         {/* Fila 2: Movida adentro para unificarse con el Canvas */}
-        <div className="flex flex-row items-center gap-1 p-2 shrink-0 bg-surface shadow-surface rounded-[10px]">
+        <div className="flex flex-row items-center gap-1 p-2 shrink-0 bg-surface shadow-surface rounded-[10px] w-full overflow-x-auto scrollbar-none">
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={() => setLeftOpen(!leftOpen)}
             >
               {leftOpen ? <PanelRightOpen /> : <PanelLeftOpen />}
@@ -1062,7 +1097,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           </Tooltip>
           <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
 
-          <div className="flex-1 min-w-0 flex items-center flex gap-1">
+          <div className="flex-1 min-w-40 flex items-center flex gap-1">
             <ScrollShadow orientation="horizontal" hideScrollBar className="min-w-0">
               <Tabs
                 variant="secondary"
@@ -1114,7 +1149,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
             <Tooltip>
               <Button
                 isIconOnly
-                variant="tertiary"
+                variant="ghost"
+                size="sm"
                 onPress={addFloor}
                 className="shrink-0"
               >
@@ -1135,7 +1171,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
               isSelected={tool === "select"}
               onChange={() => setTool("select")}
               isIconOnly
-              variant="default"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
             >
               <MousePointer2 />
             </ToggleButton>
@@ -1155,7 +1193,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
               isSelected={tool === "pan"}
               onChange={() => setTool("pan")}
               isIconOnly
-              variant="default"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
             >
               <Hand />
             </ToggleButton>
@@ -1174,7 +1214,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={() => fitToBounds(computeVenueBounds(venue))}
             >
               <LocateFixed />
@@ -1259,7 +1301,10 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 <Tooltip>
                   <ToggleButton
                     isIconOnly
-                    variant="default"
+                    variant="ghost"
+                    size="sm"
+
+                    className="shrink-0"
                     isSelected={!!item.locked}
                     onChange={(val) => {
                       if (selectedSection) patchSection(selectedSection.id, { locked: val });
@@ -1277,7 +1322,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 <Tooltip>
                   <ToggleButton
                     isIconOnly
-                    variant="default"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
                     isSelected={!!item.lockAspect}
                     onChange={(val) => {
                       if (selectedSection) patchSection(selectedSection.id, { lockAspect: val });
@@ -1295,7 +1342,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 <Tooltip>
                   <ToggleButton
                     isIconOnly
-                    variant="default"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
                     isDisabled={selectedVertexIdx < 0 || !!item.isEllipse}
                     isSelected={(() => {
                       if (selectedVertexIdx < 0 || item.isEllipse || !item.points) return false;
@@ -1322,7 +1371,10 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+
+              className="shrink-0"
+              size="sm"
               onPress={copySelection}
               isDisabled={selectedIds.size === 0}
             >
@@ -1343,7 +1395,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={pasteClipboard}
               isDisabled={!hasClipboard}
             >
@@ -1364,7 +1418,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={duplicateSelection}
               isDisabled={selectedIds.size === 0}
             >
@@ -1385,10 +1441,11 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
               onPress={deleteSelected}
               isDisabled={selectedIds.size === 0}
-              className="text-destructive"
+              className="shrink-0 text-destructive"
             >
               <Trash2 className="text-danger" />
             </Button>
@@ -1407,7 +1464,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={undo}
               isDisabled={!canUndo}
             >
@@ -1428,7 +1487,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={redo}
               isDisabled={!canRedo}
             >
@@ -1451,7 +1512,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={() => zoomBy(1.2)}
             >
               <ZoomIn />
@@ -1489,7 +1552,9 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
               onPress={() => zoomBy(0.8)}
             >
               <ZoomOut />
@@ -1529,7 +1594,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
           <Tooltip>
             <Button
               isIconOnly
-              variant="tertiary"
+              variant="ghost"
+              size="sm"
               className="shrink-0"
               onPress={() => setRightOpen(!rightOpen)}
             >
@@ -1557,75 +1623,88 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
               const activeFloor = venue.floors.find(f => f.id === activeFloorId);
               if (!activeFloor) return null;
 
-              const floorSections = venue.sections.filter(s => s.floorId === activeFloorId);
-              const floorElements = venue.canvasElements.filter(e => e.floorId === activeFloorId);
+              const normalizedSearch = searchQuery.toLowerCase().trim();
+              const floorSections = venue.sections.filter(s => s.floorId === activeFloorId && (!normalizedSearch || (s.name || "").toLowerCase().includes(normalizedSearch)));
+              const floorElements = venue.canvasElements.filter(e => e.floorId === activeFloorId && (!normalizedSearch || (e.name || "").toLowerCase().includes(normalizedSearch)));
 
               return (
                 <div className="flex flex-col h-full">
-                  <div className="px-2 py-2 flex flex-col gap-3 min-h-0 flex-1">
+                  <div className="px-4 py-4 flex flex-col gap-3 min-h-0 flex-1">
                     <div className="flex gap-1">
-                      <SearchField name="search-custom" variant="secondary" className="flex-1">
-                        <SearchField.Group>
-                          <SearchField.SearchIcon>
-                            <Search />
-                          </SearchField.SearchIcon>
-                          <SearchField.Input placeholder="Buscar secciones | elementos..." />
-                          <SearchField.ClearButton>
-                            <X />
-                          </SearchField.ClearButton>
-                        </SearchField.Group>
-                      </SearchField>
+                      <div className="pt-1 flex flex-col gap-3 w-full">
+                        <div className="flex justify-between gap-4">
+                          <h4 className="line-clamp-3">{activeFloor.name}</h4>
 
-                      <Dropdown>
-                        <Tooltip>
-                          <Dropdown.Trigger>
-                            <Button isIconOnly variant="tertiary" className="shrink-0">
-                              <Plus />
-                            </Button>
-                          </Dropdown.Trigger>
-                          <Tooltip.Content showArrow offset={12}>
-                            <Tooltip.Arrow />
-                            <span>Agregar sección | elemento</span>
-                          </Tooltip.Content>
-                        </Tooltip>
+                          <Dropdown>
+                            <Tooltip>
+                              <Dropdown.Trigger>
+                                <Button isIconOnly variant="ghost" size="sm" className="shrink-0">
+                                  <Plus />
+                                </Button>
+                              </Dropdown.Trigger>
+                              <Tooltip.Content showArrow offset={12}>
+                                <Tooltip.Arrow />
+                                <span>Agregar sección | elemento</span>
+                              </Tooltip.Content>
+                            </Tooltip>
 
-                        <Dropdown.Popover placement="bottom start">
-                          <Dropdown.Menu>
-                            <Dropdown.Item key="section" textValue="Agregar sección" onAction={() => addSection()}>
-                              Agregar sección
-                            </Dropdown.Item>
+                            <Dropdown.Popover placement="bottom start">
+                              <Dropdown.Menu>
+                                <Dropdown.Item key="section" textValue="Agregar sección" onAction={() => addSection()}>
+                                  Agregar sección
+                                </Dropdown.Item>
 
-                            <Dropdown.SubmenuTrigger>
-                              <Dropdown.Item key="element" textValue="Agregar elemento">
-                                Agregar elemento
-                                <Dropdown.SubmenuIndicator>
-                                  <ChevronRight />
-                                </Dropdown.SubmenuIndicator>
-                              </Dropdown.Item>
-                              <Dropdown.Popover >
-                                <Dropdown.Menu>
-                                  {(Object.keys(ELEMENT_TYPE_LABEL) as CanvasElementType[]).map((t) => {
-                                    const Icon = ELEMENT_ICONS[t];
-                                    return (
-                                      <Dropdown.Item
-                                        key={t}
-                                        id={t}
-                                        textValue={ELEMENT_TYPE_LABEL[t]}
-                                        onAction={() => addCanvasElement(t)}
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <Icon />
-                                          {ELEMENT_TYPE_LABEL[t]}
-                                        </div>
-                                      </Dropdown.Item>
-                                    );
-                                  })}
-                                </Dropdown.Menu>
-                              </Dropdown.Popover>
-                            </Dropdown.SubmenuTrigger>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
+                                <Dropdown.SubmenuTrigger>
+                                  <Dropdown.Item key="element" textValue="Agregar elemento">
+                                    Agregar elemento
+                                    <Dropdown.SubmenuIndicator>
+                                      <ChevronRight />
+                                    </Dropdown.SubmenuIndicator>
+                                  </Dropdown.Item>
+                                  <Dropdown.Popover >
+                                    <Dropdown.Menu>
+                                      {(Object.keys(ELEMENT_TYPE_LABEL) as CanvasElementType[]).map((t) => {
+                                        const Icon = ELEMENT_ICONS[t];
+                                        return (
+                                          <Dropdown.Item
+                                            key={t}
+                                            id={t}
+                                            textValue={ELEMENT_TYPE_LABEL[t]}
+                                            onAction={() => addCanvasElement(t)}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Icon />
+                                              {ELEMENT_TYPE_LABEL[t]}
+                                            </div>
+                                          </Dropdown.Item>
+                                        );
+                                      })}
+                                    </Dropdown.Menu>
+                                  </Dropdown.Popover>
+                                </Dropdown.SubmenuTrigger>
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
+                        </div>
+                        <SearchField
+                          name="search-custom"
+                          variant="secondary"
+                          className="flex-1"
+                          value={searchQuery}
+                          onChange={setSearchQuery}
+                        >
+                          <SearchField.Group>
+                            <SearchField.SearchIcon>
+                              <Search />
+                            </SearchField.SearchIcon>
+                            <SearchField.Input placeholder="Buscar secciones | elementos..." />
+                            <SearchField.ClearButton>
+                              <X />
+                            </SearchField.ClearButton>
+                          </SearchField.Group>
+                        </SearchField>
+                      </div>
+
                     </div>
 
 
@@ -1801,6 +1880,16 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                 <Spinner />
               </div>
             )}
+
+            {/* Indicador de guardado (esquina inferior derecha): onSave hace una
+                cascada de requests que en recintos grandes tarda varios
+                segundos, esto evita que parezca que la app se colgó. */}
+            {saving && (
+              <div className="absolute bottom-4 right-4 z-50 flex items-center gap-2 bg-surface border border-border rounded-full pl-3 pr-4 py-2 shadow-lg pointer-events-none">
+                <Spinner size="sm" />
+                <span className="text-foreground text-xs font-medium">Guardando recinto…</span>
+              </div>
+            )}
           </div>
 
           {/* Instancia de tu Panel Derecho (Respeta espacio en este flex) */}
@@ -1948,7 +2037,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           value={selectedSection.name}
                           onChange={(v) => patchSection(selectedSection.id, { name: v })}
                         >
-                          <Label className="px-2">Nombre</Label>
+                          <Label>Nombre</Label>
                           <Input />
                         </TextField>
                         <div className="grid grid-cols-2 gap-2">
@@ -1959,7 +2048,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             onChange={(v) => patchSection(selectedSection.id, { prefix: v.toUpperCase() })
                             }
                           >
-                            <Label className="px-2">Prefijo</Label>
+                            <Label>Prefijo</Label>
                             <Input maxLength={6} />
                           </TextField>
 
@@ -1970,7 +2059,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             onChange={(v) => setSectionAdmission(selectedSection.id, v === "NUMBERED")
                             }
                           >
-                            <Label className="px-2">Admisión</Label>
+                            <Label>Admisión</Label>
                             <Select.Trigger>
                               <Select.Value />
                               <Select.Indicator />
@@ -1979,16 +2068,16 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                               <ListBox>
                                 <ListBox.Item
                                   id="NUMBERED"
-                                  textValue="Con asientos"
+                                  textValue="Numerada"
                                 >
-                                  Con asientos <ListBox.ItemIndicator />
+                                  Numerada <ListBox.ItemIndicator />
                                 </ListBox.Item>
 
                                 <ListBox.Item
                                   id="GENERAL"
-                                  textValue="Sin asientos"
+                                  textValue="General"
                                 >
-                                  Sin asientos <ListBox.ItemIndicator />
+                                  General <ListBox.ItemIndicator />
                                 </ListBox.Item>
                               </ListBox>
                             </Select.Popover>
@@ -2003,7 +2092,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           description="¿Estás seguro de que deseas cambiar el estatus de la sección?"
                           confirmText="Cambiar estatus"
                         >
-                          <Label className="px-2">Estatus</Label>
+                          <Label>Estatus</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2017,7 +2106,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           </Select.Popover>
                         </ConfirmSelect>
                         <div className="flex flex-col gap-1">
-                          <Label className="px-2" htmlFor="description">Descripción:</Label>
+                          <Label htmlFor="description">Descripción:</Label>
                           <TextArea
                             variant="secondary"
                             id="description"
@@ -2048,7 +2137,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchSection(selectedSection.id, { capacity: v })}
                           >
-                            <Label className="px-2">Capacidad</Label>
+                            <Label>Capacidad</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2068,7 +2157,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                     onChange={setNewRowName}
                                     className="min-w-0"
                                   >
-                                    <Label className="px-2">Fila</Label>
+                                    <Label>Fila</Label>
                                     <InputGroup>
                                       <InputGroup.Prefix>
                                         {selectedSection.rowSeatCounts.length + 1}
@@ -2088,7 +2177,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                     onChange={setNewRowSeats}
                                   >
 
-                                    <Label className="px-2">Lugares</Label>
+                                    <Label>Lugares</Label>
                                     <NumberField.Group className="grid-cols-[1fr_auto]">
                                       <NumberField.Input />
                                       <p className="flex text-field-placeholder text-sm pr-3 items-center">
@@ -2146,7 +2235,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                       <NumberField
                                         value={count}
                                         variant="secondary"
-                                        className="px-2"
+
                                         minValue={1}
                                         step={1}
                                         onChange={(v) => { const counts = [...selectedSection.rowSeatCounts]; counts[i] = Math.max(1, v); setSectionRowConfig(selectedSection.id, counts, selectedSection.rowNames); }}
@@ -2205,7 +2294,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchSectionValidated(selectedSection.id, { coordinateX: v })}
                           >
-                            <Label className="px-2">X</Label>
+                            <Label>X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2217,7 +2306,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchSectionValidated(selectedSection.id, { coordinateY: v })}
                           >
-                            <Label className="px-2">Y</Label>
+                            <Label>Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2230,7 +2319,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => resizeSectionDimension(selectedSection.id, "width", v)}
                           >
-                            <Label className="px-2">Ancho</Label>
+                            <Label>Ancho</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2242,7 +2331,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => resizeSectionDimension(selectedSection.id, "height", v)}
                           >
-                            <Label className="px-2">Alto</Label>
+                            <Label>Alto</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2254,7 +2343,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             variant="secondary"
                             onChange={(v) => patchSectionValidated(selectedSection.id, { rotationDegrees: v })}
                           >
-                            <Label className="px-2">Rotación</Label>
+                            <Label>Rotación</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2274,7 +2363,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                   if (item) patchVertexBorderRadius(item.id, selectedVertexIdx, v);
                                 }}
                               >
-                                <Label className="px-2">Radio de esquina</Label>
+                                <Label>Radio de esquina</Label>
                                 <NumberField.Group className="grid-cols-[1fr]">
                                   <NumberField.Input />
                                 </NumberField.Group>
@@ -2335,7 +2424,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           value={selectedElement.name}
                           onChange={(v) => patchElement(selectedElement.id, { name: v })}
                         >
-                          <Label className="px-2">Nombre</Label>
+                          <Label>Nombre</Label>
                           <Input />
                         </TextField>
                         <Select
@@ -2344,7 +2433,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           value={selectedElement.elementType}
                           onChange={(v) => patchElement(selectedElement.id, { elementType: v as any })}
                         >
-                          <Label className="px-2">Tipo</Label>
+                          <Label>Tipo</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2376,7 +2465,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           description="¿Estás seguro de que deseas cambiar el estatus del elemento?"
                           confirmText="Cambiar estatus"
                         >
-                          <Label className="px-2">Estatus</Label>
+                          <Label>Estatus</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2410,7 +2499,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { coordinateX: v })}
                           >
-                            <Label className="px-2">X</Label>
+                            <Label>X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2422,7 +2511,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { coordinateY: v })}
                           >
-                            <Label className="px-2">Y</Label>
+                            <Label>Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2435,7 +2524,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { width: v })}
                           >
-                            <Label className="px-2">Ancho</Label>
+                            <Label>Ancho</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2447,7 +2536,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={10}
                             onChange={(v) => patchElementValidated(selectedElement.id, { height: v })}
                           >
-                            <Label className="px-2">Alto</Label>
+                            <Label>Alto</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2459,7 +2548,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={5}
                             onChange={(v) => patchElementValidated(selectedElement.id, { rotationDegrees: v })}
                           >
-                            <Label className="px-2">Rotación</Label>
+                            <Label>Rotación</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2479,7 +2568,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                                   if (item) patchVertexBorderRadius(item.id, selectedVertexIdx, v);
                                 }}
                               >
-                                <Label className="px-2">Radio de esquina</Label>
+                                <Label>Radio de esquina</Label>
                                 <NumberField.Group className="grid-cols-[1fr]">
                                   <NumberField.Input />
                                 </NumberField.Group>
@@ -2523,7 +2612,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             value={selectedSeat.row}
                             onChange={(v) => patchSeat(selectedSeat.id, { row: v })}
                           >
-                            <Label className="px-2">Fila</Label>
+                            <Label>Fila</Label>
                             <Input />
                           </TextField>
                           <TextField
@@ -2532,7 +2621,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             value={selectedSeat.number}
                             onChange={(v) => patchSeat(selectedSeat.id, { number: v })}
                           >
-                            <Label className="px-2">Número</Label>
+                            <Label>Número</Label>
                             <Input />
                           </TextField>
                         </div>
@@ -2542,7 +2631,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           value={selectedSeat.type}
                           onChange={(v) => patchSeat(selectedSeat.id, { type: v as any })}
                         >
-                          <Label className="px-2">Tipo</Label>
+                          <Label>Tipo</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2590,7 +2679,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                           description="¿Estás seguro de que deseas cambiar el estatus de este asiento?"
                           confirmText="Cambiar estatus"
                         >
-                          <Label className="px-2">Estatus</Label>
+                          <Label>Estatus</Label>
                           <Select.Trigger>
                             <Select.Value />
                             <Select.Indicator />
@@ -2625,7 +2714,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={1}
                             onChange={(v) => patchSeat(selectedSeat.id, { coordinateX: v })}
                           >
-                            <Label className="px-2">X</Label>
+                            <Label>X</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2638,7 +2727,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                             step={1}
                             onChange={(v) => patchSeat(selectedSeat.id, { coordinateY: v })}
                           >
-                            <Label className="px-2">Y</Label>
+                            <Label>Y</Label>
                             <NumberField.Group className="grid-cols-[1fr]">
                               <NumberField.Input />
                             </NumberField.Group>
@@ -2656,7 +2745,102 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
 
         </main >
       </div>
-    </div >
-  );
 
+      <Modal.Backdrop isOpen={infoModalOpen}>
+        <Modal.Container>
+          <Modal.Dialog className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full sm:max-w-[400px] p-8 border-none">
+            <Modal.CloseTrigger onPress={() => setInfoModalOpen(false)} />
+
+            <div className="flex flex-col gap-1">
+              <h3>Datos del recinto</h3>
+              <Description>Información general del lugar.</Description>
+            </div>
+
+            <div className="flex flex-col gap-4 flex-1">
+              <TextField
+                isRequired
+                value={venue.venue.name}
+                onChange={(v: string) => setVenueField("name", v)}
+              >
+                <Label>Nombre</Label>
+                <Input placeholder="Estadio Nacional" />
+                <FieldError />
+              </TextField>
+
+              <TextField
+                isRequired
+                value={venue.venue.address}
+                onChange={(v: string) => setVenueField("address", v)}
+              >
+                <Label>Dirección</Label>
+                <Input placeholder="Av. Principal 123" />
+                <FieldError />
+              </TextField>
+
+              <div className="grid grid-cols-2 gap-3">
+                <TextField
+                  isRequired
+                  value={venue.venue.city}
+                  onChange={(v: string) => setVenueField("city", v)}
+                >
+                  <Label>Ciudad</Label>
+                  <Input placeholder="Ciudad de México" />
+                  <FieldError />
+                </TextField>
+
+                <Select
+                  aria-label="Estado"
+                  value={venue.venue.addressState ?? ""}
+                  onChange={(v: any) => setVenueField("addressState", v || null)}
+                >
+                  <Label>Estado</Label>
+                  <Select.Trigger>
+                    {venue.venue.addressState ? <Select.Value /> : <p className="text-field-placeholder">Seleccionar</p>}
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {[
+                        "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas", "Chihuahua",
+                        "Ciudad de México", "Coahuila", "Colima", "Durango", "Estado de México", "Guanajuato",
+                        "Guerrero", "Hidalgo", "Jalisco", "Michoacán", "Morelos", "Nayarit", "Nuevo León", "Oaxaca",
+                        "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí", "Sinaloa", "Sonora", "Tabasco",
+                        "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán", "Zacatecas"
+                      ].map((s) => (
+                        <ListBox.Item key={s} id={s} textValue={s}>
+                          {s}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="description">Descripción:</Label>
+                <TextArea
+                  id="description"
+                  rows={3}
+                  value={venue.venue.description ?? ""}
+                  onChange={(e: any) => setVenueField("description", e.target ? e.target.value : e)}
+                  placeholder="Recinto principal para eventos masivos"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 mt-2">
+                <Button variant="tertiary" onPress={() => setInfoModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onPress={() => setInfoModalOpen(false)}>
+                  Guardar
+                  <Save />
+                </Button>
+              </div>
+            </div>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </div>
+  );
 }

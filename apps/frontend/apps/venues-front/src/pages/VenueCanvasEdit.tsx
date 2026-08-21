@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ApiError,
     PhysicalEditor,
@@ -9,6 +9,8 @@ import {
     type PhysicalVenueState,
     type Section,
     type Seat,
+    Button,
+    Icon,
 } from "@nextticket-frontend/commons";
 import { toPhysicalVenueState, type ApiVenueTree } from "../api";
 
@@ -35,6 +37,11 @@ export function VenueCanvasEdit() {
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
     const [saving, setSaving] = useState(false);
+    // Ver VenueCanvasCreate.tsx: candado síncrono aparte del estado, para que
+    // un doble clic no dispare dos veces la cascada de PATCH/POST antes de
+    // que React alcance a deshabilitar el botón.
+    const savingRef = useRef(false);
+
     const [original, setOriginal] = useState<PhysicalVenueState | null>(null);
     const [current, setCurrent] = useState<PhysicalVenueState | null>(null);
 
@@ -58,9 +65,10 @@ export function VenueCanvasEdit() {
     }, [id]);
 
     const handleSave = async (state: PhysicalVenueState) => {
-        if (!id || !original || saving) return;
+        if (!id || !original || savingRef.current) return;
+        
+        savingRef.current = true;
         setSaving(true);
-
         try {
             // ── FLOORS ──────────────────────────────────────────────────
             const currentFloorIds = new Set(state.floors.map((f) => f.id));
@@ -234,6 +242,7 @@ export function VenueCanvasEdit() {
         } catch (err) {
             toast.danger(err instanceof ApiError ? err.message : "No se pudo guardar la distribución del recinto");
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -258,9 +267,20 @@ export function VenueCanvasEdit() {
                     <p className="text-foreground font-semibold text-sm truncate">{current.venue.name}</p>
                     <p className="text-muted text-xs truncate">Editando distribución de zonas</p>
                 </div>
+                <Button size="sm" variant="ghost" onPress={() => navigate(`/venues/${id}/edit`)} isDisabled={saving}>
+                    <Icon.Pencil />
+                    Editar datos generales
+                </Button>
             </div>
             <div className="flex-1 min-h-0">
-                <PhysicalEditor initialState={current} onChange={setCurrent} mode="update" onSave={handleSave} />
+                <PhysicalEditor
+                    initialState={current}
+                    onChange={setCurrent}
+                    mode="update"
+                    onSave={handleSave}
+                    saving={saving}
+                    onCancel={() => navigate("/venues")}
+                />
             </div>
         </div>
     );

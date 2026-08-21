@@ -20,23 +20,23 @@ export function ThemeSwitcher() {
 
   if (!mounted) return null;
 
-  return (
-    <div className="grid grid-cols-3 gap-1.5">
+    return (
+    <div className="flex items-center gap-1 p-1 bg-surface border border-border rounded-lg">
       {THEME_OPTIONS.map(({ title, value, icon: OptionIcon }) => {
         const isActive = theme === value;
         return (
           <button
             key={value}
             type="button"
+            title={title}
             onClick={() => setTheme(value)}
-            className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-semibold transition-all duration-150 active:scale-95 border ${
+            className={`flex items-center justify-center p-2 rounded-md transition-all duration-150 active:scale-95 ${
               isActive
-                ? "border-transparent bg-accent text-accent-foreground"
-                : "border-border bg-surface-secondary text-muted hover:text-foreground"
+                ? "bg-accent text-accent-foreground shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-surface-secondary"
             }`}
           >
             <OptionIcon className="w-4 h-4" />
-            <span>{title}</span>
           </button>
         );
       })}

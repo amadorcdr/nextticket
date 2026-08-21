@@ -7,7 +7,7 @@
 import React, { useState, useEffect, startTransition } from "react";
 import type { Id, PhysicalVenueState } from "./types";
 import { Reorder } from "framer-motion";
-import { Button, Description } from "@heroui/react";
+import { Button, Description, TextField as HeroUITextField, Input } from "@heroui/react";
 import { Trash2, GripVertical, Check, Layers } from "lucide-react";
 import { sectionColorFor, ELEMENT_TYPE_DEFAULT_COLOR } from "./constants";
 import { ConfirmAlertDialog } from "./layout-components";
@@ -129,7 +129,7 @@ export const ColorField: React.FC<{
           <PaintBucket />
         </Button>
       </ColorPicker.Trigger>
-      <ColorPicker.Popover className="gap-3 min-w-50" placement="left top" >
+      <ColorPicker.Popover className="gap-3 min-w-50" placement="bottom" >
         <ColorSwatchPicker
           className="justify-center pt-2"
           size="xs"
@@ -239,30 +239,14 @@ export const DateTimeField: React.FC<{
   const [local, setLocal] = useState(value ? value.slice(0, 16) : "");
   useEffect(() => setLocal(value ? value.slice(0, 16) : ""), [value]);
   return (
-    <div className="flex flex-col gap-1">
-      <label className={fieldLabelClassName}>{label}</label>
-      <div className="flex items-center gap-1.5">
-        <input
-          type="datetime-local"
-          value={local}
-          onChange={(e) => setLocal(e.target.value)}
-          onBlur={() => onCommit(local ? new Date(local).toISOString() : null)}
-          className={fieldInputClassName}
-        />
-        {value && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onPress={() => {
-              setLocal("");
-              onCommit(null);
-            }}
-          >
-            Limpiar
-          </Button>
-        )}
-      </div>
-    </div>
+    <HeroUITextField
+      variant="secondary"
+      value={local}
+      onChange={(v: string) => { setLocal(v); onCommit(v ? new Date(v).toISOString() : null) }}
+    >
+      <Label>{label}</Label>
+      <Input type="datetime-local" />
+    </HeroUITextField>
   );
 };
 

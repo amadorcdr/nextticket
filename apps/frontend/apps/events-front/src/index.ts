@@ -4,6 +4,7 @@ export { EventDetail } from './pages/EventDetail';
 export { SeatSelection } from './pages/SeatSelection';
 export { AdminEventsView } from './pages/AdminEventsView';
 export { EventCard } from './components/EventCard';
+export { DriftWall } from './components/DriftWall';
 export type { ClientEvent, ClientEventStatus, ClientEventDetail, ClientEventZone } from './types/client';
 export type { AdminEvent, AdminEventStatus } from './types/admin';
 export type { ApiEvent, ApiEventZone, ApiEventStatus, ApiAdmissionType, ApiEventSeat, ApiEventSeatStatus, Paginated } from './api';

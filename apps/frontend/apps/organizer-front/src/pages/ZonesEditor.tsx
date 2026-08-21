@@ -286,68 +286,29 @@ export function ZonesEditor() {
   };
 
   return (
-    <div className="h-full w-full flex flex-col gap-2">
-      {/* Selector de evento + guardar */}
-      <div className="flex items-center justify-between gap-3 px-2 pt-2 shrink-0">
-        <Select
-          className="w-fit"
-          aria-label="Evento"
-          value={selectedEventId}
-          onChange={(v) => v && setSelectedEventId(v as string)}
-          isDisabled={eventsLoading || events.length === 0}
-        >
-          <Select.Trigger>
-            <div className="flex items-center gap-2">
-              <Icon.Calendar className="shrink-0 size-3.5" />
-              <Select.Value className="line-clamp-1 max-w-60 text-xs">
-                {() => events.find((e) => e.id === selectedEventId)?.name ?? "Sin eventos"}
-              </Select.Value>
-            </div>
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              {events.map((e) => (
-                <ListBox.Item key={e.id} id={e.id} textValue={e.name}>
-                  {e.name}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-
-        {selectedEvent && (
-          <Button size="sm" onPress={saveCommercial} isDisabled={!isEditable || saving || canvasLoading || !localCommercial}>
-            <Icon.Save />
-            {saving ? "Guardando..." : "Guardar cambios"}
-          </Button>
-        )}
-      </div>
-
+    <div className="h-full w-full flex flex-col">
       {!isEditable && selectedEvent && (
-        <p className="text-muted text-xs px-2">
+        <div className="bg-warning/20 text-warning px-4 py-2 text-xs font-medium text-center shrink-0">
           Este evento está {selectedEvent.status === "CANCELED" ? "cancelado" : "finalizado"}: sus zonas ya no se pueden modificar.
-        </p>
+        </div>
       )}
 
-      {eventsLoading && <p className="text-muted text-xs py-8 text-center">Cargando tus eventos...</p>}
-
-      {!eventsLoading && eventsError && <p className="text-muted text-xs py-8 text-center">{eventsError}</p>}
-
+      {eventsLoading && <div className="flex flex-1 items-center justify-center"><p className="text-muted text-xs">Cargando tus eventos...</p></div>}
+      {!eventsLoading && eventsError && <div className="flex flex-1 items-center justify-center"><p className="text-danger text-xs">{eventsError}</p></div>}
       {!eventsLoading && !eventsError && events.length === 0 && (
-        <p className="text-muted text-xs py-8 text-center">
-          No tienes eventos activos. Crea uno en "Mis Eventos" para configurar sus zonas aquí (los eventos cancelados
-          o finalizados ya no aparecen).
-        </p>
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted text-xs text-center max-w-md">
+            No tienes eventos activos. Crea uno en "Mis Eventos" para configurar sus zonas aquí (los eventos cancelados o finalizados ya no aparecen).
+          </p>
+        </div>
       )}
 
       {!eventsLoading && !eventsError && events.length > 0 && canvasLoading && (
-        <p className="text-muted text-xs py-8 text-center">Cargando recinto y zonas...</p>
+        <div className="flex flex-1 items-center justify-center"><p className="text-muted text-xs">Cargando recinto y zonas...</p></div>
       )}
 
       {!eventsLoading && !eventsError && events.length > 0 && !canvasLoading && canvasError && (
-        <div className="flex flex-col items-center gap-3 py-8">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <p className="text-muted text-xs text-center">{canvasError}</p>
           <Button size="sm" onPress={() => setReloadTick((t) => t + 1)}>
             Reintentar
@@ -357,7 +318,50 @@ export function ZonesEditor() {
 
       {!eventsLoading && !canvasLoading && !canvasError && physical && localCommercial && (
         <div className="flex-1 min-h-0">
-          <CommercialEditor key={editorKey} physical={physical} initialCommercial={localCommercial} onChange={setLocalCommercial} />
+          <CommercialEditor
+            key={editorKey}
+            physical={physical}
+            initialCommercial={localCommercial}
+            onChange={setLocalCommercial}
+            topbarStartContent={
+              <Select
+                className="w-64"
+                aria-label="Evento"
+                variant="secondary"
+                value={selectedEventId}
+                onChange={(v) => v && setSelectedEventId(v as string)}
+                isDisabled={eventsLoading || events.length === 0}
+              >
+                <Select.Trigger>
+                  <div className="flex items-center gap-2">
+                    <Icon.Calendar className="shrink-0 size-3.5" />
+                    <Select.Value className="line-clamp-1 max-w-60 text-xs">
+                      {() => events.find((e) => e.id === selectedEventId)?.name ?? "Sin eventos"}
+                    </Select.Value>
+                  </div>
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {events.map((e) => (
+                      <ListBox.Item key={e.id} id={e.id} textValue={e.name}>
+                        {e.name}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            }
+            topbarEndContent={
+              selectedEvent && (
+                <Button size="sm" onPress={saveCommercial} isDisabled={!isEditable || saving || canvasLoading || !localCommercial}>
+                  <Icon.Save />
+                  {saving ? "Guardando..." : "Guardar cambios"}
+                </Button>
+              )
+            }
+          />
         </div>
       )}
     </div>

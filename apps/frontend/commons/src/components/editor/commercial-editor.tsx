@@ -15,8 +15,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "pixi.js";
-import { Button, toast } from "@heroui/react";
-import { ChevronDown, ChevronUp, Download, Loader2, Maximize, Minus, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, toast, Tooltip, Kbd, Separator, NumberField, Accordion, Label, Description, TextField, Select, ListBox, Input, InputGroup, Tabs, ScrollShadow, SearchField } from "@heroui/react";
+import { ChevronDown, ChevronUp, Download, Loader2, Maximize, Minus, Plus, Redo2, Trash2, Undo2, Upload, ZoomIn, ZoomOut, PanelLeftOpen, PanelRightOpen, LocateFixed, Shapes, Armchair, Search, X } from "lucide-react";
 import type { Id, Pt, PhysicalVenueState, CommercialEventState, EventZone, EventZonePriceTier, EventSeat, VenueEditorFile } from "./types";
 import { uid, sectionIsNumbered } from "./types";
 import { sectionColorFor } from "./constants";
@@ -26,7 +26,9 @@ import { drawGrid, drawRuler, renderSections, renderCanvasElements, renderSeats,
 import { computeZoneCapacity, computeVenueBounds, hitTestAt, drawMarquee, computeSelectionOBB, drawSelectionBBox } from "./selection";
 import { useKeyboardShortcuts } from "./keyboard";
 import { downloadJSON, exportVenueEditorFile, readJSONFile } from "./serialization";
-import { NumField, TextField, ColorField, SelectField, CheckField, DateTimeField } from "./controls";
+import { ColorField, CheckField, DateTimeField } from "./controls";
+import { Panel } from "../organisms/Panel";
+import { useIsDesktop } from "./layout-components";
 
 const selectClassName =
   "w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none cursor-pointer focus:border-foreground transition-colors";
@@ -36,6 +38,8 @@ export interface CommercialEditorProps {
   physical: PhysicalVenueState;
   initialCommercial?: CommercialEventState;
   onChange?: (state: CommercialEventState) => void;
+  topbarStartContent?: React.ReactNode;
+  topbarEndContent?: React.ReactNode;
 }
 
 /** Genera event_seats para todas las secciones asignadas a zonas. */
@@ -63,7 +67,11 @@ const generateEventSeats = (zones: EventZone[], physical: PhysicalVenueState, ex
   return result;
 };
 
-export default function CommercialEditor({ physical, initialCommercial, onChange }: CommercialEditorProps) {
+export default function CommercialEditor({ physical, initialCommercial, onChange, topbarStartContent, topbarEndContent }: CommercialEditorProps) {
+  const isDesktop = useIsDesktop();
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
   const { state: commercial, commit: setCommercial, undo, redo, canUndo, canRedo } = useHistory<CommercialEventState>(
     initialCommercial ?? { eventId: uid("event"), eventName: "Nuevo Evento", zones: [], priceTiers: [], eventSeats: [] },
   );
@@ -74,6 +82,7 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
   const [activeFloorIdState, setActiveFloorIdState] = useState<Id>("");
   const activeFloorId = physical.floors.some((f) => f.id === activeFloorIdState) ? activeFloorIdState : (physical.floors[0]?.id ?? "");
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<Id>>(new Set());
   const marqueeRef = useRef<{ active: boolean; start: Pt; current: Pt }>({ active: false, start: { x: 0, y: 0 }, current: { x: 0, y: 0 } });
   const requestRedrawRef = useRef<() => void>(() => { });
@@ -387,194 +396,449 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
   };
 
   return (
-    <div className="flex h-full w-full">
-      {/* Panel izquierdo: evento, piso, zonas */}
-      <div className="w-75 shrink-0 overflow-y-auto p-3 border-r border-border bg-surface flex flex-col gap-3">
-        <TextField label="Nombre del evento" value={commercial.eventName} onCommit={(v) => setCommercial((p) => ({ ...p, eventName: v }))} />
-
-        <SelectField
-          label="Filtro de piso"
-          value={activeFloorId}
-          options={physical.floors.map((f) => ({ value: f.id, label: f.name }))}
-          onCommit={(v) => setActiveFloorIdState(v)}
-        />
-
-        <div className="flex flex-wrap gap-1.5">
-          <Button size="sm" onPress={addZone}>
-            <Plus className="size-3.5" />
-            Zona de venta
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly isDisabled={!canUndo} onPress={undo} title="Deshacer">
-            <Undo2 className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly isDisabled={!canRedo} onPress={redo} title="Rehacer">
-            <Redo2 className="size-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            isIconOnly
-            title="Exportar JSON"
-            onPress={() => downloadJSON(exportVenueEditorFile(physical, commercial), `${commercial.eventName || "evento"}.json`)}
-          >
-            <Download className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly title="Importar JSON de zonas" onPress={() => fileInputRef.current?.click()}>
-            <Upload className="size-4" />
-          </Button>
-          <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          {commercial.zones.map((z) => {
-            const stats = zoneStats(z);
-            const active = z.id === activeZoneId;
-            return (
-              <div
-                key={z.id}
-                className={`rounded-[10px] border p-2 flex flex-col gap-0.5 cursor-pointer transition-colors ${
-                  active ? "border-foreground bg-surface-secondary" : "border-border hover:bg-surface-secondary"
-                }`}
-                onClick={() => setActiveZoneId(z.id)}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-xs truncate ${active ? "text-foreground font-semibold" : "text-foreground font-medium"}`}>{z.publicName}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    color="danger"
-                    isIconOnly
-                    onPress={(e) => {
-                      (e as unknown as React.MouseEvent).stopPropagation?.();
-                      removeZone(z.id);
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
+    <div className="h-full flex flex-col gap-3">
+      {/* Top Navbar Fila 1 */}
+      <div className="flex flex-col gap-3 shrink-0">
+        <div className="flex flex-row items-end justify-between gap-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 items-center">
+              <h2>Zonas Comerciales</h2>
+              <div className="flex gap-1 items-center">
+                <Tooltip>
+                  <Button isIconOnly variant="ghost" size="sm" onPress={() => fileInputRef.current?.click()}>
+                    <Upload />
                   </Button>
-                </div>
-                <span className="text-muted text-[11px]">
-                  {z.sectionIds.length} secciones · {stats.available}/{stats.total} lugares
-                  {stats.disabled > 0 && <span className="text-danger"> ({stats.disabled} deshabilitados)</span>}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Importar JSON de zonas</span>
+                  </Tooltip.Content>
+                </Tooltip>
+                <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
 
-        {activeZone && (
-          <div className="mt-1 pt-3 border-t border-border flex flex-col gap-2.5">
-            <div>
-              <h4 className="text-foreground">{activeZone.publicName}</h4>
-              <p className="text-muted text-xs mt-0.5">Haz clic en las secciones del lienzo para asignarlas o quitarlas de esta zona.</p>
+                <Tooltip>
+                  <Button isIconOnly variant="ghost" size="sm" onPress={() => downloadJSON(exportVenueEditorFile(physical, commercial), `evento.json`)}>
+                    <Download />
+                  </Button>
+                  <Tooltip.Content showArrow offset={12}>
+                    <Tooltip.Arrow />
+                    <span>Exportar JSON</span>
+                  </Tooltip.Content>
+                </Tooltip>
+              </div>
             </div>
-            <TextField label="Nombre público" value={activeZone.publicName} onCommit={(v) => patchZone(activeZone.id, { publicName: v })} />
-            <SelectField label="Tipo de admisión" value={activeZone.admissionType} options={[{ value: "RESERVED", label: "Asiento reservado" }, { value: "GENERAL", label: "General" }]} onCommit={(v) => patchZone(activeZone.id, { admissionType: v })} />
-            <div className="grid grid-cols-2 gap-2">
-              <NumField label="Precio base" value={activeZone.eventPrice} step={1} min={0} onCommit={(v) => patchZone(activeZone.id, { eventPrice: v })} />
-              <NumField label="Máx. boletos/compra" value={activeZone.maxTicketsPerPurchase} step={1} min={1} onCommit={(v) => patchZone(activeZone.id, { maxTicketsPerPurchase: v })} />
-            </div>
-            <div className="flex items-end gap-2">
-              <div className="flex flex-col gap-1">
-                <label className={fieldLabelClassName}>Color en mapa</label>
+          </div>
+          
+          <div className="flex gap-2 items-center h-[36px]">
+            {topbarEndContent}
+          </div>
+        </div>
+      </div>
+
+      {/* Contenedor Combinado de Fila 2 (Tabs) + Canvas */}
+      <div className="flex flex-col gap-3 flex-1 min-h-0">
+        {/* Fila 2: Movida adentro para unificarse con el Canvas */}
+        <div className="flex flex-row items-center gap-1 p-2 shrink-0 bg-surface shadow-surface rounded-[10px] w-full overflow-x-auto scrollbar-none">
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={() => setLeftOpen(!leftOpen)}>
+              {leftOpen ? <PanelRightOpen /> : <PanelLeftOpen />}
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span>{leftOpen ? 'Ocultar panel izquierdo' : 'Mostrar panel izquierdo'}</span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <div className="flex-1 min-w-40 flex items-center flex gap-1">
+            <ScrollShadow orientation="horizontal" hideScrollBar className="min-w-0">
+              <Tabs
+                variant="secondary"
+                selectedKey={activeFloorId}
+                onSelectionChange={(key) => setActiveFloorIdState(key as string)}
+              >
+                <Tabs.ListContainer className="border-none">
+                  <Tabs.List aria-label="Pisos">
+                    {physical.floors.map((f) => (
+                      <Tabs.Tab key={f.id} id={f.id} className="w-max px-3 h-9 flex items-center justify-center cursor-pointer relative">
+                        <span className="relative z-10">{f.name}</span>
+                        <Tabs.Indicator className="bg-default size-full rounded-[10px]" />
+                      </Tabs.Tab>
+                    ))}
+                  </Tabs.List>
+                </Tabs.ListContainer>
+              </Tabs>
+            </ScrollShadow>
+          </div>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          {topbarStartContent}
+
+          {activeZone && (
+            <Tooltip>
+              <div>
                 <ColorField value={activeZone.mapColor || "#2563eb"} onCommit={(v) => patchZone(activeZone.id, { mapColor: v })} />
               </div>
-              <div className="flex-1">
-                <SelectField label="Estado" value={activeZone.status} options={[{ value: "ACTIVE", label: "Activa" }, { value: "INACTIVE", label: "Inactiva" }, { value: "SOLD_OUT", label: "Agotada" }]} onCommit={(v) => patchZone(activeZone.id, { status: v })} />
-              </div>
-            </div>
+              <Tooltip.Content showArrow offset={12}>
+                <Tooltip.Arrow />
+                <span>Color</span>
+              </Tooltip.Content>
+            </Tooltip>
+          )}
 
-            <div className="pt-2 border-t border-border flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <p className="text-foreground font-semibold text-xs">Etapas de precio</p>
-                <Button size="sm" variant="ghost" onPress={() => addPriceTier(activeZone.id)}>
-                  <Plus className="size-3.5" />
-                  Etapa
-                </Button>
-              </div>
-              {commercial.priceTiers
-                .filter((t) => t.eventZoneId === activeZone.id)
-                .sort((a, b) => a.sortOrder - b.sortOrder)
-                .map((t) => (
-                  <div key={t.id} className="border-t border-border pt-2 flex flex-col gap-2">
-                    <div className="flex gap-1.5 items-end">
-                      <div className="flex-1">
-                        <TextField label="Nombre" value={t.name} onCommit={(v) => patchPriceTier(t.id, { name: v })} />
-                      </div>
-                      <Button size="sm" variant="ghost" isIconOnly onPress={() => moveTier(t.id, -1)} title="Subir">
-                        <ChevronUp className="size-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" isIconOnly onPress={() => moveTier(t.id, 1)} title="Bajar">
-                        <ChevronDown className="size-3.5" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <NumField label="Precio" value={t.price} step={1} min={0} onCommit={(v) => patchPriceTier(t.id, { price: v })} />
-                      <NumField label="Capacidad inicial" value={t.initialCapacity ?? 0} step={10} min={0} onCommit={(v) => patchPriceTier(t.id, { initialCapacity: v || null })} />
-                    </div>
-                    <DateTimeField label="Inicio" value={t.startsAt} onCommit={(v) => patchPriceTier(t.id, { startsAt: v })} />
-                    <DateTimeField label="Fin" value={t.endsAt} onCommit={(v) => patchPriceTier(t.id, { endsAt: v })} />
-                    <SelectField label="Estado" value={t.status} options={[{ value: "PENDING", label: "Pendiente" }, { value: "ACTIVE", label: "Activa" }, { value: "EXHAUSTED", label: "Agotada" }, { value: "CLOSED", label: "Cerrada" }]} onCommit={(v) => patchPriceTier(t.id, { status: v })} />
-                    <Button size="sm" variant="ghost" color="danger" fullWidth onPress={() => removePriceTier(t.id)}>
-                      <Trash2 className="size-3.5" />
-                      Eliminar etapa
-                    </Button>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-      </div>
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
 
-      {/* Lienzo */}
-      <div className="flex-1 relative bg-background">
-        <div ref={containerRef} className="absolute inset-0" style={{ touchAction: "none" }} />
-        {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 text-muted text-sm">
-            <Loader2 className="size-4 animate-spin" />
-            Cargando lienzo…
-          </div>
-        )}
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-surface/95 backdrop-blur border border-border rounded-[10px] p-1 shadow-overlay">
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => zoomBy(1.2)} title="Acercar">
-            <Plus className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => zoomBy(0.8)} title="Alejar">
-            <Minus className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => fitToBounds(computeVenueBounds(physical))} title="Ajustar a la vista">
-            <Maximize className="size-4" />
-          </Button>
-          <span className="text-muted text-[11px] px-1.5 font-mono">{Math.round(zoom * 100)}%</span>
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={() => fitToBounds(computeVenueBounds(physical))}>
+              <LocateFixed />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">Ajustar a la vista<Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>0</Kbd.Content></Kbd></span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={undo} isDisabled={!canUndo}>
+              <Undo2 />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">Deshacer<Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>Z</Kbd.Content></Kbd></span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={redo} isDisabled={!canRedo}>
+              <Redo2 />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">Rehacer<Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>Y</Kbd.Content></Kbd></span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={() => zoomBy(1.2)}>
+              <ZoomIn />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">Acercar<Kbd><Kbd.Content>+</Kbd.Content></Kbd></span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <NumberField
+            variant="secondary"
+            minValue={20}
+            maxValue={1000}
+            step={1}
+            value={Math.round(zoom * 100)}
+            onChange={(v) => { if (v > 0 && zoom > 0) zoomBy((v / 100) / zoom); }}
+          >
+            <NumberField.Group className="grid-cols-[1fr_auto]">
+              <NumberField.Input className="text-center w-15 text-sm" />
+              <p className="flex text-field-placeholder text-sm pr-3 items-center">%</p>
+            </NumberField.Group>
+          </NumberField>
+
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={() => zoomBy(0.8)}>
+              <ZoomOut />
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span className="flex items-center gap-1">Alejar<Kbd><Kbd.Content>-</Kbd.Content></Kbd></span>
+            </Tooltip.Content>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+          <Tooltip>
+            <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={() => setRightOpen(!rightOpen)}>
+              {rightOpen ? <PanelLeftOpen /> : <PanelRightOpen />}
+            </Button>
+            <Tooltip.Content showArrow offset={12}>
+              <Tooltip.Arrow />
+              <span>{rightOpen ? 'Ocultar panel derecho' : 'Mostrar panel derecho'}</span>
+            </Tooltip.Content>
+          </Tooltip>
         </div>
-      </div>
 
-      {/* Panel derecho: selección */}
-      <div className="w-70 shrink-0 overflow-y-auto p-3 border-l border-border bg-surface flex flex-col gap-3">
-        {selectedIds.size === 0 && <p className="text-muted text-xs">Sin selección. Haz clic en una sección o asiento del lienzo.</p>}
+        {/* Contenedor Base Relativo (Actúa como borde/padding) */}
+        <main className="relative flex-1 overflow-hidden w-full h-full flex flex-row">
+          {/* Panel izquierdo */}
+          <Panel isOpen={leftOpen} onOpenChange={setLeftOpen} isDrawer={!isDesktop} placement="left" className="pointer-events-auto">
+            <div className="flex flex-col h-full">
+              <div className="px-4 py-4 flex flex-col gap-3 min-h-0 flex-1 overflow-y-auto">
+                <div className="flex gap-1">
+                  <div className="pt-1 flex flex-col gap-3 w-full">
+                    <div className="flex justify-between gap-4">
+                      <h4 className="line-clamp-3">{physical.floors.find(f => f.id === activeFloorId)?.name || "Piso"}</h4>
+                      
+                      <Tooltip>
+                        <Button isIconOnly variant="ghost" size="sm" className="shrink-0" onPress={addZone}>
+                          <Plus />
+                        </Button>
+                        <Tooltip.Content showArrow offset={12}>
+                          <Tooltip.Arrow />
+                          <span>Agregar zona comercial</span>
+                        </Tooltip.Content>
+                      </Tooltip>
+                    </div>
+                    
+                    <SearchField
+                      name="search-zones"
+                      variant="secondary"
+                      className="w-full"
+                      value={searchQuery}
+                      onChange={setSearchQuery}
+                    >
+                      <SearchField.Group>
+                        <SearchField.SearchIcon>
+                          <Search />
+                        </SearchField.SearchIcon>
+                        <SearchField.Input placeholder="Buscar zonas..." />
+                        <SearchField.ClearButton>
+                          <X />
+                        </SearchField.ClearButton>
+                      </SearchField.Group>
+                    </SearchField>
+                  </div>
+                </div>
+
+                <ScrollShadow className="flex flex-col gap-3 -mx-2 overflow-y-auto overflow-x-hidden px-2 pb-2">
+                  {commercial.zones.filter(z => !searchQuery || (z.publicName || "Nueva zona").toLowerCase().includes(searchQuery.toLowerCase())).map((z) => {
+                    const stats = zoneStats(z);
+                    const active = z.id === activeZoneId;
+                    return (
+                      <button
+                        key={z.id}
+                        type="button"
+                        className={` text-left w-full rounded-[10px] cursor-pointer flex flex-col transition-all duration-300 group active:outline-none p-2 gap-0.5 ${active ? "bg-default" : "bg-default-soft"}`}
+                        onClick={() => setActiveZoneId(z.id)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-xs truncate ${active ? "text-foreground font-semibold" : "text-foreground font-medium"}`}>{z.publicName || "Nueva zona"}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0 text-destructive"
+                            isIconOnly
+                            onPress={(e: any) => {
+                              e.stopPropagation?.();
+                              removeZone(z.id);
+                            }}
+                          >
+                            <Trash2 className="size-3.5 text-danger" />
+                          </Button>
+                        </div>
+                        <span className="text-muted text-[11px]">
+                          {z.sectionIds.length} secciones · {stats.available}/{stats.total} lugares
+                          {stats.disabled > 0 && <span className="text-danger"> ({stats.disabled} deshabilitados)</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </ScrollShadow>
+              </div>
+            </div>
+          </Panel>
+
+    {/* Lienzo */}
+        <div className="relative flex-1 rounded-[10px] overflow-hidden bg-surface shadow-surface">
+          <div className="absolute inset-0 z-0 bg-surface" ref={containerRef}></div>
+          {!ready && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto">
+              <Loader2 className="size-4 animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {/* Panel derecho */}
+        <Panel isOpen={rightOpen} onOpenChange={setRightOpen} isDrawer={!isDesktop} placement="right" className="pointer-events-auto">
+        {/* Caso 1: Nada seleccionado en el lienzo, mostramos propiedades de la Zona activa */}
+        {selectedIds.size === 0 && activeZone && (
+          <div>
+            <div className="px-3 py-3 flex flex-col gap-3">
+              <h4 className="text-foreground line-clamp-3">{activeZone.publicName || "Nueva zona"}</h4>
+              <Description>Propiedades de la zona comercial</Description>
+            </div>
+            
+            <Accordion allowsMultipleExpanded className="w-full border-t border-border" defaultExpandedKeys={["info", "precios"]}>
+              <Accordion.Item id="info">
+                <Accordion.Heading><Accordion.Trigger>Información <Accordion.Indicator/></Accordion.Trigger></Accordion.Heading>
+                <Accordion.Panel>
+                  <Accordion.Body className="flex flex-col gap-3">
+                    <TextField variant="secondary" value={activeZone.publicName} onChange={(v: string) => patchZone(activeZone.id, { publicName: v })}>
+                      <Label>Nombre público</Label>
+                      <Input />
+                    </TextField>
+
+                    <Select variant="secondary" aria-label="Tipo de admisión" value={activeZone.admissionType} onChange={(v: any) => patchZone(activeZone.id, { admissionType: v })}>
+                      <Label>Tipo de admisión</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="RESERVED" textValue="Asiento reservado">Asiento reservado <ListBox.ItemIndicator /></ListBox.Item>
+                          <ListBox.Item id="GENERAL" textValue="General">General <ListBox.ItemIndicator /></ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <NumberField variant="secondary" value={activeZone.eventPrice} minValue={0} onChange={(v) => patchZone(activeZone.id, { eventPrice: v })}>
+                        <Label>Precio base ($)</Label>
+                        <NumberField.Group className="grid-cols-[1fr]">
+                          <NumberField.Input />
+                        </NumberField.Group>
+                      </NumberField>
+
+                      <NumberField variant="secondary" value={activeZone.maxTicketsPerPurchase} minValue={1} onChange={(v) => patchZone(activeZone.id, { maxTicketsPerPurchase: v })}>
+                        <Label>Max. boletos</Label>
+                        <NumberField.Group className="grid-cols-[1fr]">
+                          <NumberField.Input />
+                        </NumberField.Group>
+                      </NumberField>
+                    </div>
+
+                    <Select variant="secondary" aria-label="Estatus" value={activeZone.status} onChange={(v: any) => patchZone(activeZone.id, { status: v })}>
+                      <Label>Estatus</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="ACTIVE" textValue="Activo">Activo <ListBox.ItemIndicator /></ListBox.Item>
+                          <ListBox.Item id="INACTIVE" textValue="Inactivo">Inactivo <ListBox.ItemIndicator /></ListBox.Item>
+                          <ListBox.Item id="SOLD_OUT" textValue="Agotado">Agotado <ListBox.ItemIndicator /></ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </Accordion.Body>
+                </Accordion.Panel>
+              </Accordion.Item>
+
+              {/* Oculto temporalmente: Etapas de Precios
+              <Accordion.Item id="precios">
+                <Accordion.Heading><Accordion.Trigger>Precios <Accordion.Indicator/></Accordion.Trigger></Accordion.Heading>
+                <Accordion.Panel>
+                  <Accordion.Body className="flex flex-col gap-3">
+                    {commercial.priceTiers.filter(t => t.eventZoneId === activeZone.id).map((t) => (
+                      <div key={t.id} className="border-t border-border pt-3 flex flex-col gap-3">
+                        <div className="flex gap-1.5 items-end">
+                          <TextField className="flex-1" variant="secondary" value={t.name} onChange={(v: string) => patchPriceTier(t.id, { name: v })}>
+                            <Label>Nombre</Label>
+                            <Input />
+                          </TextField>
+                          <Button isIconOnly variant="ghost" className="text-destructive shrink-0" size="sm" onPress={() => removePriceTier(t.id)}><Trash2 className="size-4 text-danger"/></Button>
+                        </div>
+                        
+                        <NumberField className="w-full" variant="secondary" value={t.price} onChange={(v) => patchPriceTier(t.id, { price: v })}>
+                          <Label>Precio ($)</Label>
+                          <NumberField.Group>
+                            <NumberField.Input />
+                          </NumberField.Group>
+                        </NumberField>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <NumberField variant="secondary" value={t.initialCapacity ?? 0} minValue={0} onChange={(v) => patchPriceTier(t.id, { initialCapacity: v || null })}>
+                            <Label>Aforo inicial</Label>
+                            <NumberField.Group className="grid-cols-[1fr]">
+                              <NumberField.Input />
+                            </NumberField.Group>
+                          </NumberField>
+
+                          <Select variant="secondary" aria-label="Estatus" value={t.status} onChange={(v: any) => patchPriceTier(t.id, { status: v })}>
+                            <Label>Estatus</Label>
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                <ListBox.Item id="PENDING" textValue="Pendiente">Pendiente <ListBox.ItemIndicator /></ListBox.Item>
+                                <ListBox.Item id="ACTIVE" textValue="Activo">Activo <ListBox.ItemIndicator /></ListBox.Item>
+                                <ListBox.Item id="EXHAUSTED" textValue="Agotado">Agotado <ListBox.ItemIndicator /></ListBox.Item>
+                                <ListBox.Item id="CLOSED" textValue="Cerrado">Cerrado <ListBox.ItemIndicator /></ListBox.Item>
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <DateTimeField label="Inicia" value={t.startsAt} onCommit={(v) => patchPriceTier(t.id, { startsAt: v })} />
+                          <DateTimeField label="Termina" value={t.endsAt} onCommit={(v) => patchPriceTier(t.id, { endsAt: v })} />
+                        </div>
+                      </div>
+                    ))}
+                    <Button variant="secondary" size="sm" onPress={() => addPriceTier(activeZone.id)}>Agregar precio</Button>
+                  </Accordion.Body>
+                </Accordion.Panel>
+              </Accordion.Item>
+              */}
+            </Accordion>
+          </div>
+        )}
+
+        {/* Caso 2: Nada seleccionado, ni zona activa */}
+        {selectedIds.size === 0 && !activeZone && (
+          <div className="flex flex-1 flex-col items-center justify-center p-4 text-center gap-1">
+            <Label>Sin selección</Label>
+            <Description>Haz clic en una sección o asiento del lienzo, o selecciona una zona comercial a la izquierda.</Description>
+          </div>
+        )}
+        
+        {/* Caso 3: Un solo objeto seleccionado en el lienzo */}
         {selectedIds.size === 1 && (() => {
           const id = [...selectedIds][0];
           const selectedSection = physical.sections.find(z => z.id === id);
           const selectedSeat = physical.seats.find(s => s.id === id);
           if (selectedSection) {
             return (
-              <div className="flex flex-col gap-2">
-                <div>
-                  <p className="text-foreground font-semibold text-sm">Sección: {selectedSection.name}</p>
-                  <p className="text-muted text-xs mt-0.5">Aforo: {selectedSection.capacity}</p>
+              <div className="flex flex-col gap-3">
+                <div className="px-3 py-3 flex flex-col gap-3">
+                  <h4 className="line-clamp-3">{selectedSection.name}</h4>
+                  <Description>Aforo: {selectedSection.capacity}</Description>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className={fieldLabelClassName}>Zona comercial</label>
-                  <select
-                    value={commercial.zones.find(z => z.sectionIds.includes(selectedSection.id))?.id || ""}
-                    onChange={(e) => assignSectionToZone(selectedSection.id, e.target.value)}
-                    className={selectClassName}
-                  >
-                    <option value="">Ninguna</option>
-                    {commercial.zones.map(z => (
-                      <option key={z.id} value={z.id}>{z.publicName}</option>
-                    ))}
-                  </select>
-                </div>
+                <Accordion allowsMultipleExpanded className="w-full border-t border-border" defaultExpandedKeys={["info"]}>
+                  <Accordion.Item id="info">
+                    <Accordion.Heading><Accordion.Trigger>Información <Accordion.Indicator/></Accordion.Trigger></Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="flex flex-col gap-3">
+                        <Select
+                          variant="secondary"
+                          aria-label="Zona comercial"
+                          value={commercial.zones.find(z => z.sectionIds.includes(selectedSection.id))?.id || ""}
+                          onChange={(v: any) => assignSectionToZone(selectedSection.id, v || "")}
+                        >
+                          <Label>Zona comercial</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="" textValue="Ninguna">Ninguna <ListBox.ItemIndicator/></ListBox.Item>
+                              {commercial.zones.map(z => (
+                                <ListBox.Item key={z.id} id={z.id} textValue={z.publicName}>{z.publicName} <ListBox.ItemIndicator/></ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
               </div>
             );
           }
@@ -582,53 +846,80 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
             const section = physical.sections.find(z => z.id === selectedSeat.sectionId);
             const inZone = commercial.zones.some(z => z.sectionIds.includes(selectedSeat.sectionId));
             return (
-              <div className="flex flex-col gap-2">
-                <div>
-                  <p className="text-foreground font-semibold text-sm">Asiento {selectedSeat.row}{selectedSeat.number}</p>
-                  <p className="text-muted text-xs mt-0.5">Sección: {section?.name}</p>
+              <div className="flex flex-col gap-3">
+                <div className="px-3 py-3 flex flex-col gap-3">
+                  <h4 className="line-clamp-3">Asiento {selectedSeat.row}{selectedSeat.number}</h4>
+                  <Description>Sección: {section?.name}</Description>
                 </div>
-                {!inZone && <p className="text-danger text-xs">La sección de este asiento no tiene zona comercial asignada.</p>}
-                <CheckField
-                  label="Deshabilitado (bloqueado)"
-                  checked={eventSeatOf(selectedSeat.id)?.status === "DISABLED"}
-                  onCommit={(disabled) => toggleSeatState(selectedSeat.id, disabled)}
-                />
+                <Accordion allowsMultipleExpanded className="w-full border-t border-border" defaultExpandedKeys={["info"]}>
+                  <Accordion.Item id="info">
+                    <Accordion.Heading><Accordion.Trigger>Información <Accordion.Indicator/></Accordion.Trigger></Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="flex flex-col gap-3">
+                        {!inZone && <p className="text-danger text-xs">La sección de este asiento no tiene zona comercial asignada.</p>}
+                        <CheckField
+                          label="Deshabilitado (bloqueado)"
+                          checked={eventSeatOf(selectedSeat.id)?.status === "DISABLED"}
+                          onCommit={(disabled) => toggleSeatState(selectedSeat.id, disabled)}
+                        />
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
               </div>
             );
           }
           return null;
         })()}
+        
+        {/* Caso 4: Selección múltiple en el lienzo */}
         {selectedIds.size > 1 && (
-          <div className="flex flex-col gap-3">
-            <p className="text-foreground font-semibold text-sm">{selectedIds.size} objetos seleccionados</p>
-            {Array.from(selectedIds).some(id => physical.sections.some(s => s.id === id)) && (
-              <div className="flex flex-col gap-1">
-                <label className={fieldLabelClassName}>Zona comercial (lote)</label>
-                <select
-                  value=""
-                  onChange={(e) => assignMultipleSectionsToZone(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="" disabled>Seleccionar zona...</option>
-                  <option value="NONE">Ninguna (quitar de zona)</option>
-                  {commercial.zones.map(z => (
-                    <option key={z.id} value={z.id}>{z.publicName}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {Array.from(selectedIds).some(id => physical.seats.some(s => s.id === id)) && (
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="secondary" fullWidth onPress={() => toggleMultipleSeatsState(true)}>
-                  Deshabilitar
-                </Button>
-                <Button size="sm" variant="ghost" fullWidth onPress={() => toggleMultipleSeatsState(false)}>
-                  Habilitar
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+          <div>
+             <div className="px-3 py-3 flex flex-col gap-3">
+               <h4 className="line-clamp-3">{selectedIds.size} <Description className="ml-1 inline-flex">Objetos seleccionados</Description></h4>
+             </div>
+             <Accordion allowsMultipleExpanded className="w-full border-t border-border" defaultExpandedKeys={["acciones"]}>
+               <Accordion.Item id="acciones">
+                 <Accordion.Heading><Accordion.Trigger>Acciones en lote <Accordion.Indicator/></Accordion.Trigger></Accordion.Heading>
+                 <Accordion.Panel>
+                   <Accordion.Body className="flex flex-col gap-4">
+                      {Array.from(selectedIds).some(id => physical.sections.some(s => s.id === id)) && (
+                        <Select
+                          variant="secondary"
+                          aria-label="Zona comercial (lote)"
+                          value=""
+                          onChange={(v: any) => { if (v) assignMultipleSectionsToZone(v); }}
+                        >
+                          <Label>Asignar Zona comercial</Label>
+                          <Select.Trigger>
+                            <p className="text-field-placeholder">Seleccionar zona...</p>
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="NONE" textValue="Ninguna (quitar de zona)">Ninguna (quitar de zona) <ListBox.ItemIndicator/></ListBox.Item>
+                              {commercial.zones.map(z => (
+                                <ListBox.Item key={z.id} id={z.id} textValue={z.publicName}>{z.publicName} <ListBox.ItemIndicator/></ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      )}
+                      
+                      {Array.from(selectedIds).some(id => physical.seats.some(s => s.id === id)) && (
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="secondary" fullWidth onPress={() => toggleMultipleSeatsState(true)}>Deshabilitar</Button>
+                          <Button size="sm" variant="ghost" fullWidth onPress={() => toggleMultipleSeatsState(false)}>Habilitar</Button>
+                        </div>
+                      )}
+                   </Accordion.Body>
+                 </Accordion.Panel>
+               </Accordion.Item>
+              </Accordion>
+           </div>
+          )}
+        </Panel>
+      </main>
       </div>
     </div>
   );

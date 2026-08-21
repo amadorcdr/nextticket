@@ -1,31 +1,30 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router, toast } from "@nextticket-frontend/commons";
+import {
+  Button,
+  Icon,
+  Router,
+  toast,
+  Surface,
+  Form,
+  TextField,
+  Label,
+  Input,
+  FieldError,
+  InputGroup,
+  Link,
+} from "@nextticket-frontend/commons";
 import { FormEvent, useState } from "react";
-import { InputField, authCardClassName } from "./AuthCardUI";
 import { discardPasswordReset, resetPassword, toFriendlyAuthError } from "../api";
-
-const MIN_PASSWORD_LENGTH = 8;
-
-function BackToLogin() {
-  return (
-    <div className="flex mb-3">
-      <Router.Link
-        to="/sign-in"
-        className="inline-flex items-center gap-1 text-muted hover:text-foreground text-xs transition-colors"
-      >
-        <Icon.ChevronLeft className="w-3.5 h-3.5" />
-        Inicio de sesión
-      </Router.Link>
-    </div>
-  );
-}
 
 function RequestNewLink() {
   return (
-    <div className="flex flex-col items-center text-center gap-3 py-4">
-      <div className="flex size-12 items-center justify-center rounded-full bg-danger/10">
-        <Icon.Link2Off className="size-6 text-danger" />
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-between items-center gap-3">
+        <h1>Enlace inválido</h1>
+        <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-danger/10 text-danger mb-2">
+          <Icon.Link2Off className="size-8!" />
+        </div>
       </div>
-      <p className="text-muted text-xs">
+      <p className="text-muted">
         Puedes solicitar un enlace nuevo desde{" "}
         <Router.Link to="/forgot-password" className="text-foreground font-semibold hover:opacity-70">
           "¿Olvidaste tu contraseña?"
@@ -57,10 +56,6 @@ export function ResetPassword() {
 
     if (!password || !confirmPassword) {
       toast.danger("La contraseña y su confirmación son obligatorias.");
-      return;
-    }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      toast.danger(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -106,110 +101,139 @@ export function ResetPassword() {
   };
 
   return (
-    <div className="relative w-full min-h-screen flex items-center justify-center px-4 py-10 bg-background overflow-hidden">
-      <HeroWaves />
-      <HeroParticles />
-
-      <div className={`relative z-10 w-full max-w-88 rounded-[24px] p-5 ${authCardClassName}`}>
-        {updated ? (
-          <div className="flex flex-col items-center text-center gap-3 py-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
-              <Icon.CheckCircle2 className="size-6 text-success" />
-            </div>
-            <h1 className="text-foreground font-bold text-lg tracking-tight">¡Listo!</h1>
-            <p className="text-muted text-xs">Tu contraseña se actualizó correctamente.</p>
-            <Button fullWidth onPress={() => navigate("/sign-in")}>
-              <Icon.LogIn />
-              Ir al inicio de sesión
-            </Button>
+    <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+      {updated ? (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio
+            </Router.Link>
           </div>
-        ) : discarded ? (
-          <div className="flex flex-col items-center text-center gap-3 py-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-default">
-              <Icon.ShieldCheck className="size-6 text-foreground" />
+          <div className="flex justify-between items-center gap-3">
+            <h1>¡Listo!</h1>
+            <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-success/10 text-success mb-2">
+              <Icon.CheckCircle2 className="size-8!" />
             </div>
-            <h1 className="text-foreground font-bold text-lg tracking-tight">Solicitud descartada</h1>
-            <p className="text-muted text-xs">
-              El enlace ya no es válido y tu contraseña no cambió. Si tú no pediste este cambio, no tienes que hacer
-              nada más.
-            </p>
-            <Button fullWidth onPress={() => navigate("/sign-in")}>
-              <Icon.LogIn />
-              Ir al inicio de sesión
-            </Button>
           </div>
-        ) : (
-          <>
-            <BackToLogin />
-            <div className="text-center mb-4 pb-4 border-b border-border">
-              <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Restablecer contraseña</h1>
-              <p className="text-muted text-xs">Elige una nueva contraseña para tu cuenta de NextTicket.</p>
-            </div>
 
-            {linkError ? (
-              <RequestNewLink />
-            ) : (
-              <>
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <InputField
-                    id="reset-password"
-                    label="Nueva contraseña"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={setPassword}
-                    icon={<Icon.Lock className="w-4 h-4" />}
-                    rightSlot={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="text-muted hover:text-foreground transition-colors"
-                      >
-                        {showPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-                      </button>
-                    }
-                  />
-                  <InputField
-                    id="reset-confirm-password"
-                    label="Confirmar contraseña"
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={setConfirmPassword}
-                    icon={<Icon.Lock className="w-4 h-4" />}
-                    rightSlot={
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((v) => !v)}
-                        className="text-muted hover:text-foreground transition-colors"
-                      >
-                        {showConfirmPassword ? <Icon.Eye className="w-4 h-4" /> : <Icon.EyeOff className="w-4 h-4" />}
-                      </button>
-                    }
-                  />
+          <p className="text-muted">
+            Tu contraseña se actualizó correctamente.
+          </p>
+
+          <Button fullWidth onPress={() => navigate("/sign-in")}>
+            <Icon.LogIn />
+            Ir al inicio de sesión
+          </Button>
+        </>
+      ) : discarded ? (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio
+            </Router.Link>
+          </div>
+          <div className="flex justify-between items-center gap-3">
+            <h1>Solicitud descartada</h1>
+            <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-default text-foreground mb-2">
+              <Icon.ShieldCheck className="size-8!" />
+            </div>
+          </div>
+
+          <p className="text-muted">
+            El enlace ya no es válido y tu contraseña no cambió. Si tú no pediste este cambio, no tienes que hacer nada más.
+          </p>
+
+          <Button fullWidth onPress={() => navigate("/sign-in")}>
+            <Icon.LogIn />
+            Ir al inicio de sesión
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/sign-in" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio de sesión
+            </Router.Link>
+          </div>
+          
+          {linkError ? (
+            <RequestNewLink />
+          ) : (
+            <>
+              <div className="flex flex-col gap-2">
+                <h1>Restablecer contraseña</h1>
+                <p className="text-muted">Elige una nueva contraseña para tu cuenta de NextTicket.</p>
+              </div>
+
+              <Form className="flex flex-col gap-4 flex-1" onSubmit={handleSubmit}>
+                <TextField
+                  isRequired
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e: any) => setPassword(e.target ? e.target.value : e)}
+                >
+                  <Label>Nueva contraseña</Label>
+                  <InputGroup>
+                    <InputGroup.Input placeholder="••••••••" />
+                    <InputGroup.Suffix>
+                      <Button type="button" isIconOnly size="sm" variant="ghost" onPress={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                      </Button>
+                    </InputGroup.Suffix>
+                  </InputGroup>
+                  <FieldError />
+                </TextField>
+
+                <TextField
+                  isRequired
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e: any) => setConfirmPassword(e.target ? e.target.value : e)}
+                  validate={(value) => {
+                    if (value !== password) return "Las contraseñas no coinciden.";
+                    return null;
+                  }}
+                >
+                  <Label>Confirmar contraseña</Label>
+                  <InputGroup>
+                    <InputGroup.Input placeholder="••••••••" />
+                    <InputGroup.Suffix>
+                      <Button type="button" isIconOnly size="sm" variant="ghost" onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                        {showConfirmPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                      </Button>
+                    </InputGroup.Suffix>
+                  </InputGroup>
+                  <FieldError />
+                </TextField>
+
+                <div className="flex justify-end gap-2 mt-2">
                   <Button type="submit" fullWidth isDisabled={loading}>
                     {loading ? "Restableciendo..." : "Restablecer contraseña"}
                   </Button>
-                </form>
-
-                <div className="mt-3 pt-3 text-center border-t border-border">
-                  <p className="text-muted text-[11px]">
-                    ¿No solicitaste este cambio?{" "}
-                    <button
-                      type="button"
-                      onClick={handleDiscard}
-                      disabled={discarding}
-                      className="text-foreground font-semibold hover:opacity-70 transition-opacity"
-                    >
-                      {discarding ? "Cancelando..." : "Cancelar solicitud"}
-                    </button>
-                  </p>
                 </div>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+              </Form>
+
+              <div className="flex justify-center gap-2 mt-2">
+                <p className="text-muted">¿No solicitaste este cambio? </p>
+                <button type="button" onClick={handleDiscard} disabled={discarding} className="link gap-1 flex items-center">
+                  {discarding ? "Cancelando..." : "Cancelar solicitud"}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </Surface>
   );
 }

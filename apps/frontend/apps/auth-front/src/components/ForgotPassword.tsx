@@ -1,21 +1,17 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router } from "@nextticket-frontend/commons";
+import {
+  Button,
+  Icon,
+  Router,
+  Surface,
+  Form,
+  TextField,
+  Label,
+  Input,
+  FieldError,
+  Link,
+} from "@nextticket-frontend/commons";
 import { FormEvent, useState } from "react";
-import { InputField, authCardClassName } from "./AuthCardUI";
 import { forgotPassword } from "../api";
-
-function BackToLogin() {
-  return (
-    <div className="flex mb-3">
-      <Router.Link
-        to="/sign-in"
-        className="inline-flex items-center gap-1 text-muted hover:text-foreground text-xs transition-colors"
-      >
-        <Icon.ChevronLeft className="w-3.5 h-3.5" />
-        Inicio de sesión
-      </Router.Link>
-    </div>
-  );
-}
 
 export function ForgotPassword() {
   const navigate = Router.useNavigate();
@@ -37,60 +33,94 @@ export function ForgotPassword() {
   };
 
   return (
-    <div className="relative w-full min-h-screen flex items-center justify-center px-4 py-10 bg-background overflow-hidden">
-      <HeroWaves />
-      <HeroParticles />
 
-      <div className={`relative z-10 w-full max-w-88 rounded-[24px] p-5 ${authCardClassName}`}>
-        {sent ? (
-          <div className="flex flex-col items-center text-center gap-3 py-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
-              <Icon.MailCheck className="size-6 text-success" />
-            </div>
-            <h1 className="text-foreground font-bold text-lg tracking-tight">Revisa tu correo</h1>
-            <p className="text-muted text-xs">
-              Si existe una cuenta asociada a <span className="text-foreground font-medium">{email}</span>, recibirás
-              un enlace para restablecer tu contraseña.
-            </p>
-            <Button fullWidth variant="secondary" onPress={() => navigate("/sign-in")}>
-              <Icon.LogIn />
-              Volver al inicio de sesión
-            </Button>
+
+
+
+
+
+    <Surface className="flex flex-col gap-6 bg-background shadow-overlay rounded-[10px] w-full max-w-[400px] max-h-full overflow-y-auto p-10 pointer-events-auto">
+      {sent ? (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio
+            </Router.Link>
           </div>
-        ) : (
-          <>
-            <BackToLogin />
-            <div className="text-center mb-4 pb-4 border-b border-border">
-              <h1 className="text-foreground font-bold text-lg tracking-tight mb-1">Recuperar contraseña</h1>
-              <p className="text-muted text-xs">Ingresa el correo asociado a tu cuenta.</p>
+          <div className="flex justify-between items-center gap-3">
+            <h1>Revisa tu correo</h1>
+            <div className="flex shrink-0 size-16 items-center justify-center rounded-full bg-success/10 text-success mb-2">
+              <Icon.MailCheck className="size-8!" />
             </div>
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <InputField
-                id="forgot-email"
-                label="Correo electrónico"
-                type="email"
-                placeholder="nombre@ejemplo.com"
-                value={email}
-                onChange={setEmail}
-                icon={<Icon.Mail className="w-4 h-4" />}
-              />
+          <p className="text-muted">
+            Si existe una cuenta asociada a <span className="text-foreground font-medium">{email}</span>, recibirás
+            un enlace para restablecer tu contraseña. Si no lo encuentras, revisa tu bandeja de spam.
+          </p>
+
+          <Button fullWidth onPress={() => navigate("/sign-in")}>
+            <Icon.LogIn />
+            Volver al inicio de sesión
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between gap-4">
+            <Router.Link to="/sign-in" className="link gap-1">
+              <Link.Icon>
+                <Icon.ChevronLeft />
+              </Link.Icon>
+              Inicio de sesión
+            </Router.Link>
+          </div>
+          <div className="flex flex-col gap-2">
+            <h1>Recuperar contraseña</h1>
+            <p className="text-muted">Ingresa el correo asociado a tu cuenta.</p>
+          </div>
+
+          <Form className="flex flex-col gap-4 flex-1" onSubmit={handleSubmit}>
+            <TextField
+              isRequired
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e: any) => setEmail(e.target ? e.target.value : e)}
+              validate={(value) => {
+                if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
+                  return "Por favor ingresa un correo electrónico válido.";
+                }
+                return null;
+              }}
+            >
+              <Label>Correo electrónico</Label>
+              <Input placeholder="usuario@gmail.com" />
+              <FieldError />
+            </TextField>
+
+            <div className="flex justify-end gap-2 mt-2">
               <Button type="submit" fullWidth isDisabled={loading}>
+                <Icon.Send />
+
                 {loading ? "Enviando..." : "Enviar enlace de recuperación"}
               </Button>
-            </form>
-
-            <div className="mt-3 pt-3 text-center border-t border-border">
-              <Router.Link
-                to="/sign-in"
-                className="text-foreground text-xs font-semibold hover:opacity-70 transition-opacity"
-              >
-                Volver al inicio de sesión
-              </Router.Link>
             </div>
-          </>
-        )}
-      </div>
-    </div>
+          </Form>
+
+          <div className="flex justify-center gap-2">
+            <p className="text-muted">¿Aún no tienes una cuenta? </p>
+            <Router.Link to="/sign-up" className="link gap-1 flex items-center">
+              Regístrate
+              <Link.Icon>
+                <Icon.ChevronRight />
+              </Link.Icon>
+            </Router.Link>
+          </div>
+        </>
+      )}
+    </Surface>
   );
 }
