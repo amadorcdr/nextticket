@@ -269,6 +269,17 @@ export const buildSeatsForSection = (
     if (!byRow[s.row]) byRow[s.row] = [];
     byRow[s.row].push(s);
   }
+  // El backend devuelve los asientos en orden de creación, no de número: si
+  // se reutilizaran así, un asiento que antes era "6" se pasa a la posición
+  // 0 y se renumera a "1", mientras el que YA era "1" sigue esperando su
+  // turno de guardarse — durante ese instante dos asientos de la misma fila
+  // comparten número y el backend lo rechaza (unique constraint). Ordenar
+  // por número antes de reasignar por posición hace que, al solo AGREGAR
+  // asientos a una fila, los ya existentes conserven su mismo número (nada
+  // que reasignar), y solo los nuevos entren con números que no existían.
+  for (const rowSeats of Object.values(byRow)) {
+    rowSeats.sort((a, b) => Number(a.number) - Number(b.number));
+  }
   const out: Seat[] = [];
   for (let r = 0; r < layout.length; r++) {
     const rowName = section.rowNames[r] || generateRowName(r);

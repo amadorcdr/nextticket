@@ -142,6 +142,23 @@ export class EventQueueService {
     return this.toResponse(await this.expireIfElapsed(entry));
   }
 
+  /**
+   * Salida explícita (botón "Cancelar", o el navegador avisando que la
+   * pestaña se cierra vía `pagehide`): libera el cupo de inmediato en vez de
+   * dejarlo ocupado hasta que venza el TTL de admisión. Idempotente — si ya
+   * no hay una entrada activa, no hace nada.
+   */
+  async leaveQueue(eventId: string, userId: string): Promise<void> {
+    const entry = await this.findActiveEntry(eventId, userId);
+    if (!entry) return;
+
+    await this.prisma.queueEntry.update({
+      where: { id: entry.id },
+      data: { status: QueueEntryStatus.CANCELED },
+    });
+    await this.redis.del(buildAdmissionKey(eventId, userId));
+  }
+
   /** Respaldo del TTL de Redis: mantiene QueueEntry en sync sin que el usuario tenga que hacer nada. */
   async expireElapsedAdmissions() {
     const now = new Date();

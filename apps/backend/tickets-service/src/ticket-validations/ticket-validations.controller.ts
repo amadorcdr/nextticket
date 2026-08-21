@@ -37,6 +37,9 @@ export class TicketValidationsController {
   }
 
   @Get('ticket/:ticketId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.VALIDATOR, AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get validation history for a ticket' })
   @ApiParam({
     name: 'ticketId',
@@ -47,6 +50,9 @@ export class TicketValidationsController {
   }
 
   @Get('validator/:validatorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AUTH_ROLES.VALIDATOR, AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get validations performed by a specific validator' })
   @ApiParam({
     name: 'validatorId',

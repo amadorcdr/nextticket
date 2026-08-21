@@ -71,7 +71,11 @@ export function SalesEvent() {
     api
       .get<Paginated<ApiEvent>>(`/events?organizerId=${user.id}&limit=${FETCH_LIMIT}`)
       .then((res) => {
-        const options = res.data.map((ev) => ({ id: ev.id, name: ev.name }));
+        // Mismo criterio que Zonas de Venta: un evento cancelado o finalizado
+        // no tiene ventas que siga generando, no tiene caso mostrarlo aquí.
+        const options = res.data
+          .filter((ev) => ev.status !== "CANCELED" && ev.status !== "COMPLETED")
+          .map((ev) => ({ id: ev.id, name: ev.name }));
         setEvents(options);
         setSelectedEventId((prev) => prev ?? options[0]?.id);
       })

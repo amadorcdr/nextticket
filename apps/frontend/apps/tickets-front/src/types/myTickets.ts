@@ -26,6 +26,7 @@ export interface ApiEventMinimal {
     id: string;
     name: string;
     startsAt: string;
+    venueId: string;
     venue: {
         name: string;
         address?: string;
@@ -40,7 +41,13 @@ export interface ApiEventMinimal {
 export interface ApiEventSeatMinimal {
     id: string;
     eventZoneId: string;
+    sectionId: string;
     seat: { row: string; number: string; type: string };
+}
+
+/** Solo lo que necesitamos de GET /venues/:venueId, para resolver el piso de una sección. */
+export interface ApiVenueFloorsMinimal {
+    floors: Array<{ id: string; name: string; sections: Array<{ id: string }> }>;
 }
 
 export interface EnrichedTicket {
@@ -53,10 +60,19 @@ export interface EnrichedTicket {
     venueState: string;
     venueCountry: string;
     zoneName: string;
+    floorName: string | null;
     row: string | null;
     seatNumber: string | null;
     seatType: string | null;
 }
+
+/** Mismo status real del backend, en español, para mostrar en la tarjeta. */
+const TICKET_STATUS_LABEL: Record<ApiTicketStatus, string> = {
+    ISSUED: "Emitido",
+    USED: "Usado",
+    CANCELED: "Cancelado",
+    EXPIRED: "Expirado",
+};
 
 /** "17/07/2026 • 20:00 hrs", igual formato que ya usaba la maqueta. */
 export function formatEventDateTime(iso: string): string {
@@ -66,17 +82,13 @@ export function formatEventDateTime(iso: string): string {
     return `${day} • ${time} hrs`;
 }
 
-/**
- * Piso/sección física no se resolvieron (harían falta endpoints de
- * venues-events-service fuera del alcance de esta pantalla): floorName se
- * deja vacío (la tarjeta ya muestra "—") en vez de inventar un valor.
- */
 export function toHoloCardData(enriched: EnrichedTicket, qrImageUrl?: string): HoloCardDisplayData {
     const { ticket } = enriched;
 
     return {
         eventName: enriched.eventName,
         eventDateTime: enriched.eventDateTime,
+        floorName: enriched.floorName ?? undefined,
         sectionPrefix: enriched.zoneName,
         row: enriched.row ?? undefined,
         seat: enriched.seatNumber ?? undefined,
@@ -88,7 +100,7 @@ export function toHoloCardData(enriched: EnrichedTicket, qrImageUrl?: string): H
         venueCountry: enriched.venueCountry,
         folio: ticket.folio,
         status: ticket.status,
-        badge: ticket.status,
+        badge: TICKET_STATUS_LABEL[ticket.status],
         qrImageUrl,
     };
 }

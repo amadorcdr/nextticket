@@ -210,8 +210,17 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
    * mano): las zonas de venta y a qué secciones apuntan. El "physical" del
    * archivo se ignora a propósito — el recinto en pantalla es el real del
    * evento (viene del backend), no algo que el organizador deba poder
-   * reemplazar. Cualquier sectionId que no exista en ESTE recinto se
-   * descarta con aviso, para no dejar zonas apuntando a secciones fantasma.
+   * reemplazar.
+   *
+   * Cada recinto nuevo trae ids reales distintos aunque tenga las mismas
+   * secciones (mismo nombre, misma geometría): un archivo armado con ids
+   * fijos de UN recinto en particular nunca sirve para otro. Por eso las
+   * zonas se resuelven de preferencia por `sectionNames` (nombre de sección,
+   * que sí se repite entre recintos hechos con la misma plantilla) contra el
+   * recinto físico real de ESTE evento; `sectionIds` solo queda como
+   * respaldo para archivos viejos que no traigan nombres. Lo que no matchea
+   * ni por nombre ni por id se descarta con aviso, para no dejar zonas
+   * apuntando a secciones fantasma.
    */
   const handleImportJSON = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -222,12 +231,28 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
         toast.danger("El archivo no contiene una sección \"commercial\" (zonas de venta).");
         return;
       }
-      const validSectionIds = new Set(physical.sections.map((s) => s.id));
-      let droppedSections = 0;
+      const sectionIdById = new Set(physical.sections.map((s) => s.id));
+      const sectionIdByName = new Map(physical.sections.map((s) => [s.name, s.id]));
+
+      let unresolvedCount = 0;
       const zones: EventZone[] = data.commercial.zones.map((z) => {
-        const sectionIds = z.sectionIds.filter((id) => validSectionIds.has(id));
-        droppedSections += z.sectionIds.length - sectionIds.length;
-        return { ...z, eventId: commercial.eventId, sectionIds, availableCapacity: 0 };
+        const resolvedIds = new Set<Id>();
+        // sectionNames manda si viene poblado (sirve para cualquier recinto
+        // con esos nombres); sectionIds solo es respaldo para archivos viejos.
+        if (z.sectionNames && z.sectionNames.length > 0) {
+          for (const name of z.sectionNames) {
+            const id = sectionIdByName.get(name);
+            if (id) resolvedIds.add(id);
+            else unresolvedCount += 1;
+          }
+        } else {
+          for (const id of z.sectionIds) {
+            if (sectionIdById.has(id)) resolvedIds.add(id);
+            else unresolvedCount += 1;
+          }
+        }
+
+        return { ...z, eventId: commercial.eventId, sectionIds: [...resolvedIds], availableCapacity: 0 };
       });
       const zonesWithCapacity = zones.map((z) => ({ ...z, availableCapacity: computeZoneCapacity(z, physical) }));
       const eventSeats = generateEventSeats(zonesWithCapacity, physical, data.commercial.eventSeats);
@@ -241,8 +266,8 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
       });
       setActiveZoneId(null);
 
-      if (droppedSections > 0) {
-        toast.danger(`Se importó, pero ${droppedSections} sección(es) del archivo no existen en este recinto y se omitieron.`);
+      if (unresolvedCount > 0) {
+        toast.danger(`Se importó, pero ${unresolvedCount} sección(es) del archivo no existen en este recinto y se omitieron.`);
       } else {
         toast.success("Zonas importadas");
       }

@@ -166,7 +166,7 @@ export class EventsController {
     if (!file) {
       throw new BadRequestException('Falta el archivo de imagen (campo "image")');
     }
-    return this.events.setImage(id, file.filename, user.sub);
+    return this.events.setImage(id, file.filename, user);
   }
 
   @Get(':id')
@@ -197,7 +197,7 @@ export class EventsController {
     @Body() dto: UpdateEventDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.events.update(id, dto, user.sub);
+    return this.events.update(id, dto, user);
   }
 
   @Patch(':id/status')
@@ -216,7 +216,7 @@ export class EventsController {
     @Body() dto: UpdateEventStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.events.updateStatus(id, dto.status, user.sub);
+    return this.events.updateStatus(id, dto.status, user);
   }
 
   @Delete(':id')
@@ -234,7 +234,7 @@ export class EventsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.events.remove(id, user.sub);
+    return this.events.remove(id, user);
   }
 
   @Post(':eventId/categories')
@@ -249,7 +249,7 @@ export class EventsController {
     @Body() dto: AssignEventCategoriesDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.events.assignCategories(eventId, dto.categoryIds, user.sub);
+    return this.events.assignCategories(eventId, dto.categoryIds, user);
   }
 
   @Delete(':eventId/categories/:categoryId')
@@ -264,6 +264,6 @@ export class EventsController {
     @Param('categoryId', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.events.removeCategory(eventId, categoryId, user.sub);
+    return this.events.removeCategory(eventId, categoryId, user);
   }
 }
