@@ -385,7 +385,8 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
       if (!section) return prev;
       if (numbered) {
         // De general a numerada: crear config de filas
-        const updated = { ...section, rowSeatCounts: [10], rowNames: ["A"] };
+        const rowSeatCounts = [10];
+        const updated = { ...section, rowSeatCounts, rowNames: ["A"], capacity: rowSeatCounts.reduce((a, b) => a + b, 0) };
         const rebuilt = buildSeatsForSection(updated, []);
         return { ...prev, sections: prev.sections.map((z) => (z.id === id ? updated : z)), seats: [...prev.seats.filter((s) => s.sectionId !== id), ...rebuilt] };
       } else {
@@ -400,7 +401,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
     setVenue((prev) => {
       const section = prev.sections.find((z) => z.id === id);
       if (!section) return prev;
-      const updated = { ...section, rowSeatCounts, rowNames };
+      const updated = { ...section, rowSeatCounts, rowNames, capacity: rowSeatCounts.reduce((a, b) => a + b, 0) };
       const rebuilt = buildSeatsForSection(updated, prev.seats.filter((s) => s.sectionId === id));
       return { ...prev, sections: prev.sections.map((z) => (z.id === id ? updated : z)), seats: [...prev.seats.filter((s) => s.sectionId !== id), ...rebuilt] };
     });
