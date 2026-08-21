@@ -117,6 +117,14 @@ export interface PhysicalEditorProps {
   mode?: PhysicalEditorMode;
   /** Callback al presionar el botón principal (Crear / Guardar). */
   onSave?: (state: PhysicalVenueState) => void;
+  /** El backend no tiene un endpoint de "guardar todo": onSave hace una
+   *  cascada de requests entidad por entidad, que en recintos grandes tarda
+   *  varios segundos. Mientras esto sea true, se deshabilita el botón y se
+   *  muestra un indicador de carga para que no parezca que la app se colgó. */
+  saving?: boolean;
+  /** Callback al presionar "Cancelar". Si no se pasa, el botón no se muestra
+   *  (el canvas no tiene ninguna otra forma de salir sin guardar). */
+  onCancel?: () => void;
 }
 import { worldOutline } from "./geometry";
 
@@ -207,7 +215,7 @@ const StaticSectionPreview = ({ section, seats }: { section: Section, seats: Sea
   );
 };
 
-export default function PhysicalEditor({ initialState, onChange, mode = "create", onSave }: PhysicalEditorProps) {
+export default function PhysicalEditor({ initialState, onChange, mode = "create", onSave, saving = false, onCancel }: PhysicalEditorProps) {
   const { state: venue, commit: setVenue, mutateSilently: setVenueSilent, settle, undo, redo, canUndo, canRedo } =
     useHistory<PhysicalVenueState>(initialState ?? createEmptyPhysicalVenue());
   useEffect(() => { onChange?.(venue); }, [venue, onChange]);
@@ -1034,8 +1042,20 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
               </Dropdown.Popover>
             </Dropdown>
 
-            <Button onPress={() => onSave?.(venue)}>
-              {mode === "create" ? (<><Plus /> Registrar</>) : (<><Save /> Guardar cambios</>)}
+            {onCancel && (
+              <Button variant="secondary" onPress={onCancel} isDisabled={saving}>
+                Cancelar
+              </Button>
+            )}
+
+            <Button onPress={() => { if (!saving) onSave?.(venue); }} isDisabled={saving}>
+              {saving ? (
+                <><Spinner size="sm" /> Guardando…</>
+              ) : mode === "create" ? (
+                <><Plus /> Registrar</>
+              ) : (
+                <><Save /> Guardar cambios</>
+              )}
             </Button>
           </div>
         </div>
@@ -1800,6 +1820,16 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
             {!ready && (
               <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto">
                 <Spinner />
+              </div>
+            )}
+
+            {/* Indicador de guardado (esquina inferior derecha): onSave hace una
+                cascada de requests que en recintos grandes tarda varios
+                segundos, esto evita que parezca que la app se colgó. */}
+            {saving && (
+              <div className="absolute bottom-4 right-4 z-50 flex items-center gap-2 bg-surface border border-border rounded-full pl-3 pr-4 py-2 shadow-lg pointer-events-none">
+                <Spinner size="sm" />
+                <span className="text-foreground text-xs font-medium">Guardando recinto…</span>
               </div>
             )}
           </div>

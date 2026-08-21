@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
     ApiError,
     Button,
@@ -46,6 +46,13 @@ export function VenueCanvasCreate() {
     const [step, setStep] = useState<Step>("info");
     const [venueState, setVenueState] = useState<PhysicalVenueState>(() => createEmptyPhysicalVenue());
     const [saving, setSaving] = useState(false);
+    // Candado síncrono aparte del estado: dos clics muy seguidos pueden
+    // disparar dos onPress antes de que React re-renderice el botón como
+    // deshabilitado (el estado "saving" todavía no se refleja en el DOM),
+    // y como /venues no es idempotente, cada llamada de más crea otro
+    // recinto duplicado. Esta ref se lee/escribe de forma inmediata, sin
+    // esperar a un render, así que sí corta la segunda llamada a tiempo.
+    const savingRef = useRef(false);
 
     const setVenueField = <K extends keyof PhysicalVenueState["venue"]>(
         key: K,
@@ -60,7 +67,7 @@ export function VenueCanvasCreate() {
         venueState.venue.city.trim().length > 0;
 
     const handleSave = async (state: PhysicalVenueState) => {
-        if (saving) return;
+        if (savingRef.current) return;
 
         if (!state.venue.name.trim() || !state.venue.address.trim() || !state.venue.city.trim()) {
             toast.danger("Completa nombre, dirección y ciudad del recinto antes de guardar.");
@@ -76,6 +83,7 @@ export function VenueCanvasCreate() {
             return;
         }
 
+        savingRef.current = true;
         setSaving(true);
         let createdVenueId: string | null = null;
 
@@ -170,6 +178,7 @@ export function VenueCanvasCreate() {
                 api.del(`/venues/${createdVenueId}`).catch(() => {});
             }
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -256,7 +265,14 @@ export function VenueCanvasCreate() {
                 </Button>
             </div>
             <div className="flex-1 min-h-0">
-                <PhysicalEditor initialState={venueState} onChange={setVenueState} mode="create" onSave={handleSave} />
+                <PhysicalEditor
+                    initialState={venueState}
+                    onChange={setVenueState}
+                    mode="create"
+                    onSave={handleSave}
+                    saving={saving}
+                    onCancel={() => navigate("/venues")}
+                />
             </div>
         </div>
     );

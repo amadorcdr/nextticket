@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ApiError,
     PhysicalEditor,
@@ -35,6 +35,10 @@ export function VenueCanvasEdit() {
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
     const [saving, setSaving] = useState(false);
+    // Ver VenueCanvasCreate.tsx: candado síncrono aparte del estado, para que
+    // un doble clic no dispare dos veces la cascada de PATCH/POST antes de
+    // que React alcance a deshabilitar el botón.
+    const savingRef = useRef(false);
     const [original, setOriginal] = useState<PhysicalVenueState | null>(null);
     const [current, setCurrent] = useState<PhysicalVenueState | null>(null);
 
@@ -58,7 +62,8 @@ export function VenueCanvasEdit() {
     }, [id]);
 
     const handleSave = async (state: PhysicalVenueState) => {
-        if (!id || !original || saving) return;
+        if (!id || !original || savingRef.current) return;
+        savingRef.current = true;
         setSaving(true);
 
         try {
@@ -234,6 +239,7 @@ export function VenueCanvasEdit() {
         } catch (err) {
             toast.danger(err instanceof ApiError ? err.message : "No se pudo guardar la distribución del recinto");
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -260,7 +266,14 @@ export function VenueCanvasEdit() {
                 </div>
             </div>
             <div className="flex-1 min-h-0">
-                <PhysicalEditor initialState={current} onChange={setCurrent} mode="update" onSave={handleSave} />
+                <PhysicalEditor
+                    initialState={current}
+                    onChange={setCurrent}
+                    mode="update"
+                    onSave={handleSave}
+                    saving={saving}
+                    onCancel={() => navigate("/venues")}
+                />
             </div>
         </div>
     );
