@@ -1,0 +1,2003 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "next ticket",
+      "modelConfiguration": {
+        "fallbackIntentSensitivity": {
+          "level": "LOW"
+        }
+      },
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": [
+            "what can I do",
+            "what can I ask you",
+            "what are my options",
+            "I don't know what to say",
+            "explain how this works"
+          ]
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": [
+            "go back to the menu",
+            "back to the start",
+            "main menu",
+            "let's start over",
+            "take me home"
+          ]
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": [
+            "repeat",
+            "repeat that",
+            "can you repeat",
+            "I didn't hear you",
+            "say it again"
+          ]
+        },
+        {
+          "name": "CaptureInputIntent",
+          "slots": [
+            {
+              "name": "userInput",
+              "type": "SeedPhrase"
+            }
+          ],
+          "samples": [
+            "{userInput}",
+            "my key word is {userInput}",
+            "the key word is {userInput}",
+            "my password is {userInput}",
+            "my seed is {userInput}",
+            "sign in with {userInput}",
+            "I am {userInput}"
+          ]
+        },
+        {
+          "name": "LogoutIntent",
+          "samples": [
+            "sign out",
+            "log out",
+            "close my session",
+            "switch user",
+            "I want to sign in with another account",
+            "log me out"
+          ]
+        },
+        {
+          "name": "GetActiveEventsIntent",
+          "samples": [
+            "what are my events",
+            "what are my active events",
+            "list my events",
+            "which events do I have",
+            "show me my events",
+            "my published events",
+            "what events am I organizing",
+            "what events are there",
+            "what events are available",
+            "which events are there",
+            "list the events",
+            "show me the events",
+            "what events can I see",
+            "what's available",
+            "what's on",
+            "what's coming up",
+            "tell me what events there are",
+            "I want to see the events"
+          ]
+        },
+        {
+          "name": "GetTicketsSoldIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "the event {eventName}",
+                "for {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "how many tickets have been sold for {eventName}",
+            "how are sales going for {eventName}",
+            "tell me the sales for {eventName}",
+            "how many tickets did I sell for {eventName}",
+            "sales for the event {eventName}",
+            "how many tickets has {eventName} sold",
+            "how is {eventName} doing",
+            "how much has been sold for {eventName}",
+            "how are the ticket sales going",
+            "tell me the sales",
+            "how are sales going",
+            "how many tickets have been sold"
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "the event {eventName}",
+                "for {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "what zones does {eventName} have",
+            "tell me the zones for {eventName}",
+            "what are the zones for {eventName}",
+            "list the zones for {eventName}",
+            "show me the zones for {eventName}",
+            "what sections does {eventName} have",
+            "what areas does {eventName} have",
+            "how much do the zones for {eventName} cost",
+            "prices for {eventName}",
+            "what zones are available",
+            "tell me the zones",
+            "what are the zones",
+            "what zones are there"
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "the event {eventName}",
+                "for {eventName}",
+                "{eventName}"
+              ]
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "samples": [
+                "the {zoneName} zone",
+                "in {zoneName}",
+                "{zoneName}"
+              ]
+            }
+          ],
+          "samples": [
+            "are there seats in the {zoneName} zone for {eventName}",
+            "how many seats are left in {zoneName} for {eventName}",
+            "is there availability in {zoneName}",
+            "are there tickets left in the {zoneName} zone",
+            "how many seats are there in {zoneName} for {eventName}",
+            "availability for the {zoneName} zone",
+            "are there seats left in {zoneName}",
+            "is there still room in {zoneName}",
+            "how many are left in {zoneName}",
+            "are there seats available",
+            "is there availability",
+            "are there seats left"
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "samples": [
+                "the event {eventName}",
+                "for {eventName}",
+                "{eventName}"
+              ]
+            }
+          ],
+          "samples": [
+            "when is {eventName}",
+            "where is {eventName}",
+            "give me information about {eventName}",
+            "tell me about the event {eventName}",
+            "details for {eventName}",
+            "what time is {eventName}",
+            "where does {eventName} take place",
+            "what day is {eventName}",
+            "information about the event {eventName}",
+            "when is the event",
+            "where is the event",
+            "give me the details"
+          ]
+        },
+        {
+          "name": "GetTopRevenueEventIntent",
+          "samples": [
+            "which event earned the most",
+            "what event has made the most money",
+            "which event generates the most revenue",
+            "tell me the top earning event",
+            "which event sells the best",
+            "ranking of events by revenue",
+            "which event is doing best",
+            "what is the best event"
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "samples": [
+                "the month of {monthName}",
+                "in {monthName}",
+                "{monthName}"
+              ]
+            }
+          ],
+          "samples": [
+            "how much did we make in {monthName}",
+            "what was the revenue for {monthName}",
+            "tell me the revenue for {monthName}",
+            "how much money was made in {monthName}",
+            "total revenue for {monthName}",
+            "how much did we sell in {monthName}",
+            "how much came in during {monthName}",
+            "what amount did we collect in {monthName}",
+            "how much did we earn in {monthName}",
+            "total for {monthName}",
+            "how much has been collected"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "EventType",
+          "values": [
+            {
+              "id": "ejemplo_1",
+              "name": {
+                "value": "Rock en Vivo",
+                "synonyms": [
+                  "rock",
+                  "the rock event"
+                ]
+              }
+            },
+            {
+              "id": "ejemplo_2",
+              "name": {
+                "value": "Festival Sabor Norteño",
+                "synonyms": [
+                  "sabor norteno",
+                  "the festival"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ZoneType",
+          "values": [
+            {
+              "id": "vip",
+              "name": {
+                "value": "VIP",
+                "synonyms": [
+                  "vip",
+                  "vip zone",
+                  "the vip"
+                ]
+              }
+            },
+            {
+              "id": "general",
+              "name": {
+                "value": "General",
+                "synonyms": [
+                  "general",
+                  "general zone",
+                  "general admission",
+                  "the general"
+                ]
+              }
+            },
+            {
+              "id": "preferente",
+              "name": {
+                "value": "Preferente",
+                "synonyms": [
+                  "preferred",
+                  "preferred zone",
+                  "preferente",
+                  "premium"
+                ]
+              }
+            },
+            {
+              "id": "platino",
+              "name": {
+                "value": "Platino",
+                "synonyms": [
+                  "platinum",
+                  "platinum zone",
+                  "platino"
+                ]
+              }
+            },
+            {
+              "id": "palcos",
+              "name": {
+                "value": "Palcos",
+                "synonyms": [
+                  "boxes",
+                  "box seats",
+                  "suites",
+                  "palcos"
+                ]
+              }
+            },
+            {
+              "id": "gradas",
+              "name": {
+                "value": "Gradas",
+                "synonyms": [
+                  "stands",
+                  "bleachers",
+                  "gradas"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SeedPhrase",
+          "values": [
+            {
+              "name": {
+                "value": "rapido jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido faro"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido roble"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido puente"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido rio"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "rapido templo"
+              }
+            },
+            {
+              "name": {
+                "value": "azul jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "azul colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "azul volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "azul faro"
+              }
+            },
+            {
+              "name": {
+                "value": "azul roble"
+              }
+            },
+            {
+              "name": {
+                "value": "azul puente"
+              }
+            },
+            {
+              "name": {
+                "value": "azul rio"
+              }
+            },
+            {
+              "name": {
+                "value": "azul bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "azul cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "azul templo"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante faro"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante roble"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante puente"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante rio"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "brillante templo"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente faro"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente roble"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente puente"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente rio"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "valiente templo"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno faro"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno roble"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno puente"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno rio"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "sereno templo"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado faro"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado roble"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado puente"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado rio"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "dorado templo"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre faro"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre roble"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre puente"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre rio"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "alegre templo"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte faro"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte roble"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte puente"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte rio"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "fuerte templo"
+              }
+            },
+            {
+              "name": {
+                "value": "claro jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "claro colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "claro volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "claro faro"
+              }
+            },
+            {
+              "name": {
+                "value": "claro roble"
+              }
+            },
+            {
+              "name": {
+                "value": "claro puente"
+              }
+            },
+            {
+              "name": {
+                "value": "claro rio"
+              }
+            },
+            {
+              "name": {
+                "value": "claro bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "claro cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "claro templo"
+              }
+            },
+            {
+              "name": {
+                "value": "noble jaguar"
+              }
+            },
+            {
+              "name": {
+                "value": "noble colibri"
+              }
+            },
+            {
+              "name": {
+                "value": "noble volcan"
+              }
+            },
+            {
+              "name": {
+                "value": "noble faro"
+              }
+            },
+            {
+              "name": {
+                "value": "noble roble"
+              }
+            },
+            {
+              "name": {
+                "value": "noble puente"
+              }
+            },
+            {
+              "name": {
+                "value": "noble rio"
+              }
+            },
+            {
+              "name": {
+                "value": "noble bosque"
+              }
+            },
+            {
+              "name": {
+                "value": "noble cometa"
+              }
+            },
+            {
+              "name": {
+                "value": "noble templo"
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar rapido",
+                "synonyms": [
+                  "fast jaguar",
+                  "jaguar fast",
+                  "quick jaguar",
+                  "jaguar quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar azul",
+                "synonyms": [
+                  "blue jaguar",
+                  "jaguar blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar brillante",
+                "synonyms": [
+                  "bright jaguar",
+                  "jaguar bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar valiente",
+                "synonyms": [
+                  "brave jaguar",
+                  "jaguar brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar sereno",
+                "synonyms": [
+                  "serene jaguar",
+                  "jaguar serene",
+                  "calm jaguar",
+                  "jaguar calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar dorado",
+                "synonyms": [
+                  "golden jaguar",
+                  "jaguar golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar alegre",
+                "synonyms": [
+                  "happy jaguar",
+                  "jaguar happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar fuerte",
+                "synonyms": [
+                  "strong jaguar",
+                  "jaguar strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar claro",
+                "synonyms": [
+                  "clear jaguar",
+                  "jaguar clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar noble",
+                "synonyms": [
+                  "noble jaguar",
+                  "jaguar noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri rapido",
+                "synonyms": [
+                  "fast hummingbird",
+                  "hummingbird fast",
+                  "quick hummingbird",
+                  "hummingbird quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri azul",
+                "synonyms": [
+                  "blue hummingbird",
+                  "hummingbird blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri brillante",
+                "synonyms": [
+                  "bright hummingbird",
+                  "hummingbird bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri valiente",
+                "synonyms": [
+                  "brave hummingbird",
+                  "hummingbird brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri sereno",
+                "synonyms": [
+                  "serene hummingbird",
+                  "hummingbird serene",
+                  "calm hummingbird",
+                  "hummingbird calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri dorado",
+                "synonyms": [
+                  "golden hummingbird",
+                  "hummingbird golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri alegre",
+                "synonyms": [
+                  "happy hummingbird",
+                  "hummingbird happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri fuerte",
+                "synonyms": [
+                  "strong hummingbird",
+                  "hummingbird strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri claro",
+                "synonyms": [
+                  "clear hummingbird",
+                  "hummingbird clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri noble",
+                "synonyms": [
+                  "noble hummingbird",
+                  "hummingbird noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan rapido",
+                "synonyms": [
+                  "fast volcano",
+                  "volcano fast",
+                  "quick volcano",
+                  "volcano quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan azul",
+                "synonyms": [
+                  "blue volcano",
+                  "volcano blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan brillante",
+                "synonyms": [
+                  "bright volcano",
+                  "volcano bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan valiente",
+                "synonyms": [
+                  "brave volcano",
+                  "volcano brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan sereno",
+                "synonyms": [
+                  "serene volcano",
+                  "volcano serene",
+                  "calm volcano",
+                  "volcano calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan dorado",
+                "synonyms": [
+                  "golden volcano",
+                  "volcano golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan alegre",
+                "synonyms": [
+                  "happy volcano",
+                  "volcano happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan fuerte",
+                "synonyms": [
+                  "strong volcano",
+                  "volcano strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan claro",
+                "synonyms": [
+                  "clear volcano",
+                  "volcano clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "volcan noble",
+                "synonyms": [
+                  "noble volcano",
+                  "volcano noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro rapido",
+                "synonyms": [
+                  "fast lighthouse",
+                  "lighthouse fast",
+                  "quick lighthouse",
+                  "lighthouse quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro azul",
+                "synonyms": [
+                  "blue lighthouse",
+                  "lighthouse blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro brillante",
+                "synonyms": [
+                  "bright lighthouse",
+                  "lighthouse bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro valiente",
+                "synonyms": [
+                  "brave lighthouse",
+                  "lighthouse brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro sereno",
+                "synonyms": [
+                  "serene lighthouse",
+                  "lighthouse serene",
+                  "calm lighthouse",
+                  "lighthouse calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro dorado",
+                "synonyms": [
+                  "golden lighthouse",
+                  "lighthouse golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro alegre",
+                "synonyms": [
+                  "happy lighthouse",
+                  "lighthouse happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro fuerte",
+                "synonyms": [
+                  "strong lighthouse",
+                  "lighthouse strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro claro",
+                "synonyms": [
+                  "clear lighthouse",
+                  "lighthouse clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "faro noble",
+                "synonyms": [
+                  "noble lighthouse",
+                  "lighthouse noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble rapido",
+                "synonyms": [
+                  "fast oak",
+                  "oak fast",
+                  "quick oak",
+                  "oak quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble azul",
+                "synonyms": [
+                  "blue oak",
+                  "oak blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble brillante",
+                "synonyms": [
+                  "bright oak",
+                  "oak bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble valiente",
+                "synonyms": [
+                  "brave oak",
+                  "oak brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble sereno",
+                "synonyms": [
+                  "serene oak",
+                  "oak serene",
+                  "calm oak",
+                  "oak calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble dorado",
+                "synonyms": [
+                  "golden oak",
+                  "oak golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble alegre",
+                "synonyms": [
+                  "happy oak",
+                  "oak happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble fuerte",
+                "synonyms": [
+                  "strong oak",
+                  "oak strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble claro",
+                "synonyms": [
+                  "clear oak",
+                  "oak clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "roble noble",
+                "synonyms": [
+                  "noble oak",
+                  "oak noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente rapido",
+                "synonyms": [
+                  "fast bridge",
+                  "bridge fast",
+                  "quick bridge",
+                  "bridge quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente azul",
+                "synonyms": [
+                  "blue bridge",
+                  "bridge blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente brillante",
+                "synonyms": [
+                  "bright bridge",
+                  "bridge bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente valiente",
+                "synonyms": [
+                  "brave bridge",
+                  "bridge brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente sereno",
+                "synonyms": [
+                  "serene bridge",
+                  "bridge serene",
+                  "calm bridge",
+                  "bridge calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente dorado",
+                "synonyms": [
+                  "golden bridge",
+                  "bridge golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente alegre",
+                "synonyms": [
+                  "happy bridge",
+                  "bridge happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente fuerte",
+                "synonyms": [
+                  "strong bridge",
+                  "bridge strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente claro",
+                "synonyms": [
+                  "clear bridge",
+                  "bridge clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "puente noble",
+                "synonyms": [
+                  "noble bridge",
+                  "bridge noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio rapido",
+                "synonyms": [
+                  "fast river",
+                  "river fast",
+                  "quick river",
+                  "river quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio azul",
+                "synonyms": [
+                  "blue river",
+                  "river blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio brillante",
+                "synonyms": [
+                  "bright river",
+                  "river bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio valiente",
+                "synonyms": [
+                  "brave river",
+                  "river brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio sereno",
+                "synonyms": [
+                  "serene river",
+                  "river serene",
+                  "calm river",
+                  "river calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio dorado",
+                "synonyms": [
+                  "golden river",
+                  "river golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio alegre",
+                "synonyms": [
+                  "happy river",
+                  "river happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio fuerte",
+                "synonyms": [
+                  "strong river",
+                  "river strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio claro",
+                "synonyms": [
+                  "clear river",
+                  "river clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "rio noble",
+                "synonyms": [
+                  "noble river",
+                  "river noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque rapido",
+                "synonyms": [
+                  "fast forest",
+                  "forest fast",
+                  "quick forest",
+                  "forest quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque azul",
+                "synonyms": [
+                  "blue forest",
+                  "forest blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque brillante",
+                "synonyms": [
+                  "bright forest",
+                  "forest bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque valiente",
+                "synonyms": [
+                  "brave forest",
+                  "forest brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque sereno",
+                "synonyms": [
+                  "serene forest",
+                  "forest serene",
+                  "calm forest",
+                  "forest calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque dorado",
+                "synonyms": [
+                  "golden forest",
+                  "forest golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque alegre",
+                "synonyms": [
+                  "happy forest",
+                  "forest happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque fuerte",
+                "synonyms": [
+                  "strong forest",
+                  "forest strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque claro",
+                "synonyms": [
+                  "clear forest",
+                  "forest clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bosque noble",
+                "synonyms": [
+                  "noble forest",
+                  "forest noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa rapido",
+                "synonyms": [
+                  "fast comet",
+                  "comet fast",
+                  "quick comet",
+                  "comet quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa azul",
+                "synonyms": [
+                  "blue comet",
+                  "comet blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa brillante",
+                "synonyms": [
+                  "bright comet",
+                  "comet bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa valiente",
+                "synonyms": [
+                  "brave comet",
+                  "comet brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa sereno",
+                "synonyms": [
+                  "serene comet",
+                  "comet serene",
+                  "calm comet",
+                  "comet calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa dorado",
+                "synonyms": [
+                  "golden comet",
+                  "comet golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa alegre",
+                "synonyms": [
+                  "happy comet",
+                  "comet happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa fuerte",
+                "synonyms": [
+                  "strong comet",
+                  "comet strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa claro",
+                "synonyms": [
+                  "clear comet",
+                  "comet clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "cometa noble",
+                "synonyms": [
+                  "noble comet",
+                  "comet noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo rapido",
+                "synonyms": [
+                  "fast temple",
+                  "temple fast",
+                  "quick temple",
+                  "temple quick"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo azul",
+                "synonyms": [
+                  "blue temple",
+                  "temple blue"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo brillante",
+                "synonyms": [
+                  "bright temple",
+                  "temple bright"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo valiente",
+                "synonyms": [
+                  "brave temple",
+                  "temple brave"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo sereno",
+                "synonyms": [
+                  "serene temple",
+                  "temple serene",
+                  "calm temple",
+                  "temple calm"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo dorado",
+                "synonyms": [
+                  "golden temple",
+                  "temple golden"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo alegre",
+                "synonyms": [
+                  "happy temple",
+                  "temple happy"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo fuerte",
+                "synonyms": [
+                  "strong temple",
+                  "temple strong"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo claro",
+                "synonyms": [
+                  "clear temple",
+                  "temple clear"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "templo noble",
+                "synonyms": [
+                  "noble temple",
+                  "temple noble"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "jaguar morado",
+                "synonyms": [
+                  "purple jaguar",
+                  "jaguar purple"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "colibri blanco",
+                "synonyms": [
+                  "white hummingbird",
+                  "hummingbird white"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "dialog": {
+      "delegationStrategy": "SKILL_RESPONSE",
+      "intents": [
+        {
+          "name": "GetTicketsSoldIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Tickets"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetZonesIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Zones"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetSeatAvailabilityIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Availability"
+              }
+            },
+            {
+              "name": "zoneName",
+              "type": "ZoneType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.ZoneName"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetEventInfoIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "eventName",
+              "type": "EventType",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.EventName.Info"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GetTotalRevenueByPeriodIntent",
+          "delegationStrategy": "SKILL_RESPONSE",
+          "slots": [
+            {
+              "name": "monthName",
+              "type": "AMAZON.Month",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.MonthName"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "prompts": [
+      {
+        "id": "Elicit.Slot.EventName.Tickets",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which event do you want the sales for? Just say the name, for example: Rock en Vivo."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me just the name of the event, for example: Sinfónica de Otoño."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Zones",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which event do you want the zones for? Just say the name, for example: Rock en Vivo."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me just the name of the event, for example: Festival Sabor Norteño."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Availability",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which event? Just say the name, for example: Rock en Vivo."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me just the name of the event, for example: Gira de Comedia."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.EventName.Info",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which event? Just say the name, for example: Rock en Vivo."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me just the name of the event, for example: Sinfónica de Otoño."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.ZoneName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which zone? For example: general, preferred or vip."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me the zone, for example: vip."
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.MonthName",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Which month? For example: August."
+          },
+          {
+            "type": "PlainText",
+            "value": "Tell me the name of the month, for example: August."
+          }
+        ]
+      }
+    ]
+  }
+}
