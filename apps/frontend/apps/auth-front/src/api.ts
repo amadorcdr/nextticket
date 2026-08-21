@@ -19,6 +19,25 @@ const ROLE_BY_BACKEND_NAME: Record<BackendRole, SessionRole> = {
 export class InvalidCredentialsError extends Error {}
 export class AccountDisabledError extends Error {}
 
+/**
+ * Traduce cualquier error de un flujo de auth a un mensaje mostrable en un
+ * toast. Los errores que ya lanzamos nosotros (InvalidCredentialsError,
+ * AccountDisabledError, o los Error con el mensaje del backend vía
+ * readErrorMessage) simplemente pasan su .message. Lo único que se
+ * reinterpreta es el TypeError que lanza fetch cuando ni siquiera hubo
+ * respuesta (backend caído, sin red): sin esto, esos casos mostraban un
+ * mensaje genérico que no explicaba nada.
+ */
+export function toFriendlyAuthError(err: unknown, fallback: string): string {
+  if (err instanceof TypeError) {
+    return "No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.";
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return fallback;
+}
+
 interface LoginApiResponse {
   token: string;
   user: {

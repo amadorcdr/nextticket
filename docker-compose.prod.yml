@@ -83,6 +83,8 @@ services:
       PORT: 3003
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_URL: http://api-gateway:3001
+      TICKETS_SERVICE_URL: http://tickets-service:3005
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?falta INTERNAL_SERVICE_TOKEN en el .env}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -104,6 +106,7 @@ services:
       # VENUES_SERVICE_URL para el MISMO servicio; son nombres distintos en
       # código distinto y hay que respetar cada uno.
       VENUES_EVENTS_URL: http://venues-events-service:3003
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?falta INTERNAL_SERVICE_TOKEN en el .env}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -121,6 +124,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GATEWAY_URL: http://api-gateway:3001
       VENUES_EVENTS_URL: http://venues-events-service:3003
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?falta INTERNAL_SERVICE_TOKEN en el .env}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

@@ -16,6 +16,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AUTH_ROLES } from '../auth/auth.constants';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -45,8 +47,9 @@ export class EventZonesController {
     @Param('eventId', new ParseUUIDPipe())
     eventId: string,
     @Body() dto: CreateEventZoneDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.eventZones.create(eventId, dto);
+    return this.eventZones.create(eventId, dto, user);
   }
 
   @Get()
@@ -86,11 +89,13 @@ export class EventZonesController {
     @Param('zoneId', new ParseUUIDPipe())
     zoneId: string,
     @Body() dto: UpdateEventZoneDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.update(
       eventId,
       zoneId,
       dto,
+      user,
     );
   }
 
@@ -107,11 +112,13 @@ export class EventZonesController {
     @Param('zoneId', new ParseUUIDPipe())
     zoneId: string,
     @Body() dto: AssignSectionsDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.assignSections(
       eventId,
       zoneId,
       dto,
+      user,
     );
   }
 
@@ -129,11 +136,13 @@ export class EventZonesController {
     zoneId: string,
     @Param('sectionId', new ParseUUIDPipe())
     sectionId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.removeSection(
       eventId,
       zoneId,
       sectionId,
+      user,
     );
   }
 
@@ -150,11 +159,13 @@ export class EventZonesController {
     @Param('zoneId', new ParseUUIDPipe())
     zoneId: string,
     @Body() dto: CreatePriceTierDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.createPriceTier(
       eventId,
       zoneId,
       dto,
+      user,
     );
   }
 
@@ -173,12 +184,14 @@ export class EventZonesController {
     @Param('tierId', new ParseUUIDPipe())
     tierId: string,
     @Body() dto: UpdatePriceTierDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.updatePriceTier(
       eventId,
       zoneId,
       tierId,
       dto,
+      user,
     );
   }
 
@@ -196,11 +209,13 @@ export class EventZonesController {
     zoneId: string,
     @Param('tierId', new ParseUUIDPipe())
     tierId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.removePriceTier(
       eventId,
       zoneId,
       tierId,
+      user,
     );
   }
 
@@ -216,10 +231,12 @@ export class EventZonesController {
     eventId: string,
     @Param('zoneId', new ParseUUIDPipe())
     zoneId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventZones.remove(
       eventId,
       zoneId,
+      user,
     );
   }
 }

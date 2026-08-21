@@ -75,6 +75,10 @@ export interface OrganizerEventRow {
     sold: number;
     total: number;
     status: OrganizerEventStatus;
+    /** Status real del backend, para cuando "Activo"/"Inactivo" no alcanza a
+     *  distinguir (p. ej. Dashboard necesita excluir COMPLETED, que aquí
+     *  cuenta como "Activo" pero ya no genera ventas nuevas). */
+    rawStatus: ApiEventStatus;
 }
 
 /*
@@ -123,6 +127,7 @@ export function toOrganizerEventRow(event: ApiEvent, soldByZone: Map<string, num
         sold,
         total,
         status: STATUS_LABEL[event.status],
+        rawStatus: event.status,
     };
 }
 

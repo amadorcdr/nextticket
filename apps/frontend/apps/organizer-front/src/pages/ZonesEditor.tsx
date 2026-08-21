@@ -65,7 +65,12 @@ export function ZonesEditor() {
     api
       .get<Paginated<ApiEvent>>(`/events?organizerId=${user.id}&limit=${FETCH_LIMIT}`)
       .then((res) => {
-        const options = res.data.map((ev) => ({ id: ev.id, name: ev.name, venueId: ev.venueId, status: ev.status }));
+        // Un evento cancelado o finalizado ya no admite editar sus zonas
+        // (ver isEditable más abajo): no tiene caso ni mostrarlo aquí, solo
+        // ensucia el selector con eventos sobre los que no se puede hacer nada.
+        const options = res.data
+          .filter((ev) => ev.status !== "CANCELED" && ev.status !== "COMPLETED")
+          .map((ev) => ({ id: ev.id, name: ev.name, venueId: ev.venueId, status: ev.status }));
         setEvents(options);
         setSelectedEventId((prev) => prev ?? options[0]?.id);
       })
@@ -331,7 +336,10 @@ export function ZonesEditor() {
       {!eventsLoading && eventsError && <p className="text-muted text-xs py-8 text-center">{eventsError}</p>}
 
       {!eventsLoading && !eventsError && events.length === 0 && (
-        <p className="text-muted text-xs py-8 text-center">Todavía no tienes eventos. Crea uno en "Mis Eventos" para configurar sus zonas aquí.</p>
+        <p className="text-muted text-xs py-8 text-center">
+          No tienes eventos activos. Crea uno en "Mis Eventos" para configurar sus zonas aquí (los eventos cancelados
+          o finalizados ya no aparecen).
+        </p>
       )}
 
       {!eventsLoading && !eventsError && events.length > 0 && canvasLoading && (

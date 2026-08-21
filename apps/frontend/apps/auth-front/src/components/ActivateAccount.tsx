@@ -1,7 +1,9 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router } from "@nextticket-frontend/commons";
+import { Button, HeroParticles, HeroWaves, Icon, Router, toast } from "@nextticket-frontend/commons";
 import { FormEvent, useState } from "react";
 import { InputField, authCardClassName } from "./AuthCardUI";
-import { activateAccount, resendActivation } from "../api";
+import { activateAccount, resendActivation, toFriendlyAuthError } from "../api";
+
+const MIN_PASSWORD_LENGTH = 8;
 
 function BackToLogin() {
   return (
@@ -28,6 +30,8 @@ function ResendActivation({ token }: { token: string | null }) {
     try {
       await resendActivation(email);
       setSent(true);
+    } catch (err) {
+      toast.danger(toFriendlyAuthError(err, "No se pudo reenviar el correo de activación."));
     } finally {
       setSending(false);
     }
@@ -74,25 +78,29 @@ export function ActivateAccount() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [fieldError, setFieldError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [activated, setActivated] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setFieldError(null);
     setLinkError(null);
 
     if (!password || !confirmPassword) {
-      setFieldError("La contraseña y su confirmación son obligatorias.");
+      toast.danger("La contraseña y su confirmación son obligatorias.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      toast.danger(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
     }
     if (password !== confirmPassword) {
-      setFieldError("Las contraseñas no coinciden.");
+      toast.danger("Las contraseñas no coinciden.");
       return;
     }
     if (!token) {
-      setLinkError("El enlace de activación no incluye un token válido.");
+      const message = "El enlace de activación no incluye un token válido.";
+      toast.danger(message);
+      setLinkError(message);
       return;
     }
 
@@ -101,7 +109,15 @@ export function ActivateAccount() {
       await activateAccount(token, password, confirmPassword);
       setActivated(true);
     } catch (err) {
-      setLinkError(err instanceof Error ? err.message : "No se pudo activar la cuenta.");
+      const message = toFriendlyAuthError(err, "No se pudo activar la cuenta.");
+      toast.danger(message);
+      // Solo se manda a la pantalla de "pedir enlace nuevo" cuando el token en
+      // sí es el problema (inválido/expirado): el backend siempre usa
+      // BadRequestException para eso, así que se detecta por contenido del
+      // mensaje en vez de status — ambas rutas devuelven 400.
+      if (message.toLowerCase().includes("enlace")) {
+        setLinkError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -173,7 +189,6 @@ export function ActivateAccount() {
                     </button>
                   }
                 />
-                {fieldError && <p className="text-danger text-xs">{fieldError}</p>}
                 <Button type="submit" fullWidth isDisabled={loading}>
                   {loading ? "Activando..." : "Activar cuenta"}
                 </Button>

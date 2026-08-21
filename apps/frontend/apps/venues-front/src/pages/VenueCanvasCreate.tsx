@@ -57,15 +57,22 @@ export function VenueCanvasCreate() {
     const canContinue =
         venueState.venue.name.trim().length > 0 &&
         venueState.venue.address.trim().length > 0 &&
-        venueState.venue.city.trim().length > 0 &&
-        venueState.venue.totalCapacity > 0;
+        venueState.venue.city.trim().length > 0;
 
     const handleSave = async (state: PhysicalVenueState) => {
         if (saving) return;
 
-        if (!state.venue.name.trim() || !state.venue.address.trim() || !state.venue.city.trim() || !state.venue.totalCapacity) {
-            toast.danger("Completa nombre, dirección, ciudad y aforo del recinto antes de guardar.");
+        if (!state.venue.name.trim() || !state.venue.address.trim() || !state.venue.city.trim()) {
+            toast.danger("Completa nombre, dirección y ciudad del recinto antes de guardar.");
             setStep("info");
+            return;
+        }
+
+        // La capacidad ya no se captura a mano: es la suma de la capacidad de
+        // cada sección que el usuario acomodó en el canvas.
+        const totalCapacity = state.sections.reduce((sum, s) => sum + (s.capacity || 0), 0);
+        if (totalCapacity < 1) {
+            toast.danger("Agrega al menos una sección con capacidad en el canvas antes de guardar.");
             return;
         }
 
@@ -79,7 +86,7 @@ export function VenueCanvasCreate() {
                 city: state.venue.city,
                 state: state.venue.addressState || undefined,
                 country: state.venue.country || undefined,
-                totalCapacity: state.venue.totalCapacity,
+                totalCapacity,
                 description: state.venue.description || undefined,
                 status: state.venue.status,
             });
@@ -218,20 +225,6 @@ export function VenueCanvasCreate() {
                                 ))}
                             </select>
                         </div>
-                    </div>
-                </section>
-
-                <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
-                    <p className="text-foreground font-bold text-sm">Información operativa</p>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                        <TextField isRequired type="number">
-                            <Label>Capacidad total</Label>
-                            <Input
-                                type="number"
-                                value={venueState.venue.totalCapacity.toString()}
-                                onChange={(e) => setVenueField("totalCapacity", Number(e.target.value) || 0)}
-                            />
-                        </TextField>
                     </div>
                 </section>
 

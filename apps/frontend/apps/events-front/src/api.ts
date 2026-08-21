@@ -25,6 +25,8 @@ export interface ApiEventZone {
     admissionType?: ApiAdmissionType;
     status?: ApiEventZoneStatus;
     maxTicketsPerPurchase?: number;
+    /** Solo viene en GET /events/:id: secciones físicas que forman esta zona comercial. */
+    sections?: { sectionId: string; section: { id: string; name: string } }[];
 }
 
 export interface ApiEventCategoryAssignment {
@@ -140,7 +142,9 @@ export function toAdminEvent(event: ApiEvent, ticketCountByZone: Map<string, num
 }
 
 function toClientEventStatus(status: ApiEventStatus): ClientEventStatus {
-    return status === "SOLD_OUT" ? "sold-out" : "available";
+    if (status === "SOLD_OUT") return "sold-out";
+    if (status === "CANCELED") return "canceled";
+    return "available";
 }
 
 /** Zonas activas y con precio válido: base para "desde $X" y para saber si hay algo que vender. */
@@ -189,6 +193,7 @@ export function toClientEventDetail(event: ApiEvent): ClientEventDetail {
         admissionType: zone.admissionType ?? "RESERVED",
         availableCapacity: zone.availableCapacity,
         maxTicketsPerPurchase: zone.maxTicketsPerPurchase ?? 10,
+        sectionNameById: Object.fromEntries((zone.sections ?? []).map((s) => [s.sectionId, s.section.name])),
     }));
 
     return {

@@ -152,6 +152,37 @@ function withPointIds(points: ApiGeometryPoint[] | null) {
     return (points ?? []).map((p, i) => ({ ...p, id: p.id ?? `pt_${i}` }));
 }
 
+/**
+ * rowSeatCounts/rowNames son campos SOLO-EDITOR (no existe columna para
+ * ellos en la BD): la única fuente de verdad real es la lista de asientos ya
+ * generados. Sin esto, una sección con asientos reales se veía como "Sin
+ * asientos" cada vez que se recargaba el recinto desde el servidor.
+ * El orden de las filas se infiere por su posición Y promedio (arriba→abajo),
+ * que es como las genera el propio editor.
+ */
+function deriveRowConfig(seats: ApiSeat[]): { rowSeatCounts: number[]; rowNames: string[] } {
+    if (seats.length === 0) return { rowSeatCounts: [], rowNames: [] };
+
+    const seatsByRow = new Map<string, ApiSeat[]>();
+    for (const seat of seats) {
+        const rowSeats = seatsByRow.get(seat.row) ?? [];
+        rowSeats.push(seat);
+        seatsByRow.set(seat.row, rowSeats);
+    }
+
+    const rows = [...seatsByRow.entries()].map(([row, rowSeats]) => ({
+        row,
+        count: rowSeats.length,
+        avgY: rowSeats.reduce((sum, s) => sum + (s.coordinateY ?? 0), 0) / rowSeats.length,
+    }));
+    rows.sort((a, b) => a.avgY - b.avgY);
+
+    return {
+        rowNames: rows.map((r) => r.row),
+        rowSeatCounts: rows.map((r) => r.count),
+    };
+}
+
 /** Convierte el árbol real del backend al modelo que consume PhysicalEditor. */
 export function toPhysicalVenueState(v: ApiVenueTree): PhysicalVenueState {
     return {
@@ -168,28 +199,31 @@ export function toPhysicalVenueState(v: ApiVenueTree): PhysicalVenueState {
         },
         floors: v.floors.map((f) => ({ id: f.id, venueId: f.venueId, name: f.name, levelIndex: f.levelIndex })),
         sections: v.floors.flatMap((f) =>
-            f.sections.map((s) => ({
-                id: s.id,
-                venueId: s.venueId,
-                floorId: s.floorId,
-                name: s.name,
-                description: s.description,
-                capacity: s.capacity,
-                status: s.status,
-                color: s.color,
-                prefix: s.prefix,
-                coordinateX: s.coordinateX,
-                coordinateY: s.coordinateY,
-                width: s.width,
-                height: s.height,
-                rotationDegrees: Number(s.rotationDegrees),
-                isEllipse: s.isEllipse,
-                points: withPointIds(s.geometryPoints),
-                rowSeatCounts: [],
-                rowNames: [],
-                locked: false,
-                lockAspect: false,
-            })),
+            f.sections.map((s) => {
+                const { rowSeatCounts, rowNames } = deriveRowConfig(s.seats);
+                return {
+                    id: s.id,
+                    venueId: s.venueId,
+                    floorId: s.floorId,
+                    name: s.name,
+                    description: s.description,
+                    capacity: s.capacity,
+                    status: s.status,
+                    color: s.color,
+                    prefix: s.prefix,
+                    coordinateX: s.coordinateX,
+                    coordinateY: s.coordinateY,
+                    width: s.width,
+                    height: s.height,
+                    rotationDegrees: Number(s.rotationDegrees),
+                    isEllipse: s.isEllipse,
+                    points: withPointIds(s.geometryPoints),
+                    rowSeatCounts,
+                    rowNames,
+                    locked: false,
+                    lockAspect: false,
+                };
+            }),
         ),
         seats: v.floors.flatMap((f) =>
             f.sections.flatMap((s) =>

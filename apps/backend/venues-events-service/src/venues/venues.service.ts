@@ -4,8 +4,10 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { VenueStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { ACTIVE_EVENT_STATUSES } from '../events/events.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { CreateFloorDto } from './dto/create-floor.dto';
@@ -139,7 +141,27 @@ export class VenuesService {
   }
 
   async updateVenue(id: string, dto: UpdateVenueDto) {
-    await this.ensureVenueExists(id);
+    const current = await this.ensureVenueExists(id);
+
+    // Sacar un recinto de ACTIVE (desactivarlo, mandarlo a mantenimiento,
+    // etc.) no puede dejar eventos huérfanos: si tiene eventos PUBLISHED/
+    // SOLD_OUT, un organizador o un cliente seguirían viéndolo/comprando
+    // boletos de un recinto que el admin ya dio de baja.
+    if (
+      dto.status &&
+      dto.status !== current.status &&
+      dto.status !== VenueStatus.ACTIVE
+    ) {
+      const activeEventsCount = await this.prisma.event.count({
+        where: { venueId: id, status: { in: ACTIVE_EVENT_STATUSES } },
+      });
+
+      if (activeEventsCount > 0) {
+        throw new ConflictException(
+          `No se puede desactivar el recinto: tiene ${activeEventsCount} evento${activeEventsCount === 1 ? '' : 's'} activo${activeEventsCount === 1 ? '' : 's'}.`,
+        );
+      }
+    }
 
     try {
       const venue = await this.prisma.venue.update({

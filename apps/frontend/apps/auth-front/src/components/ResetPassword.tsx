@@ -1,7 +1,9 @@
-import { Button, HeroParticles, HeroWaves, Icon, Router } from "@nextticket-frontend/commons";
+import { Button, HeroParticles, HeroWaves, Icon, Router, toast } from "@nextticket-frontend/commons";
 import { FormEvent, useState } from "react";
 import { InputField, authCardClassName } from "./AuthCardUI";
-import { discardPasswordReset, resetPassword } from "../api";
+import { discardPasswordReset, resetPassword, toFriendlyAuthError } from "../api";
+
+const MIN_PASSWORD_LENGTH = 8;
 
 function BackToLogin() {
   return (
@@ -45,26 +47,30 @@ export function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [discarding, setDiscarding] = useState(false);
-  const [fieldError, setFieldError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [updated, setUpdated] = useState(false);
   const [discarded, setDiscarded] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setFieldError(null);
     setLinkError(null);
 
     if (!password || !confirmPassword) {
-      setFieldError("La contraseña y su confirmación son obligatorias.");
+      toast.danger("La contraseña y su confirmación son obligatorias.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      toast.danger(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
     }
     if (password !== confirmPassword) {
-      setFieldError("Las contraseñas no coinciden.");
+      toast.danger("Las contraseñas no coinciden.");
       return;
     }
     if (!token) {
-      setLinkError("El enlace de recuperación no es válido.");
+      const message = "El enlace de recuperación no es válido.";
+      toast.danger(message);
+      setLinkError(message);
       return;
     }
 
@@ -73,7 +79,14 @@ export function ResetPassword() {
       await resetPassword(token, password, confirmPassword);
       setUpdated(true);
     } catch (err) {
-      setLinkError(err instanceof Error ? err.message : "No se pudo restablecer la contraseña.");
+      const message = toFriendlyAuthError(err, "No se pudo restablecer la contraseña.");
+      toast.danger(message);
+      // Mismo criterio que en ActivateAccount: solo se manda a "pide un
+      // enlace nuevo" cuando el problema es el token, no la validación del
+      // formulario — ambos casos son 400, así que se distingue por mensaje.
+      if (message.toLowerCase().includes("enlace")) {
+        setLinkError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -84,9 +97,11 @@ export function ResetPassword() {
     setDiscarding(true);
     try {
       await discardPasswordReset(token);
+      setDiscarded(true);
+    } catch (err) {
+      toast.danger(toFriendlyAuthError(err, "No se pudo descartar la solicitud."));
     } finally {
       setDiscarding(false);
-      setDiscarded(true);
     }
   };
 
@@ -172,7 +187,6 @@ export function ResetPassword() {
                       </button>
                     }
                   />
-                  {fieldError && <p className="text-danger text-xs">{fieldError}</p>}
                   <Button type="submit" fullWidth isDisabled={loading}>
                     {loading ? "Restableciendo..." : "Restablecer contraseña"}
                   </Button>

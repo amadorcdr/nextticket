@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import {
   SeatStatus,
   SectionStatus,
 } from '@prisma/client';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { AssignSectionsDto } from './dto/assign-sections.dto';
@@ -29,8 +32,24 @@ export class EventZonesService {
     private readonly redis: RedisService,
   ) {}
 
-  async create(eventId: string, dto: CreateEventZoneDto) {
+  /** Las zonas comerciales de un evento solo las toca su organizador, o un ADMIN. */
+  private assertOwnerOrAdmin(
+    event: { organizerId: string },
+    user: AuthenticatedUser,
+  ) {
+    if (
+      user.role !== AUTH_ROLES.ADMIN &&
+      event.organizerId !== user.sub
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso sobre este evento',
+      );
+    }
+  }
+
+  async create(eventId: string, dto: CreateEventZoneDto, user: AuthenticatedUser) {
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 
@@ -170,9 +189,11 @@ export class EventZonesService {
     eventId: string,
     zoneId: string,
     dto: UpdateEventZoneDto,
+    user: AuthenticatedUser,
   ) {
     const zone = await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 
@@ -237,9 +258,11 @@ export class EventZonesService {
     eventId: string,
     zoneId: string,
     dto: AssignSectionsDto,
+    user: AuthenticatedUser,
   ) {
     const zone = await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 
@@ -346,8 +369,10 @@ export class EventZonesService {
     eventId: string,
     zoneId: string,
     sectionId: string,
+    user: AuthenticatedUser,
   ) {
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 
@@ -460,9 +485,11 @@ export class EventZonesService {
     eventId: string,
     zoneId: string,
     dto: CreatePriceTierDto,
+    user: AuthenticatedUser,
   ) {
     await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
     this.validateTierDateWindow(
@@ -508,9 +535,11 @@ export class EventZonesService {
     zoneId: string,
     tierId: string,
     dto: UpdatePriceTierDto,
+    user: AuthenticatedUser,
   ) {
     await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
     this.validateTierDateWindow(
@@ -572,9 +601,15 @@ export class EventZonesService {
     return updated;
   }
 
-  async removePriceTier(eventId: string, zoneId: string, tierId: string) {
+  async removePriceTier(
+    eventId: string,
+    zoneId: string,
+    tierId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 
@@ -611,9 +646,10 @@ export class EventZonesService {
     };
   }
 
-  async remove(eventId: string, zoneId: string) {
+  async remove(eventId: string, zoneId: string, user: AuthenticatedUser) {
     const zone = await this.findOne(eventId, zoneId);
     const event = await this.findEvent(eventId);
+    this.assertOwnerOrAdmin(event, user);
 
     this.validateEventEditable(event.status);
 

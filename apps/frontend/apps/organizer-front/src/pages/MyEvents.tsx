@@ -35,6 +35,7 @@ export function MyEvents() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [eventToCancel, setEventToCancel] = useState<OrganizerEventRow | null>(null);
   const [canceling, setCanceling] = useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -109,6 +110,19 @@ export function MyEvents() {
       toast.danger(err instanceof ApiError ? err.message : "No se pudo cancelar el evento");
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const publishEvent = async (ev: OrganizerEventRow) => {
+    setPublishingId(ev.id);
+    try {
+      await api.patch<ApiEvent>(`/events/${ev.id}/status`, { status: "PUBLISHED" });
+      setEvents((prev) => prev.map((e) => (e.id === ev.id ? { ...e, rawStatus: "PUBLISHED" } : e)));
+      toast.success("Evento publicado: ya es visible en el catálogo público");
+    } catch (err) {
+      toast.danger(err instanceof ApiError ? err.message : "No se pudo publicar el evento");
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -215,7 +229,14 @@ export function MyEvents() {
           <ScrollShadow className="flex-1 overflow-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {paginated.map((ev) => (
-                <OrganizerEventCard key={ev.id} event={ev} onEdit={openEdit} onCancel={openCancel} />
+                <OrganizerEventCard
+                  key={ev.id}
+                  event={ev}
+                  onEdit={openEdit}
+                  onCancel={openCancel}
+                  onPublish={publishEvent}
+                  publishing={publishingId === ev.id}
+                />
               ))}
             </div>
           </ScrollShadow>

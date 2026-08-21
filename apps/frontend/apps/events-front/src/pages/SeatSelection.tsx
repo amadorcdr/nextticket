@@ -495,7 +495,13 @@ export function SeatSelection() {
                         <div className="flex flex-col gap-6 w-fit mx-auto p-1">
                             {reservedZones.map((zone) => {
                                 const zoneSeats = seatsByZone[zone.id] ?? [];
-                                const rows = Array.from(new Set(zoneSeats.map((s) => s.seat.row))).sort();
+                                // Una zona puede juntar varias secciones físicas (p. ej. "VIP
+                                // Izquierda" + "VIP Derecha"), y cada sección numera sus filas
+                                // por su cuenta: agrupar solo por letra de fila mezclaría dos
+                                // asientos distintos bajo la misma etiqueta "A1". Se agrupa por
+                                // sección primero, y solo se muestra su nombre si hay más de una.
+                                const sectionIds = Array.from(new Set(zoneSeats.map((s) => s.sectionId)));
+                                const showSectionLabel = sectionIds.length > 1;
 
                                 return (
                                     <div key={zone.id} className="flex flex-col gap-1.5">
@@ -504,14 +510,25 @@ export function SeatSelection() {
                                             <span className="text-xs text-muted">{formatPrice(zone.price)}</span>
                                         </div>
 
-                                        {rows.length === 0 && (
+                                        {sectionIds.length === 0 && (
                                             <p className="text-muted text-xs py-4 text-center">
                                                 No hay asientos configurados en esta zona.
                                             </p>
                                         )}
 
-                                        {rows.map((row) => {
-                                            const rowSeats = zoneSeats
+                                        {sectionIds.map((sectionId) => {
+                                            const sectionSeats = zoneSeats.filter((s) => s.sectionId === sectionId);
+                                            const rows = Array.from(new Set(sectionSeats.map((s) => s.seat.row))).sort();
+
+                                            return (
+                                                <div key={sectionId} className="flex flex-col gap-1.5">
+                                                    {showSectionLabel && (
+                                                        <span className="text-[11px] font-medium text-muted mt-1">
+                                                            {zone.sectionNameById[sectionId] ?? "Sección"}
+                                                        </span>
+                                                    )}
+                                                    {rows.map((row) => {
+                                            const rowSeats = sectionSeats
                                                 .filter((s) => s.seat.row === row)
                                                 .sort((a, b) => Number(a.seat.number) - Number(b.seat.number));
 
@@ -553,6 +570,9 @@ export function SeatSelection() {
                                                             </button>
                                                         );
                                                     })}
+                                                </div>
+                                            );
+                                        })}
                                                 </div>
                                             );
                                         })}

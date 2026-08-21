@@ -105,6 +105,7 @@ export function EventDetail() {
     if (!event) return null;
 
     const isSoldOut = event.status === "sold-out";
+    const isCanceled = event.status === "canceled";
     const minPrice = event.zones.length > 0 ? Math.min(...event.zones.map((zone) => zone.price)) : 0;
 
     return (
@@ -184,46 +185,55 @@ export function EventDetail() {
                             <Chip
                                 variant="soft"
                                 size="sm"
-                                color={isSoldOut ? "danger" : "success"}
+                                color={isCanceled || isSoldOut ? "danger" : "success"}
                             >
-                                {isSoldOut ? "Agotado" : "Disponible"}
+                                {isCanceled ? "Cancelado" : isSoldOut ? "Agotado" : "Disponible"}
                             </Chip>
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            {event.zones.map((zone) => (
-                                <div
-                                    key={zone.id}
-                                    className="flex items-center justify-between gap-3 rounded-[10px] bg-surface-secondary px-3 py-2"
-                                >
-                                    <div className="min-w-0">
-                                        <p className="md:text-sm text-xs font-medium truncate">
-                                            {zone.name}
-                                        </p>
-                                        <p className="text-xs text-muted truncate">
-                                            {zone.description}
-                                        </p>
+                        {isCanceled ? (
+                            <p className="text-danger text-xs bg-danger/10 rounded-[10px] px-3 py-2">
+                                Este evento fue cancelado por el organizador y ya no está disponible para
+                                compra.
+                            </p>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                {event.zones.map((zone) => (
+                                    <div
+                                        key={zone.id}
+                                        className="flex items-center justify-between gap-3 rounded-[10px] bg-surface-secondary px-3 py-2"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="md:text-sm text-xs font-medium truncate">
+                                                {zone.name}
+                                            </p>
+                                            <p className="text-xs text-muted truncate">
+                                                {zone.description}
+                                            </p>
+                                        </div>
+                                        <span className="md:text-sm text-xs font-semibold shrink-0">
+                                            {formatPrice(zone.price, event.currency)}
+                                        </span>
                                     </div>
-                                    <span className="md:text-sm text-xs font-semibold shrink-0">
-                                        {formatPrice(zone.price, event.currency)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
 
                         <Button
                             className="w-full"
-                            isDisabled={isSoldOut || event.zones.length === 0}
+                            isDisabled={isCanceled || isSoldOut || event.zones.length === 0}
                             onPress={() => navigate(`/event/${event.id}/fila`)}
                         >
                             <Icon.Armchair />
-                            {isSoldOut ? "Agotado" : "Elegir asientos"}
+                            {isCanceled ? "Cancelado" : isSoldOut ? "Agotado" : "Elegir asientos"}
                         </Button>
 
-                        <p className="text-xs text-muted text-center">
-                            {event.availableSeats.toLocaleString("es-MX")} lugares
-                            disponibles de {event.totalSeats.toLocaleString("es-MX")}
-                        </p>
+                        {!isCanceled && (
+                            <p className="text-xs text-muted text-center">
+                                {event.availableSeats.toLocaleString("es-MX")} lugares
+                                disponibles de {event.totalSeats.toLocaleString("es-MX")}
+                            </p>
+                        )}
                     </div>
                 </aside>
             </div>

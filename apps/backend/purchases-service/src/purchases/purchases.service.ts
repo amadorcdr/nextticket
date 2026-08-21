@@ -283,8 +283,17 @@ export class PurchasesService {
     }
 
     const event = (await response.json()) as {
+      status: string;
       zones: Array<{ id: string; eventPrice: string | number }>;
     };
+
+    // Defensa en profundidad: el catálogo del cliente ya no lista eventos
+    // cancelados, pero esta ruta es la que de verdad mueve dinero — no debe
+    // depender solo de que el frontend se porte bien.
+    if (event.status === 'CANCELED') {
+      throw new BadRequestException('Este evento fue cancelado y ya no admite compras');
+    }
+
     const priceByZone = new Map(
       event.zones.map((zone) => [zone.id, Number(zone.eventPrice)]),
     );

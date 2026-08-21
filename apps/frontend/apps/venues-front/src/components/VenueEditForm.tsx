@@ -67,15 +67,14 @@ export function VenueEditForm({ draft, onChange, floorsCount, sectionsCount, onE
             <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">
                 <p className="text-foreground font-bold text-sm">Información operativa</p>
                 <div className="grid sm:grid-cols-2 gap-3">
-                    <TextField isRequired type="number">
+                    <TextField isDisabled>
                         <Label>Capacidad</Label>
-                        <Input
-                            type="number"
-                            value={draft.total_capacity.toString()}
-                            onChange={(e) => set("total_capacity", Number(e.target.value) || 0)}
-                        />
+                        <Input value={`${draft.total_capacity.toLocaleString("es-MX")} lugares`} />
                     </TextField>
                 </div>
+                <p className="text-muted text-[11px] -mt-1">
+                    Se calcula sola a partir de las secciones que agregues en el editor de zonas.
+                </p>
             </section>
 
             <section className="bg-surface border border-border rounded-[10px] p-4 flex flex-col gap-3">

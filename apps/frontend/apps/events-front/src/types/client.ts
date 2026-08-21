@@ -1,9 +1,11 @@
 /**
  * "soon" no tiene equivalente real en venues-events-service (todo evento
  * PUBLISHED se muestra igual, esté cerca o lejos su fecha): solo existen
- * "available" (PUBLISHED) y "sold-out" (SOLD_OUT).
+ * "available" (PUBLISHED), "sold-out" (SOLD_OUT) y "canceled" (CANCELED).
+ * El catálogo nunca lista eventos CANCELED, pero la vista de detalle sí
+ * puede recibir uno si alguien entra por URL directa a un evento viejo.
  */
-export type ClientEventStatus = "available" | "sold-out";
+export type ClientEventStatus = "available" | "sold-out" | "canceled";
 
 /**
  * Evento tal como lo ve un cliente en el catálogo. Los nombres de los
@@ -40,6 +42,13 @@ export interface ClientEventZone {
     admissionType: "RESERVED" | "GENERAL";
     availableCapacity: number;
     maxTicketsPerPurchase: number;
+    /**
+     * Una zona puede agrupar varias secciones físicas del recinto (p. ej.
+     * "VIP Izquierda" + "VIP Derecha"): cada una numera sus filas/asientos
+     * de forma independiente, así que dos secciones pueden compartir fila y
+     * número. Este mapa deja distinguirlas al agrupar la selección de asientos.
+     */
+    sectionNameById: Record<string, string>;
 }
 
 export interface ClientEventDetail extends ClientEvent {
