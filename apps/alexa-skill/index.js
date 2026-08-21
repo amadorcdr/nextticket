@@ -559,7 +559,18 @@ function pluralize(count, singular, plural) {
   return count === 1 ? singular : plural;
 }
 
-function joinList(items, connector = "y") {
+/**
+ * Une una lista en lenguaje natural. El conector es parte del idioma, así que
+ * viene del diccionario: estaba fijo en "y" y las listas en inglés salían
+ * "Gira de Comedia y Sinfónica de Otoño".
+ */
+/**
+ * Conector del idioma en curso. Lo fija LocalizationInterceptor en cada
+ * petición, para que joinList no tenga que recibirlo en sus siete llamadas.
+ */
+let conectorDeLista = "y";
+
+function joinList(items, connector = conectorDeLista) {
   const list = (items || []).filter(Boolean);
   if (list.length === 0) return "";
   if (list.length === 1) return list[0];
@@ -702,6 +713,7 @@ const es = {
   MENU_ORGANIZER: "Puedes decir: cuáles son mis eventos; cómo van las ventas; qué zonas tiene; o hay lugares disponibles. ¿Qué deseas consultar?",
   MENU_ADMIN: "Puedes decir: qué eventos hay; cuál es el evento más taquillero; cuánto se recaudó en agosto; o qué zonas tiene. ¿Qué deseas consultar?",
   MENU_CUSTOMER: "Puedes decir: qué eventos hay; qué zonas tiene; hay lugares disponibles; o cuándo es el evento. ¿Qué deseas consultar?",
+  LIST_CONNECTOR: "y",
   WHAT_TO_QUERY: "¿Qué deseas consultar?",
   ANYTHING_ELSE: "¿Hay algo más que quieras consultar?",
 
@@ -789,19 +801,116 @@ const es = {
   GOODBYE: "Gracias por usar Next Ticket. ¡Hasta luego!",
 };
 
+/**
+ * Inglés. Antes solo redefinía una docena de claves y el resto caía al español
+ * por el Object.assign: la skill saludaba en inglés y seguía hablando español.
+ * Ahora está completo, con el MISMO número y orden de %s que su equivalente.
+ */
 const en = Object.assign({}, es, {
+  // ── Autenticación ──
   GREETING_NEW: "Welcome to Next Ticket. To sign in, tell me your key word.",
   ASK_SEED: "Tell me your key word.",
   SEED_NOT_FOUND: "That key word is not valid. Let's try again, what is your key word?",
   LOGIN_OK: "Welcome, %s. %s",
   LOGIN_OK_BACK: "Welcome back, %s. %s",
   LOGIN_REQUIRED: "You need to identify yourself first. Tell me your key word.",
+  SESSION_EXPIRED: "I closed your previous session for security. Tell me your key word.",
+  SESSION_STALE: "Your saved session is no longer valid, most likely because your account permissions changed. I closed it so you can sign in again. What is your key word?",
+  LOGOUT: "Session closed. Tell me the key word of the account you want to use.",
+  ALREADY_LOGGED_IN: "You are already signed in, %s. %s",
+  ROLE_DENIED: "This information is only available to %s. Your account type is %s. %s",
+
+  ROLE_NAME_ORGANIZER: "organizer",
+  ROLE_NAME_ADMIN: "administrator",
+  ROLE_NAME_CUSTOMER: "customer",
+  ROLE_PLURAL_ORGANIZER: "organizers",
+  ROLE_PLURAL_ADMIN: "administrators",
+  ROLE_PLURAL_CUSTOMER: "customers",
+
+  // ── Menús ──
+  MENU_ORGANIZER: "You can say: what are my events; how are sales going; what zones does it have; or are there seats available. What would you like to know?",
+  MENU_ADMIN: "You can say: what events are there; which event earned the most; how much did we make in August; or what zones does it have. What would you like to know?",
+  MENU_CUSTOMER: "You can say: what events are there; what zones does it have; are there seats available; or when is the event. What would you like to know?",
+  LIST_CONNECTOR: "and",
   WHAT_TO_QUERY: "What would you like to know?",
   ANYTHING_ELSE: "Is there anything else you want to check?",
-  GOODBYE: "Thanks for using Next Ticket. Goodbye!",
+
+  // ── Preguntas por slot ──
+  ASK_EVENT_TICKETS: "Which event do you want the sales for? Just say the name, for example: Rock en Vivo.",
+  ASK_EVENT_AVAILABILITY: "Which event? Just say the name, for example: Rock en Vivo.",
+  ASK_EVENT_INFO: "Which event? Just say the name, for example: Rock en Vivo.",
+  ASK_EVENT_ZONES: "Which event do you want the zones for? Just say the name.",
+  ASK_EVENT_SHORT: "Which event?",
+  ASK_ZONE: "Which zone of %s do you want to check?",
+  ASK_ZONE_SHORT: "Which zone?",
+  ASK_MONTH: "Which month do you want the revenue for?",
+  ASK_MONTH_SHORT: "Which month?",
+
+  // ── Errores de datos ──
+  EVENT_NOT_FOUND: "I couldn't find the event %s. The available events are: %s. Which one are you interested in?",
+  NO_EVENTS_AT_ALL: "There are no published events on the platform right now. %s",
+  ZONE_NOT_FOUND: "I couldn't find the zone %s in the event %s. The available zones are: %s. Which one do you want?",
+  MONTH_NOT_RECOGNIZED: "I didn't recognize the month %s. Tell me the name of the month, for example: May.",
+  NOT_EVENT_OWNER: "The event %s is not registered under your name, so I can't give you its sales figures. %s",
+  USING_REMEMBERED_EVENT: "Still on the event %s.",
+
+  // ── Consultas ──
+  NO_ACTIVE_EVENTS: "You have no active events at the moment. %s",
+  ACTIVE_EVENTS_ONE: "You have 1 active event: %s. Would you like to know how its sales are going?",
+  ACTIVE_EVENTS_MANY: "You have %s active events: %s. Say the name of one to hear more.",
+  NO_EVENTS_AVAILABLE: "There are no published events right now. %s",
+  EVENTS_AVAILABLE_ONE: "There is 1 event available: %s. Would you like to know its zones or its availability?",
+  EVENTS_AVAILABLE_MANY: "There are %s events available: %s. Say the name of one to hear more.",
+  EVENT_LIST_ITEM: "%s, at %s on %s",
+  ASK_WHICH_EVENT: "%s The available events are: %s. Which one are you interested in?",
+  ACTIVE_EVENT_ITEM: "%s, at %s on %s",
+
+  TICKETS_SOLD: "The event %s has sold %s out of %s tickets, that is %s percent occupancy. There are still %s %s. %s",
+  TICKETS_SOLD_NONE: "The event %s has no tickets sold yet. It has %s seats available. %s",
+
+  ZONES_LIST: "The event %s has %s %s: %s. %s",
+  ZONES_ITEM: "%s, at %s, with %s %s",
+  ZONES_EMPTY: "The event %s has no zones set up yet. %s",
+
+  SEAT_AVAILABLE: "For the event %s, the %s zone has %s %s. The price per ticket is %s. %s",
+  SEAT_SOLD_OUT: "The %s zone of the event %s is sold out. %s",
+
+  EVENT_INFO: "The event %s takes place on %s at %s, located in %s, %s. It has these zones: %s. %s %s",
+  EVENT_INFO_AVAILABLE: "There are still %s seats available.",
+  EVENT_INFO_SOLD_OUT: "The event is sold out.",
+
+  TOP_REVENUE: "The highest earning event is %s, with %s generated and %s percent occupancy.",
+  TOP_REVENUE_SECOND: "Next is %s with %s.",
+  NO_REVENUE_DATA: "There are no sales recorded on the platform yet. %s",
+
+  REVENUE_MONTH: "During %s the platform generated %s in revenue. %s",
+  REVENUE_MONTH_EMPTY: "No revenue was recorded in %s. %s",
+  REVENUE_NOT_FILTERED: "I can't break revenue down by month yet, so here is the running total: %s. %s",
+
+  // ── Plurales ──
+  TICKET_ONE: "ticket", TICKET_MANY: "tickets",
+  PLACE_ONE: "seat available", PLACE_MANY: "seats available",
+  EVENT_ONE: "active event", EVENT_MANY: "active events",
+  ZONE_ONE: "zone", ZONE_MANY: "zones",
+
+  // ── Errores del sistema ──
+  ERR_API_NOT_CONFIGURED: "I don't have the address of the Next Ticket server configured, so I can't look anything up.",
   ERR_API_NETWORK: "I couldn't reach the Next Ticket server. It may be offline.",
   ERR_API_TIMEOUT: "The Next Ticket server took too long to answer, so I cancelled the request.",
+  ERR_API_UNAUTHORIZED: "Your session is no longer valid. Tell me your key word to sign in again.",
+  ERR_API_FORBIDDEN: "Your account doesn't have permission to look that up on the server.",
+  ERR_API_NOT_FOUND: "The server couldn't find that information.",
+  ERR_API_SERVER: "The Next Ticket server responded with an internal error.",
+  ERR_API_TUNNEL: "I lost the connection to the Next Ticket server. Someone needs to check that it is still published.",
   ERR_UNEXPECTED: "An unexpected error occurred while processing your request.",
+
+  // ── Ayuda y salida ──
+  HELP_ANONYMOUS: "This is Next Ticket. To look anything up, first tell me your key word, which is a single word that identifies you. What is it?",
+  HELP_LOGGED: "%s You can also say: repeat, to hear it again; switch user, to sign in with another account; or stop, to exit.",
+  FALLBACK: "I didn't get that. %s",
+  FALLBACK_LOGIN: "I didn't get that. Just tell me your key word. %s",
+  REPEAT_NOTHING: "I haven't said anything I can repeat yet. %s",
+  GOODBYE: "Thanks for using Next Ticket. Goodbye!",
 });
 
 const LANGUAGE_STRINGS = { es, en };
@@ -995,6 +1104,7 @@ const LocalizationInterceptor = {
     const locale = handlerInput.requestEnvelope.request.locale || "es-MX";
     handlerInput.locale = locale;
     handlerInput.t = (key, ...args) => translate(locale, key, ...args);
+    conectorDeLista = translate(locale, "LIST_CONNECTOR");
   },
 };
 
