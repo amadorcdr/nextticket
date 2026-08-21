@@ -8,7 +8,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma, TemporaryBlock } from '@prisma/client';
+import { Prisma, QueueEntryStatus, TemporaryBlock } from '@prisma/client';
 import { AUTH_ROLES } from '../auth/auth.constants';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -343,6 +343,55 @@ export class PurchasesService {
     }
   }
 
+  /**
+   * Igual que markSeatsSold, pero para zonas GENERAL: no hay eventSeatId
+   * puntual que marcar (el comprador no eligió un asiento específico), así
+   * que se descuenta el aforo de la zona directo por cantidad. Best-effort:
+   * un fallo aquí no debe tumbar la compra ya confirmada.
+   */
+  private async markGeneralAdmissionSold(
+    eventId: string,
+    details: { eventZoneId: string; eventSeatId?: string | null }[],
+  ) {
+    const quantityByZone = new Map<string, number>();
+    for (const detail of details) {
+      if (detail.eventSeatId) continue;
+      quantityByZone.set(
+        detail.eventZoneId,
+        (quantityByZone.get(detail.eventZoneId) ?? 0) + 1,
+      );
+    }
+    if (quantityByZone.size === 0) return;
+
+    const baseUrl = process.env.VENUES_EVENTS_URL ?? 'http://localhost:3003';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    await Promise.all(
+      [...quantityByZone.entries()].map(async ([eventZoneId, quantity]) => {
+        try {
+          const response = await fetch(
+            `${baseUrl}/events/${eventId}/zones/${eventZoneId}/internal/mark-general-sold`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Service-Token': internalToken,
+              },
+              body: JSON.stringify({ quantity }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(`venues-events-service respondió ${response.status}`);
+          }
+        } catch (error) {
+          this.logger.error(
+            `No se pudo descontar aforo GENERAL (zone=${eventZoneId} qty=${quantity}) del evento ${eventId}: ${String(error)}`,
+          );
+        }
+      }),
+    );
+  }
+
   private toHoldResponse(
     holdGroupId: string,
     dto: CreateTemporaryBlockDto,
@@ -500,6 +549,12 @@ export class PurchasesService {
     }
 
     await this.markSeatsSold(dto.eventId, seatIds);
+    await this.markGeneralAdmissionSold(dto.eventId, authoritativeDetails);
+    // El comprador ya terminó lo que la fila virtual estaba protegiendo: no
+    // tiene sentido dejarle el cupo ocupado hasta que venza el TTL completo
+    // (hasta QUEUE_ADMISSION_TTL_SECONDS) — se libera de inmediato para que
+    // el siguiente en espera entre sin esperar de más.
+    await this.releaseQueueAdmission(dto.eventId, userId);
     const tickets = await this.issueTicketsForPurchase(purchase);
 
     return {
@@ -511,6 +566,31 @@ export class PurchasesService {
         message: 'Simulated payment approved',
       },
     };
+  }
+
+  /**
+   * Libera el turno de la fila virtual (Módulo 8) en cuanto se confirma la
+   * compra, en vez de dejarlo ocupado hasta que venza el TTL de admisión.
+   * Best-effort: si falla, el turno igual se libera solo por el cron de
+   * event-queue.scheduler.ts al vencer, así que no debe tumbar la compra
+   * ya confirmada.
+   */
+  private async releaseQueueAdmission(eventId: string, userId: string) {
+    try {
+      await this.prisma.queueEntry.updateMany({
+        where: {
+          eventId,
+          userId,
+          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.ADMITTED] },
+        },
+        data: { status: QueueEntryStatus.CANCELED },
+      });
+      await this.redis.del(buildAdmissionKey(eventId, userId));
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo liberar el turno de fila virtual (event=${eventId} user=${userId}): ${error}`,
+      );
+    }
   }
 
   /**

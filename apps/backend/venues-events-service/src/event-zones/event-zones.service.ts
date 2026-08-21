@@ -702,6 +702,40 @@ export class EventZonesService {
     };
   }
 
+  /**
+   * Uso interno: purchases-service llama esto tras confirmar una compra de
+   * boletos GENERAL. Una zona GENERAL no tiene EventSeat que marcar SOLD
+   * (no hay asiento puntual que vender), así que el aforo se descuenta
+   * directo de EventZone.availableCapacity. Se limita a la capacidad que
+   * de verdad queda para nunca dejarla en negativo.
+   */
+  async markGeneralSoldForPurchase(
+    eventId: string,
+    zoneId: string,
+    quantity: number,
+  ) {
+    const zone = await this.prisma.eventZone.findFirst({
+      where: { id: zoneId, eventId },
+    });
+
+    if (!zone) {
+      throw new NotFoundException(
+        `EventZone ${zoneId} no existe en el evento ${eventId}`,
+      );
+    }
+
+    const decrementBy = Math.min(quantity, zone.availableCapacity);
+    if (decrementBy > 0) {
+      await this.prisma.eventZone.update({
+        where: { id: zoneId },
+        data: { availableCapacity: { decrement: decrementBy } },
+      });
+      await this.invalidateEventCache(eventId);
+    }
+
+    return { updated: decrementBy };
+  }
+
   private async findEvent(eventId: string) {
     const event = await this.prisma.event.findUnique({
       where: {

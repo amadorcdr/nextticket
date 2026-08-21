@@ -5,13 +5,16 @@ import {
     Description,
     Icon,
     Router,
-    ScrollShadow,
+    SeatMapViewer,
     setStoredHold,
     useApi,
     useCart,
+    type EventZone as CanvasEventZone,
     type HeldSeatInfo,
+    type PhysicalVenueState,
 } from "@nextticket-frontend/commons";
 import type { CartSeat } from "@nextticket-frontend/commons";
+import { toPhysicalVenueState, type ApiVenueTree } from "@nextticket-frontend/venues-front";
 import { toClientEventDetail, type ApiEvent, type ApiEventSeat, type Paginated } from "../api";
 import type { ClientEventDetail, ClientEventZone } from "../types/client";
 
@@ -141,13 +144,13 @@ export function SeatSelection() {
     const {
         seats: cartSeats,
         toggleSeat,
-        isSelected,
         subtotal,
         setEvent,
     } = useCart();
 
     const [event, setEventDetail] = useState<ClientEventDetail | null>(null);
     const [seatsByZone, setSeatsByZone] = useState<Record<string, ApiEventSeat[]>>({});
+    const [physical, setPhysical] = useState<PhysicalVenueState | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
@@ -161,6 +164,7 @@ export function SeatSelection() {
         setLoading(true);
         setError(null);
         setNotFound(false);
+        setPhysical(null);
 
         api.get<ApiEvent>(`/events/${eventId}`)
             .then(async (res) => {
@@ -173,12 +177,21 @@ export function SeatSelection() {
                     return;
                 }
 
-                const results = await Promise.all(
-                    reservedZones.map((zone) =>
-                        fetchAllSeats(api, eventId, zone.id).then((seats) => [zone.id, seats] as const),
+                const [seatResults] = await Promise.all([
+                    Promise.all(
+                        reservedZones.map((zone) =>
+                            fetchAllSeats(api, eventId, zone.id).then((seats) => [zone.id, seats] as const),
+                        ),
                     ),
-                );
-                setSeatsByZone(Object.fromEntries(results));
+                    // El plano espacial (mismo recinto que definió Admin) es puramente
+                    // visual: si falla, el comprador igual puede completar su compra
+                    // con la lista de zonas — por eso no se mete a error/notFound.
+                    api
+                        .get<ApiVenueTree>(`/venues/${res.venueId}`)
+                        .then((tree) => setPhysical(toPhysicalVenueState(tree)))
+                        .catch(() => setPhysical(null)),
+                ]);
+                setSeatsByZone(Object.fromEntries(seatResults));
             })
             .catch((err) => {
                 if (err instanceof ApiError && err.status === 404) {
@@ -221,6 +234,71 @@ export function SeatSelection() {
         });
         return map;
     }, [seatsByZone]);
+
+    /**
+     * Seat.id físico (el que usa el plano/canvas) -> EventSeat, para poder
+     * apartar el asiento real (hold vía temporary-blocks) cuando el clic
+     * viene del mapa espacial en vez del botón plano de antes.
+     */
+    const apiSeatByPhysicalId = useMemo(() => {
+        const map = new Map<string, ApiEventSeat>();
+        Object.values(seatsByZone).forEach((seats) => {
+            seats.forEach((seat) => map.set(seat.seat.id, seat));
+        });
+        return map;
+    }, [seatsByZone]);
+
+    /** Zonas en el formato que espera el canvas compartido (mismo tipo que usan Admin/Organizador). */
+    const canvasZones = useMemo<CanvasEventZone[]>(
+        () =>
+            (event?.zones ?? []).map((zone) => ({
+                id: zone.id,
+                eventId: event?.id ?? "",
+                publicName: zone.name,
+                admissionType: zone.admissionType,
+                eventPrice: zone.price,
+                availableCapacity: zone.availableCapacity,
+                mapColor: zone.mapColor,
+                maxTicketsPerPurchase: zone.maxTicketsPerPurchase,
+                status: zone.status,
+                sectionIds: zone.sectionIds,
+            })),
+        [event],
+    );
+
+    const selectedPhysicalSeatIds = useMemo(() => {
+        const ids = new Set<string>();
+        cartSeats.forEach((seat) => {
+            const physicalId = seatsById.get(seat.id)?.seat.id;
+            if (physicalId) ids.add(physicalId);
+        });
+        return ids;
+    }, [cartSeats, seatsById]);
+
+    const unavailablePhysicalSeatIds = useMemo(() => {
+        const ids = new Set<string>();
+        Object.values(seatsByZone).forEach((seats) => {
+            seats.forEach((seat) => {
+                if (seat.status !== "AVAILABLE") ids.add(seat.seat.id);
+            });
+        });
+        return ids;
+    }, [seatsByZone]);
+
+    const handleCanvasSeatToggle = (physicalSeatId: string) => {
+        const apiSeat = apiSeatByPhysicalId.get(physicalSeatId);
+        if (!apiSeat) return;
+        const zone = event?.zones.find((z) => z.id === apiSeat.eventZoneId);
+        if (!zone) return;
+
+        toggleSeat({
+            id: apiSeat.id,
+            row: apiSeat.seat.row,
+            number: Number(apiSeat.seat.number) || 0,
+            zone: zone.name,
+            price: zone.price,
+        });
+    };
 
     const resolveZoneId = (cartSeatId: string): string | null => {
         const generalZoneId = zoneIdFromGeneralSeatId(cartSeatId);
@@ -484,118 +562,49 @@ export function SeatSelection() {
                     )}
 
                     {reservedZones.length > 0 && (
-                        <div className="rounded-[10px] bg-surface-secondary py-2 text-center">
-                            <span className="text-xs uppercase tracking-widest text-muted">
-                                Escenario
-                            </span>
+                        <div className="flex flex-wrap items-center gap-3 shrink-0">
+                            {reservedZones.map((zone) => (
+                                <span key={zone.id} className="flex items-center gap-1.5 text-xs text-muted">
+                                    <span
+                                        className="size-3 rounded-[3px] shrink-0"
+                                        style={{ backgroundColor: zone.mapColor ?? "#94a3b8" }}
+                                    />
+                                    {zone.name} · {formatPrice(zone.price)}
+                                </span>
+                            ))}
                         </div>
                     )}
 
-                    <ScrollShadow className="flex-1 overflow-auto" orientation="horizontal">
-                        <div className="flex flex-col gap-6 w-fit mx-auto p-1">
-                            {reservedZones.map((zone) => {
-                                const zoneSeats = seatsByZone[zone.id] ?? [];
-                                // Una zona puede juntar varias secciones físicas (p. ej. "VIP
-                                // Izquierda" + "VIP Derecha"), y cada sección numera sus filas
-                                // por su cuenta: agrupar solo por letra de fila mezclaría dos
-                                // asientos distintos bajo la misma etiqueta "A1". Se agrupa por
-                                // sección primero, y solo se muestra su nombre si hay más de una.
-                                const sectionIds = Array.from(new Set(zoneSeats.map((s) => s.sectionId)));
-                                const showSectionLabel = sectionIds.length > 1;
-
-                                return (
-                                    <div key={zone.id} className="flex flex-col gap-1.5">
-                                        <div className="flex items-center justify-between gap-2 pb-1">
-                                            <h4>{zone.name}</h4>
-                                            <span className="text-xs text-muted">{formatPrice(zone.price)}</span>
-                                        </div>
-
-                                        {sectionIds.length === 0 && (
-                                            <p className="text-muted text-xs py-4 text-center">
-                                                No hay asientos configurados en esta zona.
-                                            </p>
-                                        )}
-
-                                        {sectionIds.map((sectionId) => {
-                                            const sectionSeats = zoneSeats.filter((s) => s.sectionId === sectionId);
-                                            const rows = Array.from(new Set(sectionSeats.map((s) => s.seat.row))).sort();
-
-                                            return (
-                                                <div key={sectionId} className="flex flex-col gap-1.5">
-                                                    {showSectionLabel && (
-                                                        <span className="text-[11px] font-medium text-muted mt-1">
-                                                            {zone.sectionNameById[sectionId] ?? "Sección"}
-                                                        </span>
-                                                    )}
-                                                    {rows.map((row) => {
-                                            const rowSeats = sectionSeats
-                                                .filter((s) => s.seat.row === row)
-                                                .sort((a, b) => Number(a.seat.number) - Number(b.seat.number));
-
-                                            return (
-                                                <div key={row} className="flex items-center gap-1.5">
-                                                    <span className="w-4 text-xs text-muted shrink-0">{row}</span>
-                                                    {rowSeats.map((apiSeat) => {
-                                                        const occupied = apiSeat.status !== "AVAILABLE";
-                                                        const selected = isSelected(apiSeat.id);
-                                                        const seatNumber = Number(apiSeat.seat.number) || 0;
-
-                                                        return (
-                                                            <button
-                                                                key={apiSeat.id}
-                                                                type="button"
-                                                                disabled={occupied}
-                                                                aria-label={`Fila ${row}, asiento ${apiSeat.seat.number}, ${zone.name}, ${formatPrice(zone.price)}`}
-                                                                aria-pressed={selected}
-                                                                onClick={() =>
-                                                                    toggleSeat({
-                                                                        id: apiSeat.id,
-                                                                        row,
-                                                                        number: seatNumber,
-                                                                        zone: zone.name,
-                                                                        price: zone.price,
-                                                                    })
-                                                                }
-                                                                title={`${zone.name} — ${formatPrice(zone.price)}`}
-                                                                className={[
-                                                                    "size-6 rounded-[4px] text-[10px] transition-colors",
-                                                                    occupied
-                                                                        ? "border border-dashed border-muted/50 text-muted/50 cursor-not-allowed"
-                                                                        : selected
-                                                                            ? "bg-accent text-accent-foreground"
-                                                                            : "bg-surface-secondary hover:bg-default cursor-pointer",
-                                                                ].join(" ")}
-                                                            >
-                                                                {apiSeat.seat.number}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            );
-                                        })}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })}
+                    {reservedZones.length > 0 && (
+                        <div className="flex-1 min-h-[420px]">
+                            {physical ? (
+                                <SeatMapViewer
+                                    physical={physical}
+                                    zones={canvasZones}
+                                    selectedSeatIds={selectedPhysicalSeatIds}
+                                    unavailableSeatIds={unavailablePhysicalSeatIds}
+                                    onToggleSeat={handleCanvasSeatToggle}
+                                    className="h-full"
+                                />
+                            ) : (
+                                <div className="h-full rounded-[10px] bg-surface-secondary flex items-center justify-center">
+                                    <p className="text-muted text-xs">Cargando plano del recinto...</p>
+                                </div>
+                            )}
                         </div>
-                    </ScrollShadow>
+                    )}
 
                     {hasSeatMap && (
                         <div className="flex flex-wrap items-center gap-4 shrink-0">
-                            <span className="flex items-center gap-2 text-xs text-muted">
-                                <span className="size-3 rounded-[3px] bg-surface-secondary" />
-                                Disponible
-                            </span>
                             <span className="flex items-center gap-2 text-xs text-muted">
                                 <span className="size-3 rounded-[3px] bg-accent" />
                                 Seleccionado
                             </span>
                             <span className="flex items-center gap-2 text-xs text-muted">
-                                <span className="size-3 rounded-[3px] border border-dashed border-muted/50" />
+                                <span className="size-3 rounded-[3px] bg-default opacity-40" />
                                 Ocupado
                             </span>
+                            <span className="text-muted text-[11px]">Rueda del mouse o pellizco para acercar/alejar · clic derecho o Alt+clic para mover el plano</span>
                         </div>
                     )}
                 </div>

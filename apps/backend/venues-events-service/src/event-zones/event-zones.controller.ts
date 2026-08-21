@@ -18,12 +18,14 @@ import {
 import { AUTH_ROLES } from '../auth/auth.constants';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { InternalServiceGuard } from '../auth/internal-service.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AssignSectionsDto } from './dto/assign-sections.dto';
 import { CreateEventZoneDto } from './dto/create-event-zone.dto';
 import { CreatePriceTierDto } from './dto/create-price-tier.dto';
+import { MarkGeneralSoldDto } from './dto/mark-general-sold.dto';
 import { UpdateEventZoneDto } from './dto/update-event-zone.dto';
 import { UpdatePriceTierDto } from './dto/update-price-tier.dto';
 import { EventZonesService } from './event-zones.service';
@@ -216,6 +218,26 @@ export class EventZonesController {
       zoneId,
       tierId,
       user,
+    );
+  }
+
+  @Post(':zoneId/internal/mark-general-sold')
+  @UseGuards(InternalServiceGuard)
+  @ApiOperation({
+    summary:
+      'Uso interno: descuenta aforo de una zona GENERAL tras confirmar una compra (no hay asiento puntual que marcar SOLD). Solo lo llama purchases-service (header X-Internal-Service-Token, no JWT de usuario).',
+  })
+  markGeneralSold(
+    @Param('eventId', new ParseUUIDPipe())
+    eventId: string,
+    @Param('zoneId', new ParseUUIDPipe())
+    zoneId: string,
+    @Body() dto: MarkGeneralSoldDto,
+  ) {
+    return this.eventZones.markGeneralSoldForPurchase(
+      eventId,
+      zoneId,
+      dto.quantity,
     );
   }
 

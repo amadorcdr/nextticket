@@ -49,6 +49,10 @@ export interface ClientEventZone {
      * número. Este mapa deja distinguirlas al agrupar la selección de asientos.
      */
     sectionNameById: Record<string, string>;
+    /** Ids de sección física que forman esta zona — para pintar el mapa de asientos. */
+    sectionIds: string[];
+    mapColor: string | null;
+    status: "ACTIVE" | "INACTIVE" | "SOLD_OUT";
 }
 
 export interface ClientEventDetail extends ClientEvent {

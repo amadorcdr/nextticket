@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, Button, Icon, Router, useApi } from "@nextticket-frontend/commons";
+import { API_BASE_URL, ApiError, Button, Icon, Router, useApi, useSession } from "@nextticket-frontend/commons";
 
 type QueueStatus = "WAITING" | "ADMITTED" | "EXPIRED" | "CANCELED";
 
@@ -45,6 +45,7 @@ export function VirtualQueue() {
     const { eventId } = Router.useParams();
     const navigate = Router.useNavigate();
     const api = useApi();
+    const { user } = useSession();
 
     const [entry, setEntry] = useState<QueueEntry | null>(null);
     const [joining, setJoining] = useState(true);
@@ -101,6 +102,39 @@ export function VirtualQueue() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [eventId, entry?.status]);
 
+    // Si cierran la pestaña/navegador mientras siguen en la fila (WAITING o
+    // ADMITTED), se avisa al backend para liberar el turno de inmediato en
+    // vez de dejarlo ocupado hasta que venza el TTL de admisión. "pagehide"
+    // solo se dispara al cerrar de verdad la pestaña/documento — la
+    // navegación interna de React Router (p. ej. "Continuar" a /asientos)
+    // no la dispara, así que no interfiere con el flujo normal.
+    useEffect(() => {
+        if (!eventId || !entry || (entry.status !== "WAITING" && entry.status !== "ADMITTED")) return;
+        if (!user?.token) return;
+
+        const releaseOnUnload = () => {
+            fetch(`${API_BASE_URL}/purchases/queue/${eventId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${user.token}` },
+                keepalive: true,
+            }).catch(() => {
+                // Best-effort: si falla, el turno igual se libera solo al vencer el TTL.
+            });
+        };
+
+        window.addEventListener("pagehide", releaseOnUnload);
+        return () => window.removeEventListener("pagehide", releaseOnUnload);
+    }, [eventId, entry, user?.token]);
+
+    const cancelAndLeave = () => {
+        if (eventId) {
+            api.del(`/purchases/queue/${eventId}`).catch(() => {
+                // Best-effort: si falla, el turno igual se libera solo al vencer el TTL.
+            });
+        }
+        navigate("/eventos");
+    };
+
     // Admitido: pasa solo a elegir asientos, con un respiro para que se vea el estado.
     useEffect(() => {
         if (!eventId || entry?.status !== "ADMITTED") return;
@@ -114,7 +148,7 @@ export function VirtualQueue() {
 
     if (!eventId) {
         return (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center h-full">
                 <Icon.CalendarX className="size-8 text-muted" />
                 <h4>Evento no encontrado</h4>
                 <Button variant="secondary" onPress={() => navigate("/eventos")}>
@@ -127,7 +161,7 @@ export function VirtualQueue() {
 
     if (fatalError) {
         return (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center h-full">
                 <Icon.CircleAlert className="size-8 text-muted" />
                 <h4>No se pudo entrar a la fila</h4>
                 <p className="text-muted md:text-sm text-xs max-w-sm">{fatalError}</p>
@@ -141,7 +175,7 @@ export function VirtualQueue() {
 
     if (joining && !entry) {
         return (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center h-full">
                 <Icon.LoaderCircle className="size-8 text-muted animate-spin" />
                 <p className="text-muted md:text-sm text-xs">Uniéndote a la fila virtual...</p>
             </div>
@@ -151,7 +185,7 @@ export function VirtualQueue() {
     if (!entry) return null;
 
     return (
-        <div className="flex flex-col items-center gap-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-6 py-16 text-center h-full">
             <div className="w-full max-w-sm rounded-[10px] bg-surface shadow-surface p-6 flex flex-col items-center gap-4">
                 {entry.status === "WAITING" && (
                     <>
@@ -217,7 +251,7 @@ export function VirtualQueue() {
                 )}
             </div>
 
-            <Button variant="ghost" size="sm" onPress={() => navigate("/eventos")}>
+            <Button variant="ghost" size="sm" onPress={cancelAndLeave}>
                 Cancelar y volver al catálogo
             </Button>
         </div>
