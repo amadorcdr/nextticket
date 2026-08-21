@@ -15,8 +15,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text } from "pixi.js";
-import { Button, toast } from "@heroui/react";
-import { ChevronDown, ChevronUp, Download, Loader2, Maximize, Minus, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, toast, Tooltip, Tabs, Separator, NumberField, Kbd, Spinner, ScrollShadow } from "@heroui/react";
+import { ChevronDown, ChevronUp, Download, LocateFixed, PanelLeftOpen, PanelRightOpen, Plus, Redo2, Trash2, Undo2, Upload, ZoomIn, ZoomOut } from "lucide-react";
 import type { Id, Pt, PhysicalVenueState, CommercialEventState, EventZone, EventZonePriceTier, EventSeat, VenueEditorFile } from "./types";
 import { uid, sectionIsNumbered } from "./types";
 import { sectionColorFor } from "./constants";
@@ -27,6 +27,8 @@ import { computeZoneCapacity, computeVenueBounds, hitTestAt, drawMarquee, comput
 import { useKeyboardShortcuts } from "./keyboard";
 import { downloadJSON, exportVenueEditorFile, readJSONFile } from "./serialization";
 import { NumField, TextField, ColorField, SelectField, CheckField, DateTimeField } from "./controls";
+import { useIsDesktop } from "./layout-components";
+import { Panel } from "../organisms/Panel";
 
 const selectClassName =
   "w-full bg-background border border-border rounded-[10px] text-foreground text-xs px-2.5 py-1.5 outline-none cursor-pointer focus:border-foreground transition-colors";
@@ -74,7 +76,14 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
   const [activeFloorIdState, setActiveFloorIdState] = useState<Id>("");
   const activeFloorId = physical.floors.some((f) => f.id === activeFloorIdState) ? activeFloorIdState : (physical.floors[0]?.id ?? "");
 
+  // Mismo shell (barra de herramientas + paneles colapsables) que el canvas
+  // de Admin, para que ambos editores se vean homogéneos.
+  const isDesktop = useIsDesktop();
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
   const [selectedIds, setSelectedIds] = useState<Set<Id>>(new Set());
+  const handleFloorChange = useCallback((id: Id) => { setActiveFloorIdState(id); setSelectedIds(new Set()); }, []);
   const marqueeRef = useRef<{ active: boolean; start: Pt; current: Pt }>({ active: false, start: { x: 0, y: 0 }, current: { x: 0, y: 0 } });
   const requestRedrawRef = useRef<() => void>(() => { });
 
@@ -386,44 +395,169 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
     return { total, disabled, available: total - disabled };
   };
 
+  // Auto-abrir panel derecho al seleccionar algo en el lienzo (igual que Admin).
+  useEffect(() => {
+    if (selectedIds.size > 0) setRightOpen(true);
+  }, [selectedIds.size]);
+
   return (
-    <div className="flex h-full w-full">
-      {/* Panel izquierdo: evento, piso, zonas */}
-      <div className="w-75 shrink-0 overflow-y-auto p-3 border-r border-border bg-surface flex flex-col gap-3">
-        <TextField label="Nombre del evento" value={commercial.eventName} onCommit={(v) => setCommercial((p) => ({ ...p, eventName: v }))} />
+    <div className="h-full flex flex-col gap-3">
+      {/* Barra de herramientas: mismo look que el canvas de Admin (pisos como
+          tabs, acciones con tooltip, controles de zoom, toggles de panel). */}
+      <div className="flex flex-row items-center gap-1 p-2 shrink-0 bg-surface shadow-surface rounded-[10px]">
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => setLeftOpen(!leftOpen)}>
+            {leftOpen ? <PanelRightOpen /> : <PanelLeftOpen />}
+          </Button>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span>{leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}</span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
 
-        <SelectField
-          label="Filtro de piso"
-          value={activeFloorId}
-          options={physical.floors.map((f) => ({ value: f.id, label: f.name }))}
-          onCommit={(v) => setActiveFloorIdState(v)}
-        />
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          <ScrollShadow orientation="horizontal" hideScrollBar className="min-w-0">
+            <Tabs variant="secondary" selectedKey={activeFloorId} onSelectionChange={(key) => handleFloorChange(key as string)}>
+              <Tabs.ListContainer className="border-none">
+                <Tabs.List aria-label="Pisos">
+                  {physical.floors.map((floor) => (
+                    <Tabs.Tab key={floor.id} id={floor.id} className="w-max px-3 h-9">
+                      <span className="relative z-10">{floor.name}</span>
+                      <Tabs.Indicator className="bg-default size-full rounded-[10px]" />
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+              </Tabs.ListContainer>
+            </Tabs>
+          </ScrollShadow>
+        </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          <Button size="sm" onPress={addZone}>
-            <Plus className="size-3.5" />
-            Zona de venta
+        <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+        <Button size="sm" onPress={addZone}>
+          <Plus className="size-3.5" />
+          Zona de venta
+        </Button>
+
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" isDisabled={!canUndo} onPress={undo}>
+            <Undo2 />
           </Button>
-          <Button size="sm" variant="ghost" isIconOnly isDisabled={!canUndo} onPress={undo} title="Deshacer">
-            <Undo2 className="size-4" />
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span className="flex items-center gap-1">
+              Deshacer
+              <Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>Z</Kbd.Content></Kbd>
+            </span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" isDisabled={!canRedo} onPress={redo}>
+            <Redo2 />
           </Button>
-          <Button size="sm" variant="ghost" isIconOnly isDisabled={!canRedo} onPress={redo} title="Rehacer">
-            <Redo2 className="size-4" />
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span className="flex items-center gap-1">
+              Rehacer
+              <Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>Y</Kbd.Content></Kbd>
+            </span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => fileInputRef.current?.click()}>
+            <Upload />
           </Button>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span>Importar zonas (JSON)</span>
+          </Tooltip.Content>
+        </Tooltip>
+        <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
+        <Tooltip>
           <Button
-            size="sm"
-            variant="ghost"
             isIconOnly
-            title="Exportar JSON"
+            variant="tertiary"
             onPress={() => downloadJSON(exportVenueEditorFile(physical, commercial), `${commercial.eventName || "evento"}.json`)}
           >
-            <Download className="size-4" />
+            <Download />
           </Button>
-          <Button size="sm" variant="ghost" isIconOnly title="Importar JSON de zonas" onPress={() => fileInputRef.current?.click()}>
-            <Upload className="size-4" />
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span>Exportar JSON</span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => fitToBounds(computeVenueBounds(physical))}>
+            <LocateFixed />
           </Button>
-          <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportJSON} className="hidden" />
-        </div>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span className="flex items-center gap-1">
+              Ajustar a la vista
+              <Kbd><Kbd.Abbr keyValue="ctrl" /><Kbd.Content>0</Kbd.Content></Kbd>
+            </span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => zoomBy(1.2)}>
+            <ZoomIn />
+          </Button>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span className="flex items-center gap-1">
+              Acercar
+              <Kbd><Kbd.Content>+</Kbd.Content></Kbd>
+            </span>
+          </Tooltip.Content>
+        </Tooltip>
+        <NumberField
+          variant="secondary"
+          minValue={20}
+          maxValue={1000}
+          step={1}
+          value={Math.round(zoom * 100)}
+          onChange={(v) => { if (v > 0 && zoom > 0) zoomBy((v / 100) / zoom); }}
+        >
+          <NumberField.Group className="grid-cols-[1fr_auto]">
+            <NumberField.Input className="text-center w-15 text-sm" />
+            <p className="flex text-field-placeholder text-sm pr-3 items-center">%</p>
+          </NumberField.Group>
+        </NumberField>
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => zoomBy(0.8)}>
+            <ZoomOut />
+          </Button>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span className="flex items-center gap-1">
+              Alejar
+              <Kbd><Kbd.Content>-</Kbd.Content></Kbd>
+            </span>
+          </Tooltip.Content>
+        </Tooltip>
+        <Separator orientation="vertical" className="h-1/2 mx-1 self-center" />
+
+        <Tooltip>
+          <Button isIconOnly variant="tertiary" onPress={() => setRightOpen(!rightOpen)}>
+            {rightOpen ? <PanelLeftOpen /> : <PanelRightOpen />}
+          </Button>
+          <Tooltip.Content showArrow offset={12}>
+            <Tooltip.Arrow />
+            <span>{rightOpen ? "Ocultar panel derecho" : "Mostrar panel derecho"}</span>
+          </Tooltip.Content>
+        </Tooltip>
+      </div>
+
+      <main className="relative flex-1 overflow-hidden w-full h-full flex flex-row">
+        {/* Panel izquierdo: evento, zonas */}
+        <Panel isOpen={leftOpen} onOpenChange={setLeftOpen} isDrawer={!isDesktop} placement="left" className="pointer-events-auto">
+        <div className="p-3 flex flex-col gap-3">
+        <TextField label="Nombre del evento" value={commercial.eventName} onCommit={(v) => setCommercial((p) => ({ ...p, eventName: v }))} />
 
         <div className="flex flex-col gap-1.5">
           {commercial.zones.map((z) => {
@@ -523,33 +657,22 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
             </div>
           </div>
         )}
-      </div>
-
-      {/* Lienzo */}
-      <div className="flex-1 relative bg-background">
-        <div ref={containerRef} className="absolute inset-0" style={{ touchAction: "none" }} />
-        {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 text-muted text-sm">
-            <Loader2 className="size-4 animate-spin" />
-            Cargando lienzo…
-          </div>
-        )}
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-surface/95 backdrop-blur border border-border rounded-[10px] p-1 shadow-overlay">
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => zoomBy(1.2)} title="Acercar">
-            <Plus className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => zoomBy(0.8)} title="Alejar">
-            <Minus className="size-4" />
-          </Button>
-          <Button size="sm" variant="ghost" isIconOnly onPress={() => fitToBounds(computeVenueBounds(physical))} title="Ajustar a la vista">
-            <Maximize className="size-4" />
-          </Button>
-          <span className="text-muted text-[11px] px-1.5 font-mono">{Math.round(zoom * 100)}%</span>
         </div>
-      </div>
+        </Panel>
 
-      {/* Panel derecho: selección */}
-      <div className="w-70 shrink-0 overflow-y-auto p-3 border-l border-border bg-surface flex flex-col gap-3">
+        {/* Lienzo */}
+        <div className="relative flex-1 rounded-[10px] overflow-hidden bg-surface shadow-surface">
+          <div ref={containerRef} className="absolute inset-0" style={{ touchAction: "none" }} />
+          {!ready && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto">
+              <Spinner />
+            </div>
+          )}
+        </div>
+
+        {/* Panel derecho: selección */}
+        <Panel isOpen={rightOpen} onOpenChange={setRightOpen} isDrawer={!isDesktop} placement="right" className="pointer-events-auto">
+        <div className="p-3 flex flex-col gap-3">
         {selectedIds.size === 0 && <p className="text-muted text-xs">Sin selección. Haz clic en una sección o asiento del lienzo.</p>}
         {selectedIds.size === 1 && (() => {
           const id = [...selectedIds][0];
@@ -629,7 +752,9 @@ export default function CommercialEditor({ physical, initialCommercial, onChange
             )}
           </div>
         )}
-      </div>
+        </div>
+        </Panel>
+      </main>
     </div>
   );
 }
