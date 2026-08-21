@@ -61,6 +61,12 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
+# Carpeta de imágenes de evento (event-image.storage.ts): se crea aquí, como
+# root, y se le pasa la propiedad a "node" — si no, el usuario sin privilegios
+# de abajo no puede ni crear la carpeta la primera vez que alguien sube una
+# imagen (EACCES), y ese error terminaba tumbando el proceso completo.
+RUN mkdir -p /app/uploads/events && chown -R node:node /app/uploads
+
 # No corre como root: si alguien logra ejecutar algo dentro, no es dueño de nada.
 USER node
 

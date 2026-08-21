@@ -22,11 +22,22 @@ export const EVENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 export const eventImageMulterOptions = {
   storage: diskStorage({
+    // mkdirSync tira si el proceso no tiene permiso de escritura (p. ej. el
+    // contenedor corre como usuario no-root y nadie preparó la carpeta):
+    // sin este try/catch ese throw se escapa dentro del callback de Multer
+    // y tumba TODO el proceso de Node, no solo esta subida — ver Dockerfile,
+    // ahí se crea la carpeta con los permisos correctos para que esto nunca
+    // debería disparar, pero si algo cambia (disco lleno, etc.) esto lo
+    // convierte en un 500 normal para esta petición en vez de un crash.
     destination: (_req, _file, callback) => {
-      if (!existsSync(EVENT_IMAGES_DIR)) {
-        mkdirSync(EVENT_IMAGES_DIR, { recursive: true });
+      try {
+        if (!existsSync(EVENT_IMAGES_DIR)) {
+          mkdirSync(EVENT_IMAGES_DIR, { recursive: true });
+        }
+        callback(null, EVENT_IMAGES_DIR);
+      } catch (error) {
+        callback(error as Error, EVENT_IMAGES_DIR);
       }
-      callback(null, EVENT_IMAGES_DIR);
     },
     // Nombre generado, nunca el original: evita colisiones y path traversal
     // (el nombre que manda el cliente no se usa para nada más que la extensión).

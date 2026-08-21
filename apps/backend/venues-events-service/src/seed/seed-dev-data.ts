@@ -388,11 +388,11 @@ async function main() {
 
   console.log('Sembrando categorías DEV...');
   const categoryIds = {
-    conciertos: await seedCategory('conciertos', 'DEV - Conciertos', 'dev-conciertos'),
-    festivales: await seedCategory('festivales', 'DEV - Festivales', 'dev-festivales'),
-    teatro: await seedCategory('teatro', 'DEV - Teatro y Artes', 'dev-teatro-y-artes'),
-    comedia: await seedCategory('comedia', 'DEV - Comedia', 'dev-comedia'),
-    gaming: await seedCategory('gaming', 'DEV - Gaming y Esports', 'dev-gaming-y-esports'),
+    conciertos: await seedCategory('conciertos', 'Conciertos', 'dev-conciertos'),
+    festivales: await seedCategory('festivales', 'Festivales', 'dev-festivales'),
+    teatro: await seedCategory('teatro', 'Teatro y Artes', 'dev-teatro-y-artes'),
+    comedia: await seedCategory('comedia', 'Comedia', 'dev-comedia'),
+    gaming: await seedCategory('gaming', 'Gaming y Esports', 'dev-gaming-y-esports'),
   };
 
   console.log('Sembrando recintos DEV...');
