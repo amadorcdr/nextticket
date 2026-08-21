@@ -1,0 +1,60 @@
+{
+  "formatVersion": "nextticket-canvas-v12",
+  "commercial": {
+    "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+    "eventName": "Obra de prueba NextTicket",
+    "zones": [
+      {
+        "id": "zone_platea",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Platea",
+        "admissionType": "RESERVED",
+        "eventPrice": 550,
+        "availableCapacity": 0,
+        "mapColor": "#059669",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Platea Ala Izquierda",
+          "Platea Central",
+          "Platea Ala Derecha"
+        ]
+      },
+      {
+        "id": "zone_balcon_arco",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Balcón",
+        "admissionType": "RESERVED",
+        "eventPrice": 700,
+        "availableCapacity": 0,
+        "mapColor": "#d97706",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Balcón Arco Izquierdo",
+          "Balcón Arco Central",
+          "Balcón Arco Derecho"
+        ]
+      },
+      {
+        "id": "zone_palco_vip",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Palco VIP",
+        "admissionType": "GENERAL",
+        "eventPrice": 1200,
+        "availableCapacity": 0,
+        "mapColor": "#2563eb",
+        "maxTicketsPerPurchase": 4,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Palco VIP Central"
+        ]
+      }
+    ],
+    "priceTiers": [],
+    "eventSeats": []
+  }
+}

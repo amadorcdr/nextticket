@@ -1,0 +1,58 @@
+{
+  "formatVersion": "nextticket-canvas-v12",
+  "commercial": {
+    "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+    "eventName": "Festival de prueba NextTicket",
+    "zones": [
+      {
+        "id": "zone_cancha",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Cancha General",
+        "admissionType": "GENERAL",
+        "eventPrice": 400,
+        "availableCapacity": 0,
+        "mapColor": "#059669",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Cancha General"
+        ]
+      },
+      {
+        "id": "zone_palcos_vip",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Palcos VIP",
+        "admissionType": "RESERVED",
+        "eventPrice": 1800,
+        "availableCapacity": 0,
+        "mapColor": "#d97706",
+        "maxTicketsPerPurchase": 8,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Palco VIP Norte",
+          "Palco VIP Sur"
+        ]
+      },
+      {
+        "id": "zone_tribunas",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Tribunas",
+        "admissionType": "RESERVED",
+        "eventPrice": 250,
+        "availableCapacity": 0,
+        "mapColor": "#2563eb",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Tribuna Oriente",
+          "Tribuna Poniente"
+        ]
+      }
+    ],
+    "priceTiers": [],
+    "eventSeats": []
+  }
+}
