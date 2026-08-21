@@ -38,8 +38,13 @@ async function bootstrap() {
     }),
   );
 
+  // CORS: el navegador manda el Origin de la PÁGINA que hace la petición
+  // (el frontend), no el del api-gateway al que en realidad llega la
+  // petición proxiada — por eso esto compara contra FRONTEND_URL, nunca
+  // contra GATEWAY_URL (esa variable es la URL pública de la API, se usa
+  // para construir enlaces/URLs de imagen, no para esto).
   app.enableCors({
-    origin: [process.env.GATEWAY_URL ?? 'http://localhost:3001'],
+    origin: [process.env.FRONTEND_URL ?? 'http://localhost:4000'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 

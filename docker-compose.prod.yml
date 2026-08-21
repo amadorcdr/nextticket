@@ -54,8 +54,13 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@nextticket.com}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
-      GATEWAY_URL: http://api-gateway:3001
-      FRONTEND_URL: ${FRONTEND_URL}
+      # URL pública de la API (usada para construir enlaces/URLs de imagen
+      # que el navegador tiene que poder resolver — NUNCA el hostname interno
+      # de Docker, eso solo lo entienden los contenedores entre sí).
+      GATEWAY_URL: ${GATEWAY_URL:?falta GATEWAY_URL en el .env}
+      # URL pública del frontend (para el allowlist de CORS: el navegador
+      # manda el Origin de la página, no el del api-gateway).
+      FRONTEND_URL: ${FRONTEND_URL:?falta FRONTEND_URL en el .env}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
@@ -82,7 +87,13 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: 3003
       JWT_SECRET: ${JWT_SECRET}
-      GATEWAY_URL: http://api-gateway:3001
+      # URL pública de la API (usada para construir enlaces/URLs de imagen
+      # que el navegador tiene que poder resolver — NUNCA el hostname interno
+      # de Docker, eso solo lo entienden los contenedores entre sí).
+      GATEWAY_URL: ${GATEWAY_URL:?falta GATEWAY_URL en el .env}
+      # URL pública del frontend (para el allowlist de CORS: el navegador
+      # manda el Origin de la página, no el del api-gateway).
+      FRONTEND_URL: ${FRONTEND_URL:?falta FRONTEND_URL en el .env}
       TICKETS_SERVICE_URL: http://tickets-service:3005
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?falta INTERNAL_SERVICE_TOKEN en el .env}
     depends_on:
@@ -100,7 +111,13 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: 3004
       JWT_SECRET: ${JWT_SECRET}
-      GATEWAY_URL: http://api-gateway:3001
+      # URL pública de la API (usada para construir enlaces/URLs de imagen
+      # que el navegador tiene que poder resolver — NUNCA el hostname interno
+      # de Docker, eso solo lo entienden los contenedores entre sí).
+      GATEWAY_URL: ${GATEWAY_URL:?falta GATEWAY_URL en el .env}
+      # URL pública del frontend (para el allowlist de CORS: el navegador
+      # manda el Origin de la página, no el del api-gateway).
+      FRONTEND_URL: ${FRONTEND_URL:?falta FRONTEND_URL en el .env}
       TICKETS_SERVICE_URL: http://tickets-service:3005
       # Ojo: aquí la variable se llama VENUES_EVENTS_URL. El api-gateway usa
       # VENUES_SERVICE_URL para el MISMO servicio; son nombres distintos en
@@ -122,7 +139,13 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: 3005
       JWT_SECRET: ${JWT_SECRET}
-      GATEWAY_URL: http://api-gateway:3001
+      # URL pública de la API (usada para construir enlaces/URLs de imagen
+      # que el navegador tiene que poder resolver — NUNCA el hostname interno
+      # de Docker, eso solo lo entienden los contenedores entre sí).
+      GATEWAY_URL: ${GATEWAY_URL:?falta GATEWAY_URL en el .env}
+      # URL pública del frontend (para el allowlist de CORS: el navegador
+      # manda el Origin de la página, no el del api-gateway).
+      FRONTEND_URL: ${FRONTEND_URL:?falta FRONTEND_URL en el .env}
       VENUES_EVENTS_URL: http://venues-events-service:3003
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?falta INTERNAL_SERVICE_TOKEN en el .env}
     depends_on:

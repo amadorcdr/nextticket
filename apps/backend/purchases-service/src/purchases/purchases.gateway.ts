@@ -35,8 +35,10 @@ interface QueueExpiredPayload {
   // Namespaced under /purchases so it rides the same api-gateway proxy rule
   // as the REST endpoints, instead of the socket.io default "/socket.io" path.
   path: '/purchases/socket.io',
+  // Mismo criterio que main.ts: el navegador manda el Origin de la página
+  // (el frontend), no el del api-gateway — compara contra FRONTEND_URL.
   cors: {
-    origin: [process.env.GATEWAY_URL ?? 'http://localhost:3001'],
+    origin: [process.env.FRONTEND_URL ?? 'http://localhost:4000'],
   },
 })
 export class PurchasesGateway
