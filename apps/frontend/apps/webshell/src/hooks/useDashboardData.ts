@@ -20,6 +20,12 @@ import {
 // Cuántos eventos próximos se traen (alimenta tanto "Eventos Próximos" como
 // "Resumen de Ventas" — comparten el mismo fetch).
 const UPCOMING_EVENTS_LIMIT = 4;
+// El backend no deja filtrar por varios status a la vez (solo uno), así que
+// se pide un colchón más grande sin filtrar y se recorta del lado del
+// cliente a PUBLISHED/SOLD_OUT — si no, un DRAFT con fecha más próxima le
+// gana el lugar a un evento real solo por venir antes en la fecha.
+const UPCOMING_EVENTS_FETCH_LIMIT = 20;
+const VISIBLE_UPCOMING_STATUSES = new Set(["PUBLISHED", "SOLD_OUT"]);
 // Tope final de "Actividad Reciente". Los fetches de usuarios/compras piden
 // esta misma cantidad cada uno, para que el pool combinado siempre alcance
 // para llenar el tope tras mezclarlos y ordenarlos por fecha.
@@ -58,14 +64,17 @@ export function useDashboardData() {
             api.get<ApiPurchasesStats>("/purchases/stats"),
             api.get<Paginated<ApiUserSummary>>(`/users?page=1&limit=${ACTIVITY_LIMIT}`),
             api.get<{ meta: { total: number } }>("/venues?page=1&limit=1"),
-            api.get<Paginated<ApiEvent>>(`/events?upcoming=true&limit=${UPCOMING_EVENTS_LIMIT}`),
+            api.get<Paginated<ApiEvent>>(`/events?upcoming=true&limit=${UPCOMING_EVENTS_FETCH_LIMIT}`),
             api.get<Paginated<ApiPurchase>>(`/purchases?page=1&limit=${ACTIVITY_LIMIT}`),
         ])
             .then(async ([eventsStats, ticketsStats, purchasesStats, usersRes, venuesRes, upcomingRes, purchasesRes]) => {
                 const ticketCountByZone = new Map(ticketsStats.byEventZone.map((z) => [z.eventZoneId, z.count]));
 
-                const upcomingEvents = upcomingRes.data.map((event) => toUpcomingEventSummary(event, ticketCountByZone));
-                const occupancy = upcomingRes.data.map((event) => toEventOccupancy(event, ticketCountByZone));
+                const visibleUpcoming = upcomingRes.data
+                    .filter((event) => VISIBLE_UPCOMING_STATUSES.has(event.status))
+                    .slice(0, UPCOMING_EVENTS_LIMIT);
+                const upcomingEvents = visibleUpcoming.map((event) => toUpcomingEventSummary(event, ticketCountByZone));
+                const occupancy = visibleUpcoming.map((event) => toEventOccupancy(event, ticketCountByZone));
 
                 // Enriquecimiento acotado: solo sobre las compras recientes (ventana chica),
                 // no existe endpoint de "traer muchos por ids" en auth-service/venues-events-service.
