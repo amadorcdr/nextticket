@@ -70,11 +70,19 @@ export function useDashboardData() {
             .then(async ([eventsStats, ticketsStats, purchasesStats, usersRes, venuesRes, upcomingRes, purchasesRes]) => {
                 const ticketCountByZone = new Map(ticketsStats.byEventZone.map((z) => [z.eventZoneId, z.count]));
 
-                const visibleUpcoming = upcomingRes.data
-                    .filter((event) => VISIBLE_UPCOMING_STATUSES.has(event.status))
+                // El backend ya regresa esto ordenado por fecha (startsAt asc),
+                // que es justo el orden que "Eventos Próximos" necesita.
+                const visibleUpcoming = upcomingRes.data.filter((event) => VISIBLE_UPCOMING_STATUSES.has(event.status));
+                const upcomingEvents = visibleUpcoming
+                    .slice(0, UPCOMING_EVENTS_LIMIT)
+                    .map((event) => toUpcomingEventSummary(event, ticketCountByZone));
+
+                // "Resumen de Ventas" es otro orden: los de mayor % de ocupación
+                // primero, sin importar qué tan próxima sea su fecha.
+                const occupancy = visibleUpcoming
+                    .map((event) => toEventOccupancy(event, ticketCountByZone))
+                    .sort((a, b) => b.occupancyPercentage - a.occupancyPercentage)
                     .slice(0, UPCOMING_EVENTS_LIMIT);
-                const upcomingEvents = visibleUpcoming.map((event) => toUpcomingEventSummary(event, ticketCountByZone));
-                const occupancy = visibleUpcoming.map((event) => toEventOccupancy(event, ticketCountByZone));
 
                 // Enriquecimiento acotado: solo sobre las compras recientes (ventana chica),
                 // no existe endpoint de "traer muchos por ids" en auth-service/venues-events-service.
