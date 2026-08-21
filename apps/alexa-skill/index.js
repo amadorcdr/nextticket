@@ -21,6 +21,8 @@ const Alexa = require("ask-sdk-core");
 const AWS = require("aws-sdk");
 const ddbAdapter = require("ask-sdk-dynamodb-persistence-adapter");
 const axios = require("axios");
+const i18n = require("i18next");
+const sprintf = require("i18next-sprintf-postprocessor");
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -913,24 +915,32 @@ const en = Object.assign({}, es, {
   GOODBYE: "Thanks for using Next Ticket. Goodbye!",
 });
 
-const LANGUAGE_STRINGS = { es, en };
+/**
+ * i18next espera los recursos agrupados por idioma bajo la clave `translation`.
+ * Basta con "es" y "en": la librería resuelve sola es-MX -> es y en-US -> en.
+ */
+const languageStrings = {
+  es: { translation: es },
+  en: { translation: en },
+};
+
 const DEFAULT_LANGUAGE = "es";
 
-function getLanguageCode(locale) {
+/**
+ * Traductor de respaldo, sin i18next.
+ *
+ * Se usa solo si el LocalizationInterceptor no llegó a correr — por ejemplo si
+ * el ErrorHandler atrapa un fallo ocurrido antes de los interceptores. Sin
+ * esto, ese camino se quedaría sin `t` y la skill respondería con las claves
+ * en crudo en vez de una frase.
+ */
+function translateFallback(locale, key, ...args) {
   const lang = String(locale || DEFAULT_LANGUAGE).split("-")[0].toLowerCase();
-  return LANGUAGE_STRINGS[lang] ? lang : DEFAULT_LANGUAGE;
-}
+  const dict = (languageStrings[lang] || languageStrings[DEFAULT_LANGUAGE]).translation;
 
-function translate(locale, key, ...args) {
-  const lang = getLanguageCode(locale);
-  let value = LANGUAGE_STRINGS[lang][key];
-
-  if (value === undefined) value = LANGUAGE_STRINGS[DEFAULT_LANGUAGE][key];
-  if (value === undefined) {
-    console.warn(`i18n: falta la clave "${key}" en "${lang}"`);
-    return key;
-  }
-  if (Array.isArray(value)) value = value[Math.floor(Math.random() * value.length)];
+  let value = dict[key];
+  if (value === undefined) value = languageStrings[DEFAULT_LANGUAGE].translation[key];
+  if (value === undefined) return key;
 
   let index = 0;
   return String(value)
@@ -942,6 +952,7 @@ function translate(locale, key, ...args) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1100,11 +1111,32 @@ const PERSISTED_KEYS = [
 const HAS_PERSISTENCE = Boolean(process.env.DYNAMODB_PERSISTENCE_TABLE_NAME);
 
 const LocalizationInterceptor = {
-  process(handlerInput) {
+  async process(handlerInput) {
     const locale = handlerInput.requestEnvelope.request.locale || "es-MX";
+
+    // El postprocesador sprintf es lo que hace que %s funcione, y
+    // overloadTranslationOptionHandler permite llamar t("CLAVE", a, b) en vez
+    // de la forma larga con { postProcess, sprintf: [...] }.
+    await i18n.use(sprintf).init({
+      lng: locale,
+      fallbackLng: DEFAULT_LANGUAGE,
+      overloadTranslationOptionHandler: sprintf.overloadTranslationOptionHandler,
+      resources: languageStrings,
+      returnObjects: true,
+    });
+
+    const t = (key, ...args) => i18n.t(key, ...args);
+
+    // Donde el SDK espera encontrarlo: es la forma canónica y la que usa
+    // handlerInput.attributesManager.getRequestAttributes() en los ejemplos.
+    handlerInput.attributesManager.setRequestAttributes({ t });
+
+    // Alias por comodidad: los handlers de esta skill leen handlerInput.t.
+    // Apunta a la MISMA función, así que no hay dos traductores conviviendo.
     handlerInput.locale = locale;
-    handlerInput.t = (key, ...args) => translate(locale, key, ...args);
-    conectorDeLista = translate(locale, "LIST_CONNECTOR");
+    handlerInput.t = t;
+
+    conectorDeLista = t("LIST_CONNECTOR");
   },
 };
 
@@ -1778,7 +1810,7 @@ function safeT(handlerInput) {
   if (handlerInput && typeof handlerInput.t === "function") return handlerInput.t;
   const locale =
     (handlerInput && handlerInput.requestEnvelope && handlerInput.requestEnvelope.request.locale) || "es-MX";
-  return (key, ...args) => translate(locale, key, ...args);
+  return (key, ...args) => translateFallback(locale, key, ...args);
 }
 
 const HelpIntentHandler = {
