@@ -25,6 +25,10 @@ export interface ApiEventZone {
     admissionType?: ApiAdmissionType;
     status?: ApiEventZoneStatus;
     maxTicketsPerPurchase?: number;
+    /** Color hex asignado por el organizador en el editor de zonas (para pintar el mapa). */
+    mapColor?: string | null;
+    /** Solo viene en GET /events/:id: secciones físicas que forman esta zona comercial. */
+    sections?: { sectionId: string; section: { id: string; name: string } }[];
 }
 
 export interface ApiEventCategoryAssignment {
@@ -48,6 +52,7 @@ export interface ApiEvent {
     endsAt?: string;
     imageUrl?: string | null;
     status: ApiEventStatus;
+    venueId: string;
     venue: ApiEventVenue;
     zones: ApiEventZone[];
     categories: ApiEventCategoryAssignment[];
@@ -140,7 +145,9 @@ export function toAdminEvent(event: ApiEvent, ticketCountByZone: Map<string, num
 }
 
 function toClientEventStatus(status: ApiEventStatus): ClientEventStatus {
-    return status === "SOLD_OUT" ? "sold-out" : "available";
+    if (status === "SOLD_OUT") return "sold-out";
+    if (status === "CANCELED") return "canceled";
+    return "available";
 }
 
 /** Zonas activas y con precio válido: base para "desde $X" y para saber si hay algo que vender. */
@@ -189,6 +196,10 @@ export function toClientEventDetail(event: ApiEvent): ClientEventDetail {
         admissionType: zone.admissionType ?? "RESERVED",
         availableCapacity: zone.availableCapacity,
         maxTicketsPerPurchase: zone.maxTicketsPerPurchase ?? 10,
+        sectionNameById: Object.fromEntries((zone.sections ?? []).map((s) => [s.sectionId, s.section.name])),
+        sectionIds: (zone.sections ?? []).map((s) => s.sectionId),
+        mapColor: zone.mapColor ?? null,
+        status: zone.status ?? "ACTIVE",
     }));
 
     return {

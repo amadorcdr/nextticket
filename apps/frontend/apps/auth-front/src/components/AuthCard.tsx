@@ -11,7 +11,7 @@ import {
 } from "@nextticket-frontend/commons";
 import { CSSProperties, FormEvent, useEffect, useRef, useState } from "react";
 import { InputField, authCardClassName } from "./AuthCardUI";
-import { AccountDisabledError, InvalidCredentialsError, login, register } from "../api";
+import { login, register, toFriendlyAuthError } from "../api";
 
 const WELCOME_LABEL_BY_ROLE: Record<SessionRole, string> = {
   usuario: "cliente",
@@ -62,11 +62,7 @@ function LoginFace({ onFlip }: { onFlip: () => void }) {
       toast.success(`Bienvenido, ${result.name} (${WELCOME_LABEL_BY_ROLE[result.role]})`);
       navigate(HOME_BY_ROLE[result.role]);
     } catch (err) {
-      toast.danger(
-        err instanceof InvalidCredentialsError || err instanceof AccountDisabledError
-          ? err.message
-          : "No se pudo iniciar sesión. Intenta de nuevo.",
-      );
+      toast.danger(toFriendlyAuthError(err, "No se pudo iniciar sesión. Intenta de nuevo."));
     } finally {
       setLoading(false);
     }
@@ -157,7 +153,7 @@ function RegisterFace({ onFlip }: { onFlip: () => void }) {
       const result = await register(fullName, email);
       setDone(result.email);
     } catch (err) {
-      toast.danger(err instanceof Error ? err.message : "No se pudo completar el registro. Intenta de nuevo.");
+      toast.danger(toFriendlyAuthError(err, "No se pudo completar el registro. Intenta de nuevo."));
     } finally {
       setLoading(false);
     }

@@ -100,32 +100,39 @@ export function OrganizerDashboard() {
   const ticketsSold = rows.reduce((sum, r) => sum + r.sold, 0);
   const totalRevenue = [...revenueByEventId.values()].reduce((sum, v) => sum + v, 0);
 
+  // Cancelado o finalizado ya no genera ventas nuevas ni tiene caso destacarlo
+  // en estas listas: mismo criterio que ya se usa en Zonas de Venta y Ventas.
+  const activeRows = useMemo(
+    () => rows.filter((r) => r.rawStatus !== "CANCELED" && r.rawStatus !== "COMPLETED"),
+    [rows],
+  );
+
   const occupancyByEvent = useMemo(
     () =>
-      rows
+      activeRows
         .filter((r) => r.total > 0)
         .map((r) => ({ id: r.id, name: r.name, pct: Math.round((r.sold / r.total) * 100) }))
         .sort((a, b) => b.pct - a.pct)
         .slice(0, OCCUPANCY_LIMIT),
-    [rows],
+    [activeRows],
   );
 
   const topEvent = useMemo(() => {
     let best: { row: OrganizerEventRow; revenue: number } | null = null;
-    for (const row of rows) {
+    for (const row of activeRows) {
       const revenue = revenueByEventId.get(row.id) ?? 0;
       if (!best || revenue > best.revenue) best = { row, revenue };
     }
     return best;
-  }, [rows, revenueByEventId]);
+  }, [activeRows, revenueByEventId]);
 
   const upcomingEvents = useMemo(() => {
     const now = Date.now();
-    return rows
-      .filter((r) => r.status === "Activo" && new Date(r.startsAt).getTime() > now)
+    return activeRows
+      .filter((r) => new Date(r.startsAt).getTime() > now)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .slice(0, UPCOMING_LIMIT);
-  }, [rows]);
+  }, [activeRows]);
 
   return (
     <div className="flex flex-col gap-3 animate-in fade-in duration-500">

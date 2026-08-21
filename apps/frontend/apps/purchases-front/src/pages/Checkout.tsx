@@ -11,10 +11,18 @@ import {
     TextField,
     clearStoredHold,
     getStoredHold,
+    toast,
     useApi,
     useCart,
+    useSession,
 } from "@nextticket-frontend/commons";
 import type { ApiPurchaseResult } from "../types";
+
+/** El backend guarda un solo `name`: se separa en nombre/apellido(s) para prellenar el formulario. */
+function splitName(fullName: string): { firstName: string; lastName: string } {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
+}
 
 function formatPrice(value: number) {
     return new Intl.NumberFormat("es-MX", {
@@ -41,15 +49,32 @@ function parseExpiry(value: string): { month: number; year: number } | null {
     return { month, year };
 }
 
+/** Va insertando el "/" solo, conforme se escribe: "0826" -> "08/26". */
+function formatExpiryInput(raw: string): string {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+/** La misma regla de "no vencida" que usa purchases-service, pero antes de mandar la petición. */
+function isExpiryInThePast(expiry: { month: number; year: number }): boolean {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    return expiry.year < currentYear || (expiry.year === currentYear && expiry.month < currentMonth);
+}
+
 export function Checkout() {
     const navigate = Router.useNavigate();
     const api = useApi();
+    const { user } = useSession();
     const { event, seats, subtotal, serviceFee, total, clear } = useCart();
+    const { firstName, lastName } = splitName(user?.name ?? "");
 
     const hold = event ? getStoredHold(event.id) : null;
 
     const [isProcessing, setIsProcessing] = useState(false);
-    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [expiryValue, setExpiryValue] = useState("");
     const [remainingMs, setRemainingMs] = useState<number>(() =>
         hold ? new Date(hold.expiresAt).getTime() - Date.now() : 0,
     );
@@ -115,13 +140,33 @@ export function Checkout() {
 
     const handleSubmit = (formEvent: React.FormEvent<HTMLFormElement>) => {
         formEvent.preventDefault();
-        setSubmitError(null);
 
         const formData = new FormData(formEvent.currentTarget);
         const cardNumber = String(formData.get("cardNumber") ?? "").replace(/\s+/g, "");
         const cardholderName = String(formData.get("cardholder") ?? "").trim();
         const cvv = String(formData.get("cvv") ?? "").trim();
         const expiry = parseExpiry(String(formData.get("expiry") ?? ""));
+
+        if (!cardholderName) {
+            toast.danger("Ingresa el nombre en la tarjeta.");
+            return;
+        }
+        if (!/^\d{16}$/.test(cardNumber)) {
+            toast.danger("El número de tarjeta debe tener 16 dígitos.");
+            return;
+        }
+        if (!expiry) {
+            toast.danger("La fecha de vencimiento no es válida (formato MM/AA).");
+            return;
+        }
+        if (isExpiryInThePast(expiry)) {
+            toast.danger("Esa tarjeta ya venció.");
+            return;
+        }
+        if (!/^\d{3,4}$/.test(cvv)) {
+            toast.danger("El CVV no es válido.");
+            return;
+        }
 
         const details = seats.map((seat) => {
             const held = hold.seatMap[seat.id];
@@ -133,7 +178,7 @@ export function Checkout() {
         });
 
         if (details.some((detail) => !detail.eventZoneId)) {
-            setSubmitError("No pudimos identificar la zona de uno de tus asientos. Vuelve a elegirlos.");
+            toast.danger("No pudimos identificar la zona de uno de tus asientos. Vuelve a elegirlos.");
             return;
         }
 
@@ -146,16 +191,16 @@ export function Checkout() {
                 details,
                 payment: {
                     paymentMethod: "CREDIT_CARD",
-                    cardholderName: cardholderName || undefined,
-                    cardNumber: cardNumber || undefined,
-                    expirationMonth: expiry?.month,
-                    expirationYear: expiry?.year,
-                    cvv: cvv || undefined,
+                    cardholderName,
+                    cardNumber,
+                    expirationMonth: expiry.month,
+                    expirationYear: expiry.year,
+                    cvv,
                 },
             })
             .then((result) => {
                 if (!result.paymentResult.approved) {
-                    setSubmitError(result.paymentResult.message || "Tu pago fue rechazado, intenta con otra tarjeta.");
+                    toast.danger(result.paymentResult.message || "Tu pago fue rechazado, intenta con otra tarjeta.");
                     return;
                 }
 
@@ -164,7 +209,7 @@ export function Checkout() {
                 navigate("/checkout/confirmacion", { state: result });
             })
             .catch((err) => {
-                setSubmitError(err instanceof ApiError ? err.message : "No se pudo completar la compra");
+                toast.danger(err instanceof ApiError ? err.message : "No se pudo completar la compra");
             })
             .finally(() => setIsProcessing(false));
     };
@@ -206,11 +251,11 @@ export function Checkout() {
 
                         {/* En HeroUI (react-aria) el valor vive en TextField, no en Input. */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <TextField isRequired name="firstName" defaultValue="Juan">
+                            <TextField isRequired name="firstName" defaultValue={firstName}>
                                 <Label>Nombre</Label>
                                 <Input />
                             </TextField>
-                            <TextField isRequired name="lastName" defaultValue="Pérez García">
+                            <TextField isRequired name="lastName" defaultValue={lastName}>
                                 <Label>Apellidos</Label>
                                 <Input />
                             </TextField>
@@ -218,19 +263,10 @@ export function Checkout() {
                                 isRequired
                                 name="email"
                                 type="email"
-                                defaultValue="juan.perez@ejemplo.com"
+                                defaultValue={user?.email ?? ""}
                                 className="sm:col-span-2"
                             >
                                 <Label>Correo electrónico</Label>
-                                <Input />
-                            </TextField>
-                            <TextField
-                                name="phone"
-                                type="tel"
-                                defaultValue="+52 55 1234 5678"
-                                className="sm:col-span-2"
-                            >
-                                <Label>Teléfono</Label>
                                 <Input />
                             </TextField>
                         </div>
@@ -242,42 +278,33 @@ export function Checkout() {
                         <div>
                             <h4>Pago</h4>
                             <Description>
-                                Pago simulado: usa la tarjeta de prueba o cambia el número para probar un rechazo
+                                Pago simulado: usa la tarjeta de prueba 4242 4242 4242 4242 o cambia el número para probar un rechazo
                             </Description>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <TextField
-                                isRequired
-                                name="cardholder"
-                                defaultValue="JUAN PEREZ"
-                                className="sm:col-span-2"
-                            >
+                            <TextField isRequired name="cardholder" className="sm:col-span-2">
                                 <Label>Nombre en la tarjeta</Label>
                                 <Input />
                             </TextField>
-                            <TextField
-                                isRequired
-                                name="cardNumber"
-                                defaultValue="4242 4242 4242 4242"
-                                className="sm:col-span-2"
-                            >
+                            <TextField isRequired name="cardNumber" className="sm:col-span-2">
                                 <Label>Número de tarjeta</Label>
                                 <Input />
                             </TextField>
-                            <TextField isRequired name="expiry" defaultValue="12/30">
+                            <TextField
+                                isRequired
+                                name="expiry"
+                                value={expiryValue}
+                                onChange={(v) => setExpiryValue(formatExpiryInput(v))}
+                            >
                                 <Label>Vencimiento</Label>
-                                <Input />
+                                <Input placeholder="MM/AA" />
                             </TextField>
-                            <TextField isRequired name="cvv" defaultValue="123">
+                            <TextField isRequired name="cvv">
                                 <Label>CVV</Label>
                                 <Input />
                             </TextField>
                         </div>
-
-                        {submitError && (
-                            <p className="text-danger text-xs">{submitError}</p>
-                        )}
                     </div>
                 </form>
 

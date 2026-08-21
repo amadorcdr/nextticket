@@ -221,6 +221,14 @@ export function VenueCanvasEdit() {
                 await api.post(`/venues/${id}/floors/${resolveFloorId(element.floorId)}/canvas-elements`, elementPatchBody(element));
             }
 
+            // La capacidad del recinto ya no se edita a mano: se recalcula
+            // cada vez que cambian las secciones, para que nunca quede
+            // desfasada de lo que en verdad hay en el canvas.
+            const totalCapacity = state.sections.reduce((sum, s) => sum + (s.capacity || 0), 0);
+            if (totalCapacity > 0) {
+                await api.patch(`/venues/${id}`, { totalCapacity });
+            }
+
             toast.success("Distribución del recinto actualizada");
             navigate(`/venues/${id}/edit`);
         } catch (err) {

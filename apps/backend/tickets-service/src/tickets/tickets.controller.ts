@@ -63,10 +63,10 @@ export class TicketsController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(AUTH_ROLES.ORGANIZER, AUTH_ROLES.ADMIN)
+  @Roles(AUTH_ROLES.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'List tickets, without QR codes (staff only, paginated)',
+    summary: 'List all tickets platform-wide, without QR codes (ADMIN only)',
   })
   findAll(@Query() pagination: PaginationQueryDto) {
     return this.tickets.findAll(pagination);
@@ -115,6 +115,27 @@ export class TicketsController {
   })
   getStats(): Promise<TicketsStatsResponseDto> {
     return this.tickets.getStats();
+  }
+
+  @Get('internal/sold-count')
+  @UseGuards(InternalServiceGuard)
+  @ApiOperation({
+    summary:
+      'Uso interno: boletos vendidos (no cancelados) de una lista de zonas de evento. Solo lo llama venues-events-service (header X-Internal-Service-Token, no JWT de usuario) para bloquear la cancelación de un evento con boletos vendidos.',
+  })
+  @ApiQuery({
+    name: 'eventZoneIds',
+    description: 'Lista de UUIDs de zonas del evento, separados por coma',
+    example: '550e8400-e29b-41d4-a716-446655440000,550e8400-e29b-41d4-a716-446655440001',
+  })
+  getInternalSoldCount(
+    @Query(
+      'eventZoneIds',
+      new ParseArrayPipe({ items: String, separator: ',', optional: true }),
+    )
+    eventZoneIds: string[] = [],
+  ): Promise<TicketsEventZoneStatsResponseDto> {
+    return this.tickets.getStatsByEventZones(eventZoneIds);
   }
 
   @Get('stats/by-event-zones')

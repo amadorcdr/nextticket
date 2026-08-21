@@ -1,0 +1,75 @@
+{
+  "formatVersion": "nextticket-canvas-v12",
+  "commercial": {
+    "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+    "eventName": "Presentación NextTicket",
+    "zones": [
+      {
+        "id": "zone_general",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "General",
+        "admissionType": "GENERAL",
+        "eventPrice": 450,
+        "availableCapacity": 0,
+        "mapColor": "#059669",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "General"
+        ]
+      },
+      {
+        "id": "zone_vip",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "VIP",
+        "admissionType": "RESERVED",
+        "eventPrice": 950,
+        "availableCapacity": 0,
+        "mapColor": "#7c3aed",
+        "maxTicketsPerPurchase": 4,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "VIP Izquierda",
+          "VIP Derecha"
+        ]
+      },
+      {
+        "id": "zone_balcon",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Balcón General",
+        "admissionType": "GENERAL",
+        "eventPrice": 650,
+        "availableCapacity": 0,
+        "mapColor": "#2563eb",
+        "maxTicketsPerPurchase": 6,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Balcón General"
+        ]
+      },
+      {
+        "id": "zone_palcos",
+        "eventId": "EVENTO_SELECCIONADO_SE_SOBREESCRIBE_AL_IMPORTAR",
+        "publicName": "Palcos",
+        "admissionType": "RESERVED",
+        "eventPrice": 2500,
+        "availableCapacity": 0,
+        "mapColor": "#d97706",
+        "maxTicketsPerPurchase": 8,
+        "status": "ACTIVE",
+        "sectionIds": [],
+        "sectionNames": [
+          "Palco A",
+          "Palco B",
+          "Palco C",
+          "Palco D"
+        ]
+      }
+    ],
+    "priceTiers": [],
+    "eventSeats": []
+  }
+}

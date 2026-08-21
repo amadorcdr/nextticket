@@ -163,6 +163,14 @@ export interface EventZone {
   maxTicketsPerPurchase: number;
   status: EventZoneStatus;
   sectionIds: Id[];
+  /**
+   * Solo se usa al IMPORTAR un archivo de zonas de venta (nunca se persiste
+   * ni se exporta desde datos reales): nombres de sección a resolver contra
+   * el recinto físico del evento actual. Un mismo archivo de zonas puede
+   * reutilizarse en cualquier recinto que tenga secciones con esos nombres,
+   * sin importar que cada recinto nuevo tenga sus propios ids reales.
+   */
+  sectionNames?: string[];
 }
 
 /** `event_zone_price_tiers`. */

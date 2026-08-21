@@ -715,7 +715,16 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
   }, [venue]);
   const handleImportJSON = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    try { const data = await readJSONFile<VenueEditorFile>(file); if (data.physical) { setVenue(data.physical); setSelectedIds(new Set()); setVertexEditId(null); setImportedFileName(file.name); } else window.alert("El archivo no contiene datos físicos válidos."); }
+    try {
+      const data = await readJSONFile<VenueEditorFile>(file);
+      if (data.physical) {
+        // Solo se trae la geometría (pisos/secciones/asientos/elementos): el
+        // nombre/dirección/ciudad/capacidad del recinto ya se capturó en el
+        // paso "Información general" y un import de canvas no debe pisarlo.
+        setVenue((prev) => ({ ...data.physical, venue: prev.venue }));
+        setSelectedIds(new Set()); setVertexEditId(null); setImportedFileName(file.name);
+      } else window.alert("El archivo no contiene datos físicos válidos.");
+    }
     catch { window.alert("Archivo JSON inválido."); }
     finally { e.target.value = ""; }
   }, [setVenue]);
@@ -954,7 +963,7 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
         <div className="flex flex-row items-end justify-between gap-4">
           <div className="flex flex-col gap-3">
             <div className="flex gap-2 items-center">
-              <h2>Crear nuevo recinto</h2>
+              <h2>{mode === "update" ? "Editar distribución de zonas" : "Crear nuevo recinto"}</h2>
 
               {importedFileName && <Description><Icon.FileBracesCorner /> {importedFileName}</Description>}
 
@@ -1970,16 +1979,16 @@ export default function PhysicalEditor({ initialState, onChange, mode = "create"
                               <ListBox>
                                 <ListBox.Item
                                   id="NUMBERED"
-                                  textValue="Numerada"
+                                  textValue="Con asientos"
                                 >
-                                  Numerada <ListBox.ItemIndicator />
+                                  Con asientos <ListBox.ItemIndicator />
                                 </ListBox.Item>
 
                                 <ListBox.Item
                                   id="GENERAL"
-                                  textValue="General"
+                                  textValue="Sin asientos"
                                 >
-                                  General <ListBox.ItemIndicator />
+                                  Sin asientos <ListBox.ItemIndicator />
                                 </ListBox.Item>
                               </ListBox>
                             </Select.Popover>

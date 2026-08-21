@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
@@ -59,5 +59,20 @@ export class EventQueueController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QueueEntryResponseDto> {
     return this.eventQueue.getStatus(eventId, entryId, user.sub);
+  }
+
+  @Delete(':eventId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Salir de la fila virtual: libera el turno de inmediato en vez de esperar a que venza',
+  })
+  @ApiParam({ name: 'eventId', example: '550e8400-e29b-41d4-a716-446655440000' })
+  async leave(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ left: true }> {
+    await this.eventQueue.leaveQueue(eventId, user.sub);
+    return { left: true };
   }
 }

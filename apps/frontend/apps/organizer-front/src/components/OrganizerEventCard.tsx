@@ -12,9 +12,11 @@ interface OrganizerEventCardProps {
   event: OrganizerEventRow;
   onEdit: (event: OrganizerEventRow) => void;
   onCancel: (event: OrganizerEventRow) => void;
+  onPublish: (event: OrganizerEventRow) => void;
+  publishing?: boolean;
 }
 
-export function OrganizerEventCard({ event, onEdit, onCancel }: OrganizerEventCardProps) {
+export function OrganizerEventCard({ event, onEdit, onCancel, onPublish, publishing }: OrganizerEventCardProps) {
   const status = STATUS_META[event.status];
   const pct = event.total > 0 ? Math.round((event.sold / event.total) * 100) : 0;
 
@@ -71,6 +73,12 @@ export function OrganizerEventCard({ event, onEdit, onCancel }: OrganizerEventCa
             <Icon.Pencil />
             Editar
           </Button>
+          {event.rawStatus === "DRAFT" && (
+            <Button size="sm" fullWidth onPress={() => onPublish(event)} isDisabled={publishing}>
+              <Icon.Send />
+              {publishing ? "Publicando..." : "Publicar"}
+            </Button>
+          )}
           {event.status === "Activo" && (
             <Button size="sm" variant="secondary" color="danger" isIconOnly onPress={() => onCancel(event)}>
               <Icon.CalendarX2 />

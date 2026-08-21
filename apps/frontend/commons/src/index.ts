@@ -22,6 +22,7 @@ export * from "./components/atoms/HeroParticles";
 export * from "./components/atoms/Logo";
 export { default as PhysicalEditor, createEmptyPhysicalVenue } from "./components/editor/physical-editor";
 export { default as CommercialEditor } from "./components/editor/commercial-editor";
+export { default as SeatMapViewer } from "./components/editor/seat-map-viewer";
 export type {
     PhysicalVenueState,
     Floor,

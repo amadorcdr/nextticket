@@ -7,6 +7,8 @@ import { EventsService } from './events.service';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440001';
+// ADMIN para que assertOwnerOrAdmin no dependa del organizerId que estos mocks no incluyen.
+const ADMIN_USER = { sub: USER_ID, email: 'admin@test.com', role: 'ADMIN' };
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -56,7 +58,7 @@ describe('EventsService', () => {
       });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.event.update).not.toHaveBeenCalled();
@@ -86,7 +88,7 @@ describe('EventsService', () => {
       });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.event.update).not.toHaveBeenCalled();
@@ -117,7 +119,7 @@ describe('EventsService', () => {
       });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.event.update).not.toHaveBeenCalled();
@@ -148,7 +150,7 @@ describe('EventsService', () => {
       });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.event.update).not.toHaveBeenCalled();
@@ -183,7 +185,7 @@ describe('EventsService', () => {
     });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).resolves.toEqual(
       expect.objectContaining({
         status: EventStatus.PUBLISHED,
@@ -208,7 +210,7 @@ describe('EventsService', () => {
     });
 
     await expect(
-      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, USER_ID),
+      service.updateStatus(EVENT_ID, EventStatus.PUBLISHED, ADMIN_USER),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.event.update).not.toHaveBeenCalled();

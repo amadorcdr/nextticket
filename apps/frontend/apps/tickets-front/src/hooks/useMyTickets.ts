@@ -6,6 +6,7 @@ import {
     type ApiEventSeatMinimal,
     type ApiPurchaseMinimal,
     type ApiTicket,
+    type ApiVenueFloorsMinimal,
     type EnrichedTicket,
 } from "../types/myTickets";
 
@@ -86,6 +87,28 @@ export function useMyTickets() {
                     }),
                 );
 
+                // sectionId -> nombre del piso. Los ids de sección son UUIDs
+                // reales del recinto, así que un solo mapa plano alcanza aunque
+                // los boletos sean de recintos distintos.
+                const venueIds = [
+                    ...new Set(
+                        events.filter((event): event is ApiEventMinimal => event !== null).map((event) => event.venueId),
+                    ),
+                ];
+                const venueFloors = await Promise.all(
+                    venueIds.map((id) => api.get<ApiVenueFloorsMinimal>(`/venues/${id}`).catch(() => null)),
+                );
+                const floorNameBySectionId = new Map<string, string>();
+                venueFloors
+                    .filter((venue): venue is ApiVenueFloorsMinimal => venue !== null)
+                    .forEach((venue) => {
+                        venue.floors.forEach((floor) => {
+                            floor.sections.forEach((section) => {
+                                floorNameBySectionId.set(section.id, floor.name);
+                            });
+                        });
+                    });
+
                 const enriched: EnrichedTicket[] = rawTickets.map((ticket) => {
                     const eventId = ticket.purchaseId ? eventIdByPurchaseId.get(ticket.purchaseId) : undefined;
                     const event = eventId ? eventById.get(eventId) : undefined;
@@ -103,6 +126,7 @@ export function useMyTickets() {
                         venueState: event?.venue.state ?? "",
                         venueCountry: event?.venue.country ?? "México",
                         zoneName: zone?.publicName ?? "General",
+                        floorName: seat ? (floorNameBySectionId.get(seat.sectionId) ?? null) : null,
                         row: seat?.seat.row ?? null,
                         seatNumber: seat?.seat.number ?? null,
                         seatType: seat?.seat.type ?? null,

@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   AdmissionType,
@@ -11,6 +13,8 @@ import {
   PriceTierStatus,
   VenueStatus,
 } from '@prisma/client';
+import { AUTH_ROLES } from '../auth/auth.constants';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -27,7 +31,9 @@ import {
 const EVENTS_LIST_CACHE_KEY = 'events:list';
 const EVENTS_STATS_CACHE_KEY = 'events:stats';
 const CATEGORY_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const ACTIVE_EVENT_STATUSES: EventStatus[] = [
+/** También la usa VenuesService para bloquear la desactivación de un recinto
+ *  con eventos en curso — ver venues.service.ts#updateVenue. */
+export const ACTIVE_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
   EventStatus.SOLD_OUT,
 ];
@@ -295,8 +301,25 @@ export class EventsService {
     return event;
   }
 
-  async update(id: string, dto: UpdateEventDto, userId: string) {
+  /** Un evento solo lo puede modificar su propio organizador, o un ADMIN. */
+  private assertOwnerOrAdmin(
+    event: { organizerId: string },
+    user: AuthenticatedUser,
+  ) {
+    if (
+      user.role !== AUTH_ROLES.ADMIN &&
+      event.organizerId !== user.sub
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso sobre este evento',
+      );
+    }
+  }
+
+  async update(id: string, dto: UpdateEventDto, user: AuthenticatedUser) {
     const currentEvent = await this.findOneFromDatabase(id);
+    this.assertOwnerOrAdmin(currentEvent, user);
+    const userId = user.sub;
 
     const startsAt = dto.startsAt
       ? new Date(dto.startsAt)
@@ -353,8 +376,10 @@ export class EventsService {
    * valor lo arma este método (siempre una URL válida hacia
    * GET /events/images/:filename), no algo que mande el cliente.
    */
-  async setImage(id: string, filename: string, userId: string) {
-    await this.findOneFromDatabase(id);
+  async setImage(id: string, filename: string, user: AuthenticatedUser) {
+    const currentEvent = await this.findOneFromDatabase(id);
+    this.assertOwnerOrAdmin(currentEvent, user);
+    const userId = user.sub;
 
     const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:3001';
     const imageUrl = `${gatewayUrl}/events/images/${filename}`;
@@ -377,13 +402,19 @@ export class EventsService {
     return event;
   }
 
-  async updateStatus(id: string, status: EventStatus, userId: string) {
+  async updateStatus(id: string, status: EventStatus, user: AuthenticatedUser) {
     const currentEvent = await this.findOneFromDatabase(id);
+    this.assertOwnerOrAdmin(currentEvent, user);
+    const userId = user.sub;
 
     this.validateStatusTransition(currentEvent.status, status);
 
     if (status === EventStatus.PUBLISHED) {
       await this.validateEventCanBePublished(id);
+    }
+
+    if (status === EventStatus.CANCELED) {
+      await this.validateEventCanBeCanceled(id);
     }
 
     const event = await this.prisma.event.update({
@@ -404,8 +435,9 @@ export class EventsService {
     return event;
   }
 
-  async remove(id: string, _userId: string) {
+  async remove(id: string, user: AuthenticatedUser) {
     const event = await this.findOneFromDatabase(id);
+    this.assertOwnerOrAdmin(event, user);
 
     const zonesCount = await this.prisma.eventZone.count({
       where: {
@@ -628,6 +660,56 @@ export class EventsService {
     }
   }
 
+  /**
+   * No se puede cancelar un evento que ya tiene boletos vendidos: un
+   * organizador podría cancelarlo por error (o de mala fe) dejando a
+   * compradores reales sin evento. El conteo de boletos vive en
+   * tickets-service (otra base de datos), así que se consulta por HTTP con
+   * el mismo token interno que ya usan purchases-service ↔ tickets-service.
+   */
+  private async validateEventCanBeCanceled(eventId: string) {
+    const zones = await this.prisma.eventZone.findMany({
+      where: { eventId },
+      select: { id: true },
+    });
+
+    if (zones.length === 0) return;
+
+    const soldCount = await this.getSoldTicketsCount(zones.map((z) => z.id));
+
+    if (soldCount > 0) {
+      throw new ConflictException(
+        `No se puede cancelar el evento: tiene ${soldCount} boleto${soldCount === 1 ? '' : 's'} vendido${soldCount === 1 ? '' : 's'}.`,
+      );
+    }
+  }
+
+  private async getSoldTicketsCount(eventZoneIds: string[]): Promise<number> {
+    const baseUrl = process.env.TICKETS_SERVICE_URL ?? 'http://localhost:3005';
+    const internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${baseUrl}/tickets/internal/sold-count?eventZoneIds=${eventZoneIds.join(',')}`,
+        { headers: { 'X-Internal-Service-Token': internalToken } },
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar si el evento tiene boletos vendidos. Intenta de nuevo en unos segundos.',
+      );
+    }
+
+    if (!response.ok) {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar si el evento tiene boletos vendidos. Intenta de nuevo en unos segundos.',
+      );
+    }
+
+    const stats = (await response.json()) as { sold?: number };
+    return stats.sold ?? 0;
+  }
+
   private getEventCacheKey(id: string) {
     return `events:${id}`;
   }
@@ -644,9 +726,11 @@ export class EventsService {
   async assignCategories(
     eventId: string,
     categoryIds: string[],
-    userId: string,
+    user: AuthenticatedUser,
   ) {
-    await this.findOneFromDatabase(eventId);
+    const currentEvent = await this.findOneFromDatabase(eventId);
+    this.assertOwnerOrAdmin(currentEvent, user);
+    const userId = user.sub;
 
     const uniqueCategoryIds = [...new Set(categoryIds)];
 
@@ -701,9 +785,11 @@ export class EventsService {
   async removeCategory(
     eventId: string,
     categoryId: string,
-    userId: string,
+    user: AuthenticatedUser,
   ) {
-    await this.findOneFromDatabase(eventId);
+    const currentEvent = await this.findOneFromDatabase(eventId);
+    this.assertOwnerOrAdmin(currentEvent, user);
+    const userId = user.sub;
 
     const assignment =
       await this.prisma.eventCategoryAssignment.findUnique({

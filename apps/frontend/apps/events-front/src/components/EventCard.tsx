@@ -12,6 +12,8 @@ const STATUS_META: Record<
 > = {
     available: { label: "Disponible", color: "success" },
     "sold-out": { label: "Agotado", color: "danger" },
+    // El catálogo nunca lista eventos cancelados, pero el tipo lo exige.
+    canceled: { label: "Cancelado", color: "danger" },
 };
 
 function formatPrice(value: number, currency: string) {
