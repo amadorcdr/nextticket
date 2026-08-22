@@ -192,7 +192,7 @@ Dependencias cruzadas: `organizer-front` usa componentes de `tickets-front` y `v
 - **Re-exports de terceros bajo un único namespace**: todo `@heroui/react` (kit de componentes UI), `lucide-react` como `Icon`, `react-router-dom` como `Router`, `@tanstack/react-table` como `Tanstack` — así ningún microfrontend importa esas librerías por su cuenta, siempre pasan por `commons`.
 - **Providers/contexto global**: `ThemeProvider`, `SessionProvider`, `CartProvider`, `RequireRole`, y el cliente HTTP (`useApi`, `ApiError`, `API_BASE_URL`).
 - **Componentes propios**: `Panel` (sidebar/drawer), `ProfilePage`, `Carousel`, `ThemeSwitcher`, y una serie de efectos visuales de marca (`Plasma`, `PrismaticBurst`, `RadiantBurst`, `SideRays`, `HeroWaves`, `HeroParticles`, `Logo`).
-- **El editor de mapas de recintos**: `PhysicalEditor` y `CommercialEditor` (motor de canvas propio — colisiones, geometría, historial de undo/redo, serialización), usado por `venues-front` (mapa físico del recinto) y por `organizer-front` (`ZonesEditor`, mapa comercial de zonas/precios sobre ese mismo recinto).
+- **El editor de mapas de recintos**: `PhysicalEditor` y `CommercialEditor` (motor de canvas propio — colisiones, geometría, historial de undo/redo, serialización), usado por `venues-front` (mapa físico del recinto) y por `organizer-front` (`ZonesEditor`, mapa comercial de zonas/precios sobre ese mismo recinto). `SeatMapViewer` reutiliza el mismo motor de canvas en modo **solo lectura + clic para elegir asiento**, sin ninguna de las herramientas de edición de geometría — lo usa `events-front` en la selección de asientos del cliente.
 
 Todos los microfrontends deben reutilizar estos componentes en vez de reimplementar UI propia, para mantener la identidad visual homogénea.
 
@@ -200,13 +200,13 @@ Todos los microfrontends deben reutilizar estos componentes en vez de reimplemen
 
 ## 6. Backend
 
-Los cinco servicios comparten patrón: NestJS 11, Prisma 7 (`@prisma/adapter-pg`, obligatorio en Prisma 7), Swagger + Scalar para documentación interactiva, `ValidationPipe` global, CORS restringido a `GATEWAY_URL`, y guard JWT/roles con el mismo `JwtAuthGuard`/`RolesGuard` copiado en los 4 microservicios de negocio (no hay librería compartida de backend — cada servicio es un paquete `pnpm` aislado).
+Los cinco servicios comparten patrón: NestJS 11, Prisma 7 (`@prisma/adapter-pg`, obligatorio en Prisma 7), Swagger + Scalar para documentación interactiva, `ValidationPipe` global, CORS restringido a `FRONTEND_URL` (el origen de la página del navegador, no el del gateway — ver nota en §6.1), y guard JWT/roles con el mismo `JwtAuthGuard`/`RolesGuard` copiado en los 4 microservicios de negocio (no hay librería compartida de backend — cada servicio es un paquete `pnpm` aislado).
 
 ### 6.1 API Gateway
 
 - **Puerto**: `3001`. Único puerto expuesto en producción.
 - **Responsabilidad**: reverse proxy transparente (`http-proxy-middleware`), sin lógica de negocio ni validación de token — cada microservicio valida su propio JWT.
-- **CORS**: lo centraliza (`origin: '*'`).
+- **CORS**: el gateway en sí no restringe origen (`origin: '*'`) — quien sí restringe es cada uno de los 4 microservicios de negocio, comparando el `Origin` real de la petición del navegador contra `FRONTEND_URL` (nunca contra `GATEWAY_URL`, que es la URL pública de la API, no la del frontend).
 - **Documentación**: no genera OpenAPI propio; reenvía `/docs/*`, `/swagger/*` y `/api-json/*` a cada servicio, que es quien expone su propio Scalar/Swagger.
 - **Dependencias**: `AUTH_SERVICE_URL`, `VENUES_SERVICE_URL`, `PURCHASES_SERVICE_URL`, `TICKETS_SERVICE_URL`.
 
@@ -366,7 +366,7 @@ Venue (recinto)
   → Floor (piso)
     → Section (sección física)
       → Seat (asiento físico)
-    → CanvasElement (elementos decorativos del mapa: escenario, entradas, baños…)
+    → CanvasElement (elementos decorativos del mapa: STAGE, SCREEN, SPEAKER, ENTRANCE, EXIT, CORRIDOR, BATHROOM, BAR, TEXT, SHAPE, CUSTOM)
 ```
 
 Al crear un evento sobre un `Venue`, el organizador define **zonas comerciales** (`EventZone`) que agrupan una o más `Section` físicas (`EventZoneSection`) y les asigna un precio (`eventPrice`) y, opcionalmente, niveles de precio escalonados (`EventZonePriceTier`: preventa/general/última hora, cada uno con su propia capacidad y ventana de vigencia). Cada asiento físico se expone para ese evento como un `EventSeat`, con su propio `status` (`AVAILABLE`/`RESERVED`/`SOLD`/`DISABLED`) — el `Seat` físico del recinto no cambia de estado entre eventos, solo su `EventSeat` correspondiente.

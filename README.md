@@ -114,12 +114,12 @@ nextticket/
 │   │           ├── 📁 src/            #    Routing global, layouts, providers
 │   │           └── 📄 package.json    #    @nextticket-frontend/webshell
 │   │
-│   └── 📁 backend/                    # ── Microservicios Backend (PNPM aislado) ──
+│   ├── 📁 backend/                    # ── Microservicios Backend (PNPM aislado) ──
 │       ├── 📁 api-gateway/            # 🚪 API Gateway (puerto 3001)
 │       │   ├── 📁 src/
 │       │   │   ├── 📄 main.ts         #    Bootstrap: reverse proxy
 │       │   │   └── 📄 app.module.ts   #    Módulo raíz
-│       │   ├── 📄 .env                #    URLs de los microservicios
+│       │   ├── 📄 .env.example        #    Plantilla de URLs de los microservicios (el .env real no se sube al repo)
 │       │   └── 📄 package.json        #    NestJS
 │       │
 │       ├── 📁 auth-service/           # 🔑 Servicio de autenticación (puerto 3002)
@@ -145,11 +145,18 @@ nextticket/
 │           ├── 📁 prisma/
 │           └── 📄 package.json
 │
+│   └── 📁 alexa-skill/                # 🔊 Skill de Alexa: cliente adicional contra la misma API (ver §13)
+│
 ├── 📁 docker/                         # Scripts de arranque de la infraestructura
 │   └── 📄 init-databases.sql          # Crea las 4 bases la primera vez
 ├── 📁 docs/                           # Documentación general
-│   └── 📄 doc.md                      # Mapa de endpoints y permisos
-├── 📄 docker-compose.yml              # Postgres 16 + Redis 7 (levantar desde aquí)
+│   ├── 📄 ARCHITECTURE.md             # Arquitectura técnica completa (ver enlace arriba)
+│   ├── 📄 Correr-Proyecto-Local.md    # Guía paso a paso para levantar el proyecto en local
+│   ├── 📄 Despliegue-AWS.md           # Guía de despliegue en EC2 con Docker Compose
+│   └── 📄 Mapa-Endpoints.md           # Mapa de endpoints y permisos
+├── 📁 scripts/                        # Scripts de conveniencia (sembrar usuarios de prueba, arrancar el backend, deploy en EC2)
+├── 📄 docker-compose.yml              # Postgres 16 + Redis 7 (levantar desde aquí, en local)
+├── 📄 docker-compose.prod.yml         # Todo en contenedores (lo que corre en producción)
 └── 📄 nextticket.sql                  # Respaldo / Base de datos inicial
 ```
 
@@ -610,7 +617,9 @@ Sigue el [proceso de Pull Requests](#8-proceso-de-pull-requests-pr).
 
 ## 7. Convenciones de Commits
 
-Usamos **Conventional Commits** validados automáticamente con **Husky + Commitlint**. Cada commit debe seguir este formato:
+Usamos **Conventional Commits**. Cada commit debe seguir este formato:
+
+> ⚠️ Esto es una convención de equipo, **no se valida automáticamente**: no hay `husky` ni `commitlint` configurados en el repo. Es responsabilidad de cada quien seguirla al hacer commit.
 
 ```
 [TIPO]: descripción breve y clara
@@ -978,7 +987,7 @@ NextTicket maneja 4 roles de usuario. Detalle completo de rutas por rol: [docs/A
 | Push directo a `main` | El branch está protegido; el push será rechazado |
 | Push directo a `develop` | Todo debe pasar por PR |
 | Merge local entre ramas | Siempre usar GitHub PRs |
-| Commits sin convención | Husky rechazará el commit |
+| Commits sin convención | No se rechaza automáticamente (no hay Husky configurado) — se corrige en code review |
 | Crear ramas desde `main` | Excepto hotfixes — siempre desde `develop` |
 | Dejar ramas sin eliminar post-merge | Mantener el repo limpio |
 
